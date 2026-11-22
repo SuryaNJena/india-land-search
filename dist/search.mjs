@@ -54,13 +54,21 @@ export function assignImportState(workspace, state) {
 }
 
 const placeKey = value => normalize(value).replace(/^0+(?=\d+$)/u, '');
+const placeFilters = criteria => locationFields.map(field => [field, searchTerms(criteria[field]).map(placeKey)]);
+const includesPlace = (filters, place) => filters.every(([field,wanted]) =>
+  !wanted.length || place[field].some(value=>wanted.includes(placeKey(value))));
+
+export function selectLiveLocations(locations, criteria) {
+  const filters = placeFilters(criteria);
+  return locations.filter(place => includesPlace(filters,Object.fromEntries(locationFields.map(field=>
+    [field,[place[field],place[`${field}Code`]]]))));
+}
 
 export function findRecords(workspace, index, criteria) {
   const names = searchTerms(criteria.names);
-  const filters = locationFields.map(field => [field, searchTerms(criteria[field]).map(placeKey)]);
+  const filters = placeFilters(criteria);
   const inState = index.filter(entry => entry.state === criteria.state);
-  const scoped = inState.filter(({location}) => filters.every(([field, wanted]) =>
-    !wanted.length || location[field].some(value => wanted.includes(placeKey(value)))));
+  const scoped = inState.filter(({location})=>includesPlace(filters,location));
   const rows = scoped.map(({index}) => workspace.rows[index]);
   const matches = matchRows(rows, {names});
   return {

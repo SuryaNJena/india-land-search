@@ -27,6 +27,12 @@
 .state-map path:hover,.state-map path:focus-visible{fill:#b6d8c6;stroke:#155744;stroke-width:1.5}
 .state-map path[aria-pressed=true]{fill:#50967c;stroke:#155744;stroke-width:1.5}
 #home-parcel-map{cursor:crosshair}
+#home-search-scope:not(:empty){margin-top:9px}
+#search-bhulekh[hidden]{display:none}
+.live-village{border-top:1px solid var(--line);padding:10px 0}
+.live-village summary{cursor:pointer;font-weight:650}
+.live-village ul{margin:.5rem 0;padding-left:1.5rem}
+.live-village li+li{margin-top:.35rem}
 @media(max-width:1180px){.search-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:705px){.picker-maps{grid-template-columns:1fr}}
 @media(max-width:480px){.search-fields{grid-template-columns:1fr}}
