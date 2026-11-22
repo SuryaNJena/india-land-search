@@ -5,6 +5,8 @@ import {extractCaste,matchRows,sourceCaste,suggestSurname,validateWorkspace,parc
 import {exportWorkbook,exportRORBundle,zipWorkspace,importFile} from './dist/files.mjs';
 import {makeMapPDF} from './dist/maps.mjs';
 import {portals} from './dist/portals.mjs';
+import {statePaths} from './dist/india-states.mjs';
+import {assignImportState, criteriaFrom, findRecords, searchIndex} from './dist/search.mjs';
 
 const require=createRequire(import.meta.url);
 globalThis.JSZip=require('./dist/vendor/jszip.js');
@@ -19,6 +21,22 @@ assert.equal(matchRows([{...sample,info:'ଆଶା ଜେନା ଜା: ପା�
 assert.equal(extractCaste('ଜା: ଖଣ୍ଡାୟତ, ଜା: କଣ୍ଡରା',sourceCaste).status,'Mixed / review');
 assert.equal(suggestSurname('Jena','or').filter(x=>x.source==='Curated spelling').length,2);
 assert.equal(new Set(portals.map(x=>x.name)).size,36);
+assert.deepEqual(Object.keys(statePaths).sort(),portals.map(x=>x.name).sort());
+assert.deepEqual(findRecords(null,[],criteriaFrom({state:'Odisha',names:'ଜେନା'})),{stateCount:0,scopedCount:0,searchable:0,hits:[]});
+const multiState = assignImportState({rows:[
+  {...sample,state:'Odisha',tehsil:'010',ri_name:'Example Circle',village_code:'021'},
+  {...sample,id:'2',state:'Bihar',village_code:'021'},
+  {...sample,id:'3',village:'Other village',village_code:'022',info:'',status:'No plot information'},
+  {...sample,id:'4',source:'https://app4bhunakshaodisha.nic.in:8443/bhunaksha/',village:'Third village',village_code:'023'}
+]},'Odisha');
+const multiIndex = searchIndex(multiState);
+const odishaSearch = filters => findRecords(multiState,multiIndex,criteriaFrom({state:'Odisha',names:'ଜେନା',...filters}));
+assert.deepEqual(multiIndex.map(x=>x.state),['Odisha','Bihar','Odisha','Odisha']);
+assert.deepEqual(odishaSearch({}).hits.map(x=>x.index),[0,3]);
+assert.equal(odishaSearch({}).searchable,2);
+assert.equal(odishaSearch({tehsil:'10',ri:'example circle',village:'21, 22'}).scopedCount,1);
+assert.equal(odishaSearch({tehsil:'99'}).scopedCount,0);
+assert.deepEqual(odishaSearch({state:'Bihar'}).hits.map(x=>x.index),[1]);
 
 const pdf=await makeMapPDF(data.summary,geometry,new Map([[parcelKey(sample),matches[0]]]),false);
 assert.equal((await PDFLib.PDFDocument.load(pdf)).getPageCount(),1);
@@ -34,6 +52,13 @@ if(process.argv[2]){
   const real=await importFile(new File([await fs.readFile(process.argv[2])],'Odisha.zip'));
   const selected=matchRows(real.rows,real.rules);
   assert.equal(real.rows.length,15389);
+  const index=searchIndex(real);
+  const scope=findRecords(real,index,criteriaFrom({state:'Odisha',names:'ଜେନା\nଯେନା'}));
+  assert.equal(scope.stateCount,15389);
+  assert.equal(scope.hits.length,497);
+  const ri=findRecords(real,index,criteriaFrom({state:'Odisha',names:'ଜେନା',tehsil:'Mahanga',ri:'Kurujanga'}));
+  assert.ok(ri.hits.length>0);
+  assert.ok(ri.hits.every(({index})=>real.rows[index].district==='3' && real.rows[index].ri==='8'));
   assert.equal(real.summary.length,21);
   assert.equal(selected.filter(x=>x.surnameSelected).length,292);
   assert.equal(selected.filter(x=>x.fullSelected).length,79);

@@ -33,13 +33,15 @@ export function drawMap(canvas, features, gis, result, options={}) {
     if (!firstRing) continue;
     const key=keyOf(feature,gis);
     ctx.fillStyle=options.plain ? '#fff' : colours[result.get(key)?.level ?? 'missing']; ctx.fill(path,'evenodd');
-    ctx.strokeStyle=options.selected===key ? '#0f5344' : '#64796c'; ctx.stroke(path);
+    ctx.strokeStyle='#64796c'; ctx.stroke(path);
     if (options.labels) {
       const [x,y]=firstRing.reduce(([x,y],p)=>[x+p[0]/firstRing.length,y+p[1]/firstRing.length],[0,0]);
       if (ctx.isPointInPath(path,x,y,'evenodd')) {ctx.fillStyle='#233d34';ctx.fillText(feature.properties?.kide ?? '',x,y);}
     }
     hits.push({path,key});
   }
+  const selected=options.selected && hits.find(hit=>hit.key===options.selected);
+  if (selected) { ctx.lineWidth=3; ctx.strokeStyle='#0f5344'; ctx.stroke(selected.path); }
   return hits;
 }
 
