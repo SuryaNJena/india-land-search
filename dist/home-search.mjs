@@ -1,4 +1,4 @@
-import {normalize, parcelKey} from './core.mjs';
+import {parcelKey} from './core.mjs';
 import {drawMap} from './maps.mjs';
 import {portals} from './portals.mjs';
 import {statePaths} from './india-states.mjs';
@@ -33,7 +33,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
     if (known.size === 1) criteria.state = [...known][0];
   }
   root.innerHTML = `<div class="card-head"><div><h2>Search names in land records</h2><p>Choose a state and enter a surname or full name. Add a district, tehsil, RI, or village if you know it.</p></div></div>
-    <form id="home-search-form">
+    <form id="home-search-form" novalidate>
       <div class="search-fields">
         <label class="label">State or union territory<select name="state" required><option value="">Choose a state</option>${portals.map(p => `<option>${escape(p.name)}</option>`).join('')}</select></label>
         ${locationFields.map(field => `<label class="label location-input">${fields[field]} <span class="optional">Optional</span><input name="${field}" list="home-${field}" maxlength="500" placeholder="${field === 'village' ? 'Names or codes, separated by commas' : 'Name or code'}"><datalist id="home-${field}"></datalist></label>`).join('')}
@@ -41,7 +41,8 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
       </div>
       <div class="name-review" id="home-name-review" hidden></div>
       <details class="live-location" id="odisha-location" hidden></details>
-      <div class="actions"><button type="submit" class="button primary">Search records</button><button type="button" id="search-bhulekh" class="button secondary" hidden>Search Bhulekh live</button><div id="home-portal-links" class="actions"></div></div>
+      <div class="actions"><button type="submit" class="button primary" aria-describedby="home-search-feedback">Search records</button><button type="button" id="search-bhulekh" class="button secondary" aria-describedby="home-search-feedback" hidden>Search Bhulekh live</button><div id="home-portal-links" class="actions"></div></div>
+      <p id="home-search-feedback" role="status"></p>
       <p class="muted" id="home-search-scope"></p>
     </form>
     <details class="search-picker"><summary>Pick a location on the map <span class="optional">Optional</span></summary><div id="home-maps"></div></details>
@@ -51,6 +52,9 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
   const mapPicker = root.querySelector('.search-picker');
   const mapBox = root.querySelector('#home-maps');
   const scopeElement = root.querySelector('#odisha-location');
+  const submitButton=form.querySelector('[type=submit]');
+  const liveButton=form.querySelector('#search-bhulekh');
+  const feedback=form.querySelector('#home-search-feedback');
   const control = key => form.elements.namedItem(key);
   const loadFields = () => Object.entries(criteria).forEach(([key, value]) => { control(key).value = value; });
   let liveSearch;
@@ -61,6 +65,8 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
 
   function clearResults() {
     liveSearch?.abort(); liveSearch=undefined;
+    submitButton.disabled=liveButton.disabled=false;
+    feedback.textContent='';
     if (submitted) { submitted=false; showResults(); }
   }
 
@@ -72,8 +78,8 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
     const inState = index.filter(x => x.state === criteria.state);
     const live = criteria.state==='Odisha';
     const hasLocal = inState.length>0;
-    form.querySelector('[type=submit]').textContent = live && !hasLocal ? 'Search live Odisha records' : 'Search loaded records';
-    form.querySelector('#search-bhulekh').hidden = !live || !hasLocal;
+    submitButton.textContent = live && !hasLocal ? 'Search live Odisha records' : 'Search loaded records';
+    liveButton.hidden = !live || !hasLocal;
     scopeElement.hidden=!live;
     form.querySelectorAll('.location-input').forEach(label=>{label.hidden=live && !hasLocal;});
     form.querySelector('#home-search-scope').textContent = live
@@ -85,33 +91,24 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
     }
   }
 
-  async function runLive() {
-    liveSearch?.abort();
+  async function runLive(targets,names) {
     const abort = new AbortController();
     liveSearch = abort;
-    const names = review.names();
-    const targets = odisha.targets();
-    if (!targets.length) {
-      odisha.open();
-      results.innerHTML = '<div class="empty"><strong>Choose villages to search live.</strong><p>Bhulekh supplies village-level tenant lists. An Odisha-wide name search needs a statewide name index.</p></div>';
-      return;
-    }
-    if (!names.length || names.length>30 || names.some(x=>x.length>140)) {
-      results.innerHTML = '<div class="empty">Enter 1 to 30 names, up to 140 characters each.</div>';
-      return;
-    }
     const completed = [], failures = [], shown = new Map();
     const active = () => liveSearch===abort && root.isConnected;
     const listItems = hits => hits.map(hit=>`<li>${escape(hit.tenant)} <span class="muted">· ${escape(hit.matched.join(', '))}</span></li>`).join('');
     function paint(message, busy, signin=false) {
       if (!active()) return;
+      feedback.textContent=busy ? message : '';
+      submitButton.disabled=liveButton.disabled=busy;
+      if (!busy) liveSearch=undefined;
       const hitCount=completed.reduce((sum,x)=>sum+x.hits.length,0);
       const groups=completed.map((item,i) => {
         const visible = shown.get(i) ?? 100, total = item.hits.length;
         return `<details class="live-village" ${total?'open':''}><summary>${escape(item.location.village)} (${escape(item.location.villageCode)}) · ${count.format(total)} ${total===1?'match':'matches'}</summary><p class="muted">${escape(item.location.tehsil)}, ${escape(item.location.district)} · ${count.format(item.checked)} tenant options checked</p>${total?`<ul>${listItems(item.hits.slice(0,visible))}</ul>`:'<p>No matching tenant names in this village.</p>'}${total>visible?`<button class="button secondary" data-more="${i}">Show more matches</button>`:''}</details>`;
       }).join('');
       const missing=failures.length?`<ul>${failures.map(([location,error])=>`<li>${escape(location.village)} · ${escape(error)}</li>`).join('')}</ul>`:'';
-      results.innerHTML = `<h3>Live Odisha tenant search</h3><p role="status">${escape(message)}</p><p>${count.format(completed.length)} of ${count.format(targets.length)} selected villages checked${completed.length?` · ${count.format(hitCount)} matching tenant entries`:''}.</p>${busy?'<button class="button secondary" id="cancel-live">Cancel search</button>':''}${signin?'<a class="button primary" target="_top" href="/signin-with-chatgpt?return_to=%2F">Continue with ChatGPT</a>':''}${groups}${missing}${tag('https://bhulekh.ori.nic.in/','Open Bhulekh to view the official RoR')}`;
+      results.innerHTML = `<h3>Live Odisha tenant search</h3>${busy?'':`<p role="status">${escape(message)}</p>`}<p>${count.format(completed.length)} of ${count.format(targets.length)} selected ${targets.length===1?'village':'villages'} checked${completed.length?` · ${count.format(hitCount)} matching tenant ${hitCount===1?'entry':'entries'}`:''}.</p>${busy?'<button class="button secondary" id="cancel-live">Cancel search</button>':''}${signin?'<a class="button primary" target="_top" href="/signin-with-chatgpt?return_to=%2F">Continue with ChatGPT</a>':''}${groups}${missing}${tag('https://bhulekh.ori.nic.in/','Open Bhulekh to view the official RoR')}`;
       results.querySelector('#cancel-live')?.addEventListener('click',()=>{abort.abort();paint('Search stopped. Completed villages are listed below.',false);});
       results.querySelectorAll('[data-more]').forEach(button=>{button.onclick=()=>{
         const i=Number(button.dataset.more), start=shown.get(i)??100, hits=completed[i].hits;
@@ -179,7 +176,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
 
   function selectState(state) {
     if (criteria.state === state) return;
-    liveSearch?.abort(); liveSearch=undefined;
+    clearResults();
     criteria = criteriaFrom({state, names:criteria.names});
     submitted = false;
     loadFields(); review.update(criteria.state,criteria.names); refreshScope(); showResults();
@@ -210,7 +207,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
       const entry = parcelLocations.get(key);
       if (!entry) { status.textContent = 'That parcel has no loaded location details.'; return; }
       const row = workspace.rows[entry.index];
-      liveSearch?.abort(); liveSearch=undefined;
+      clearResults();
       for (const field of locationFields) criteria[field] = entry.location[field][0] ?? '';
       submitted = false;
       loadFields(); showResults(); draw(key);
@@ -231,19 +228,44 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
       clearResults();
     }
   };
-  form.onsubmit = event => {
-    event.preventDefault();
-    if (!normalize(criteria.names.replace(/[,;\n]/g, ' '))) { control('names').focus(); return; }
-    if (!review.confirmed()) return;
-    saveSearch(); submitted = true;
+  function startSearch(forceLive = false) {
+    if (liveSearch) return;
+    feedback.textContent='';
+    if (!criteria.state) {
+      feedback.textContent='Choose a state or union territory.';
+      control('state').focus(); return;
+    }
+    const names=review.names();
+    if (!names.length) {
+      feedback.textContent='Enter a surname or full name to search.';
+      control('names').focus(); return;
+    }
+    if (!review.confirmed()) {
+      feedback.textContent='Check a suggested spelling above or choose Use typed spellings only.';
+      return;
+    }
+    saveSearch();
     const found = criteria.state==='Odisha' && !workspace?.demo ? findRecords(workspace,index,reviewedCriteria()) : null;
-    if (found && !found.scopedCount) runLive(); else showResults();
+    if (forceLive || found && !found.scopedCount) {
+      if (names.length>30 || names.some(x=>x.length>140)) {
+        feedback.textContent='Use up to 30 names and spellings of 140 characters each.';
+        control('names').focus(); return;
+      }
+      const targets=odisha.targets();
+      if (!targets.length) {
+        feedback.textContent='Choose a district, tehsil, and village above, then search again.';
+        odisha.focusLocation(); return;
+      }
+      submitted=true;
+      void runLive(targets,names);
+    } else {
+      submitted=true;
+      showResults();
+    }
     results.setAttribute('tabindex', '-1'); results.focus();
-  };
-  form.querySelector('#search-bhulekh').onclick=()=>{
-    if (!form.reportValidity() || !review.confirmed()) return;
-    saveSearch(); submitted=true; runLive();
-  };
+  }
+  form.onsubmit=event=>{event.preventDefault();startSearch();};
+  liveButton.onclick=()=>startSearch(true);
   mapPicker.ontoggle = showMaps;
   refreshScope(); showResults();
 }

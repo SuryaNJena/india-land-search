@@ -28,6 +28,7 @@
 .state-map path[aria-pressed=true]{fill:#50967c;stroke:#155744;stroke-width:1.5}
 #home-parcel-map{cursor:crosshair}
 #home-search-scope:not(:empty){margin-top:9px}
+#home-search-feedback:not(:empty){margin-top:10px;padding:8px 11px;background:var(--pale);border-radius:7px;color:var(--ink);font-weight:600}
 #search-bhulekh[hidden]{display:none}
 .live-village{border-top:1px solid var(--line);padding:10px 0}
 .live-village summary{cursor:pointer;font-weight:650}

@@ -35,10 +35,10 @@ export function mountOdishaScope(root,escape,onEdit) {
     retained.querySelectorAll('[data-remove]').forEach(button=>{button.onclick=()=>{picked.delete(button.dataset.remove);save();};});
   }
 
-  function save() {
+  function save(notify = true) {
     persisted=[...picked.values()];
     try { localStorage.setItem(storageKey,JSON.stringify(persisted)); } catch { /* Selection remains in this tab. */ }
-    renderPicked(); onEdit();
+    renderPicked(); if (notify) onEdit();
   }
 
   async function load(field) {
@@ -82,17 +82,28 @@ export function mountOdishaScope(root,escape,onEdit) {
       if (branch[field] && fields[i+1]) void load(fields[i+1]);
     };
   });
-  add.onclick=()=>{
+  function addVillage(notify) {
     const parts=fields.map(field=>branch[field]);
     if (parts.some(value=>!value)) return;
     const id=parts.map(x=>x.code).join('-');
-    if (picked.has(id)) {status.textContent='That village is already selected.';return;}
+    if (picked.has(id)) {if (notify) status.textContent='That village is already selected.';return;}
     if (picked.size>=20) {status.textContent='Choose up to 20 villages per live search.';return;}
     picked.set(id,{id,district:parts[0].label,tehsil:parts[1].label,village:parts[2].label});
     status.textContent=`${picked.size} ${picked.size===1?'village':'villages'} selected.`;
-    save();
-  };
+    save(notify);
+  }
+  add.onclick=()=>addVillage(true);
   root.ontoggle=()=>{if (root.open && select('district').options.length<=1 && !pending) void load('district');};
   renderPicked();
-  return {open:()=>{ root.open=true; }, targets:()=>[...picked.values()]};
+  return {
+    focusLocation() {
+      root.open=true;
+      const next=select(fields.find(field=>!branch[field]) ?? 'village');
+      (next.disabled ? root.querySelector('summary') : next).focus();
+    },
+    targets() {
+      addVillage(false);
+      return [...picked.values()];
+    }
+  };
 }
