@@ -37,7 +37,8 @@ export function mountLiveOdishaMap(root,locations,escape,tag) {
       if (abort.signal.aborted) return;
       geometry=next;
       frame.hidden=false; render();
-      status.textContent=`${geometry.features.length} mapped parcels. Click a parcel to see its plot number.`;
+      const copy=geometry.captured ? `Saved BhuNaksha map from ${geometry.captured}. ` : '';
+      status.textContent=`${copy}${geometry.features.length} mapped parcels. Click a parcel to see its plot number.`;
     } catch(error) {
       if (!abort.signal.aborted) {
         status.textContent=error instanceof SyntaxError?'LandReview could not load the BhuNaksha map. Open the official portal below.':error.message;

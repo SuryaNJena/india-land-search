@@ -176,7 +176,7 @@ export function officialRoR(location,khata,type) {
   return url.href;
 }
 
-export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),nameLimit=1000,requireIdentity=true}) {
+export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),mapSnapshots={villages:{}},nameLimit=1000,requireIdentity=true}) {
   const cache = new Map(), mapCache = new Map();
   let busyUntil = 0, pausedUntil = 0;
   const json = (status, value, headers = {}) => Response.json(value,{status,headers:{'Cache-Control':'no-store',...headers}});
@@ -218,16 +218,20 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       const sheet=input.sheet??'';
       if (typeof sheet!=='string' || (sheet && !/^\d{1,3}$/.test(sheet))) return json(400,{error:'Choose a BhuNaksha sheet.'});
       const key=`${location.id}/${sheet}`, cached=mapCache.get(key);
-      if (cached && Date.now()-cached.at<3600000) return json(200,cached.data);
+      if (cached && Date.now()-cached.at<(cached.data.captured?300000:3600000)) return json(200,cached.data);
+      let data;
       try {
-        const data=await readMap(location,sheet);
-        mapCache.delete(key);
-        if (mapCache.size>=4) mapCache.delete(mapCache.keys().next().value);
-        mapCache.set(key,{at:Date.now(),data});
-        return json(200,data);
+        data=await readMap(location,sheet);
       } catch(error) {
-        return json(error.status??502,{error:error instanceof PortalError?error.message:'The BhuNaksha map service could not be reached.'});
+        const village=mapSnapshots.villages[location.id];
+        const saved=village && (sheet ? village[sheet] : {sheets:Object.keys(village).sort()});
+        if (!saved) return json(error.status??502,{error:error instanceof PortalError?error.message:'The BhuNaksha map service could not be reached.'});
+        data={...saved,captured:mapSnapshots.collected};
       }
+      mapCache.delete(key);
+      if (mapCache.size>=4) mapCache.delete(mapCache.keys().next().value);
+      mapCache.set(key,{at:Date.now(),data});
+      return json(200,data);
     }
     const names=input?.names;
     if (!directory && (!Array.isArray(names) || !names.length || names.length>nameLimit || !names.every(x=>typeof x==='string' && x.trim() && x.length<=140))) {

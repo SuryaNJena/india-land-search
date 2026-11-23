@@ -107,6 +107,14 @@ assert.deepEqual(await (await mapSite.fetch(mapRequest(''))).json(),{sheets:['01
 const map=await (await mapSite.fetch(mapRequest('01'))).json();
 assert.equal(map.features[0].properties.kide,'101/2');
 assert.equal(map.features[0].properties.info,undefined);
+const savedMaps=JSON.parse(await fs.readFile(new URL('./worker/odisha-map-snapshots.json',import.meta.url),'utf8'));
+assert.ok(Object.values(savedMaps.villages).flatMap(Object.values).every(sheet=>sheet.features.every(f=>Object.keys(f.properties).sort().join(',')==='id,kide')));
+const fallbackSite=makeLandReviewWorker({assets:{},matchRows,requireIdentity:false,mapSnapshots:savedMaps,async readMap(){throw Error('fixture outage');}});
+const savedSheets=await (await fallbackSite.fetch(mapRequest(''))).json();
+assert.deepEqual(savedSheets.sheets,['01','02','03']);
+const savedSheet=await (await fallbackSite.fetch(mapRequest('01'))).json();
+assert.equal(savedSheet.captured,savedMaps.collected);
+assert.equal(savedSheet.features.length,302);
 
 const pdf=await makeMapPDF(data.summary,geometry,new Map([[parcelKey(sample),matches[0]]]),false);
 assert.equal((await PDFLib.PDFDocument.load(pdf)).getPageCount(),1);
