@@ -34,6 +34,10 @@
 .live-village summary{cursor:pointer;font-weight:650}
 .live-village ul{margin:.5rem 0;padding-left:1.5rem}
 .live-village li+li{margin-top:.35rem}
+.live-ror-links{margin:4px 0 8px;font-size:.9rem}
+.live-map{margin:12px 0}
+.live-map .toolbar{margin-top:8px}
+.live-map canvas{cursor:crosshair}
 .name-review{background:#f4f8f3;border:1px solid var(--line);border-radius:9px;padding:14px;margin:6px 0 15px}
 .variant-head{display:flex;gap:14px;justify-content:space-between;align-items:start}
 .variant-head h3{margin:0 0 4px}
@@ -41,6 +45,8 @@
 .variant-option{display:flex;align-items:start;gap:8px;padding:8px;background:white;border:1px solid var(--line);border-radius:7px;overflow-wrap:anywhere}
 .variant-option input{margin-top:.35em}
 .variant-option small{display:block;color:var(--muted);font-size:.82rem}
+.name-orders{margin-top:10px}
+.name-orders summary{cursor:pointer;font-weight:650}
 #variant-status:not(:empty){margin-top:7px}
 .live-location{margin:2px 0 16px;padding:12px;border:1px solid var(--line);border-radius:8px}
 .live-location summary{font-weight:650;cursor:pointer}

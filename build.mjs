@@ -16,7 +16,7 @@ const app = await readFile(new URL('./worker/odisha.mjs',import.meta.url),'utf8'
 const matcher = await readFile(new URL('core.mjs',dist),'utf8');
 const manifest = await readFile(new URL('./.openai/hosting.json',import.meta.url),'utf8');
 await Promise.all([mkdir(new URL('server/',dist),{recursive:true}),mkdir(new URL('.openai/',dist),{recursive:true})]);
-const bundle = `${matcher}\n${app}\nexport default makeLandReviewWorker({assets:${JSON.stringify(assets)},matchRows});\n`;
+const bundle = `${matcher}\n${app}\nexport default makeLandReviewWorker({assets:${JSON.stringify(assets)},matchRows,nameLimit:liveNameLimit});\n`;
 await Promise.all([
   writeFile(new URL('server/index.js',dist),bundle),
   writeFile(new URL('.openai/hosting.json',dist),manifest)

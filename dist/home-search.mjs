@@ -1,10 +1,11 @@
-import {parcelKey} from './core.mjs';
+import {liveNameLimit,parcelKey} from './core.mjs';
 import {drawMap} from './maps.mjs';
 import {portals} from './portals.mjs';
 import {statePaths} from './india-states.mjs';
 import {criteriaFrom, findRecords, locationFields, searchIndex} from './search.mjs';
 import {mountNameReview} from './name-review.mjs';
 import {mountOdishaScope} from './odisha-scope.mjs';
+import {mountLiveOdishaMap} from './live-odisha-map.mjs';
 
 const storageKey = 'landreview.home-search';
 const fields = {district:'District', tehsil:'Tehsil / taluk', ri:'RI / revenue circle', village:'Villages'};
@@ -96,7 +97,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
     liveSearch = abort;
     const completed = [], failures = [], shown = new Map();
     const active = () => liveSearch===abort && root.isConnected;
-    const listItems = hits => hits.map(hit=>`<li>${escape(hit.tenant)} <span class="muted">· ${escape(hit.matched.join(', '))}</span></li>`).join('');
+    const listItems = hits => hits.map(hit=>`<li>${escape(hit.tenant)} <span class="muted">· ${escape(hit.matched.join(', '))}</span>${hit.khata?`<div class="actions live-ror-links"><span class="muted">Khata ${escape(hit.khata)}</span>${tag(hit.front,'RoR front')}${tag(hit.back,'RoR back')}</div>`:''}</li>`).join('');
     function paint(message, busy, signin=false) {
       if (!active()) return;
       feedback.textContent=busy ? message : '';
@@ -108,7 +109,9 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
         return `<details class="live-village" ${total?'open':''}><summary>${escape(item.location.village)} (${escape(item.location.villageCode)}) · ${count.format(total)} ${total===1?'match':'matches'}</summary><p class="muted">${escape(item.location.tehsil)}, ${escape(item.location.district)} · ${count.format(item.checked)} tenant options checked</p>${total?`<ul>${listItems(item.hits.slice(0,visible))}</ul>`:'<p>No matching tenant names in this village.</p>'}${total>visible?`<button class="button secondary" data-more="${i}">Show more matches</button>`:''}</details>`;
       }).join('');
       const missing=failures.length?`<ul>${failures.map(([location,error])=>`<li>${escape(location.village)} · ${escape(error)}</li>`).join('')}</ul>`:'';
-      results.innerHTML = `<h3>Live Odisha tenant search</h3>${busy?'':`<p role="status">${escape(message)}</p>`}<p>${count.format(completed.length)} of ${count.format(targets.length)} selected ${targets.length===1?'village':'villages'} checked${completed.length?` · ${count.format(hitCount)} matching tenant ${hitCount===1?'entry':'entries'}`:''}.</p>${busy?'<button class="button secondary" id="cancel-live">Cancel search</button>':''}${signin?'<a class="button primary" target="_top" href="/signin-with-chatgpt?return_to=%2F">Continue with ChatGPT</a>':''}${groups}${missing}${tag('https://bhulekh.ori.nic.in/','Open Bhulekh to view the official RoR')}`;
+      const maps=busy?[]:completed.map(item=>item.location).filter(location=>location.riCode);
+      results.innerHTML = `<h3>Live Odisha tenant search</h3>${busy?'':`<p role="status">${escape(message)}</p>`}<p>${count.format(completed.length)} of ${count.format(targets.length)} selected ${targets.length===1?'village':'villages'} checked${completed.length?` · ${count.format(hitCount)} matching tenant ${hitCount===1?'entry':'entries'}`:''}.</p>${busy?'<button class="button secondary" id="cancel-live">Cancel search</button>':''}${signin?'<a class="button primary" target="_top" href="/signin-with-chatgpt?return_to=%2F">Continue with ChatGPT</a>':''}${maps.length?'<details class="live-location live-map"></details>':''}${groups}${missing}${tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal')}`;
+      if (maps.length) mountLiveOdishaMap(results.querySelector('.live-map'),maps,escape,tag);
       results.querySelector('#cancel-live')?.addEventListener('click',()=>{abort.abort();paint('Search stopped. Completed villages are listed below.',false);});
       results.querySelectorAll('[data-more]').forEach(button=>{button.onclick=()=>{
         const i=Number(button.dataset.more), start=shown.get(i)??100, hits=completed[i].hits;
@@ -241,14 +244,14 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
       control('names').focus(); return;
     }
     if (!review.confirmed()) {
-      feedback.textContent='Check a suggested spelling above or choose Use typed spellings only.';
+      feedback.textContent='Check a suggested spelling above or use Clear all to search only what you typed.';
       return;
     }
     saveSearch();
     const found = criteria.state==='Odisha' && !workspace?.demo ? findRecords(workspace,index,reviewedCriteria()) : null;
     if (forceLive || found && !found.scopedCount) {
-      if (names.length>30 || names.some(x=>x.length>140)) {
-        feedback.textContent='Use up to 30 names and spellings of 140 characters each.';
+      if (names.length>liveNameLimit || names.some(x=>x.length>140)) {
+        feedback.textContent=`Search up to ${count.format(liveNameLimit)} spellings of 140 characters each.`;
         control('names').focus(); return;
       }
       const targets=odisha.targets();

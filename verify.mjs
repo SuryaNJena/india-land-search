@@ -7,8 +7,8 @@ import {makeMapPDF} from './dist/maps.mjs';
 import {portals} from './dist/portals.mjs';
 import {statePaths} from './dist/india-states.mjs';
 import {assignImportState, criteriaFrom, findRecords, searchIndex} from './dist/search.mjs';
-import {proposeNames,recordLanguages,suggestedLanguages} from './dist/name-variants.mjs';
-import {makeLandReviewWorker,readBhulekhForm,makeBhulekhReader} from './worker/odisha.mjs';
+import {proposeNames,proposeNameOrders,recordLanguages,suggestedLanguages} from './dist/name-variants.mjs';
+import {makeLandReviewWorker,readBhulekhForm,makeBhulekhReader,makeBhunakshaReader,officialRoR} from './worker/odisha.mjs';
 
 const require=createRequire(import.meta.url);
 globalThis.JSZip=require('./dist/vendor/jszip.js');
@@ -50,11 +50,18 @@ assert.ok(proposed('Kaur','Punjab').includes('ਕੌਰ'));
 assert.ok(proposed('Khan','Jammu and Kashmir').includes('خان'));
 assert.deepEqual(proposed('ଜେନା','Odisha'),[]);
 assert.deepEqual(proposed('Sangma','Meghalaya'),[]);
+const sourceName='Debendra Kumar Jena';
+const permutations=proposeNameOrders([sourceName],proposeNames([sourceName],['or'],sanscript)).map(item=>item.spelling);
+assert.ok(permutations.includes('Jena Kumar Debendra'));
+assert.ok(permutations.includes('ଯେନା କୁମାର ଦେବେନ୍ଦ୍ର'));
+assert.ok(!permutations.includes(sourceName));
+assert.equal(new Set(permutations).size,permutations.length);
+assert.deepEqual(matchRows([sample],{names:['ଆଶା ଜେନା',...Array.from({length:40},(_,i)=>`fixture ${i}`)]})[0].full,['ଆଶା ଜେନା']);
 const prefix='ctl00$ContentPlaceHolder1$';
 const picker=(field,value,label)=>`<select name="${prefix}${field}"><option selected="selected" value="${value}">${label}</option></select>`;
 const form=(...controls)=>'<input type="hidden" name="__VIEWSTATE" value="test&amp;state">'+controls.join('');
 assert.equal(readBhulekhForm(form()).fields.get('__VIEWSTATE'),'test&state');
-const sequence=[form(picker('ddlDistrict','3','Cuttack')),form(picker('ddlTahsil','11','Mahanga')),form(picker('ddlVillage','102','Bharatapada')),form(),form(`<input type="radio" name="${prefix}rbtnRORSearchtype" value="Tenant" checked>`,picker('ddlVillage','102','Bharatapada'),picker('ddlBindData','12','ଆଶା ଜେନା'))];
+const sequence=[form(picker('ddlDistrict','3','Cuttack')),form(picker('ddlTahsil','11','Mahanga')),form(picker('ddlVillage','102','Bharatapada')),form(),form(`<input type="radio" name="${prefix}rbtnRORSearchtype" value="Tenant" checked>`,picker('ddlVillage','102','Bharatapada'),picker('ddlBindData','12/3 ','ଆଶା ଜେନା'),`<select disabled name="${prefix}ddlRI"><option selected value="08">Kurujanga</option></select>`)];
 const posts=[];
 const lookup=makeBhulekhReader(async (url, options)=>{
   if (options.method==='POST') {
@@ -70,7 +77,13 @@ assert.equal((await site.fetch(request())).status,401);
 assert.equal((await site.fetch(request({origin:'https://elsewhere.example'}))).status,403);
 const tenantResult=await site.fetch(request({'oai-authenticated-user-id':'fixture-user'}));
 assert.equal(tenantResult.status,200);
-assert.equal((await tenantResult.json()).hits[0].tenant,'ଆଶା ଜେନା');
+const tenant=(await tenantResult.json());
+assert.equal(tenant.hits[0].tenant,'ଆଶା ଜେନା');
+assert.equal(tenant.location.riCode,'8');
+assert.equal(tenant.hits[0].khata,'12/3');
+assert.equal(new URL(tenant.hits[0].front).searchParams.get('KhataNo'),'12/3');
+assert.equal(new URL(tenant.hits[0].back).searchParams.get('type'),'back');
+assert.equal(officialRoR({districtCode:'3',tehsilCode:'11',villageCode:'102'},'Unknown','front'),'');
 assert.deepEqual(posts,['ddlDistrict','ddlTahsil','ddlVillage','rbtnRORSearchtype$2'].map(x=>prefix+x));
 const directorySite=makeLandReviewWorker({assets:{},matchRows,requireIdentity:false,async readTenants(location,{directory}){
   assert.equal(directory,true);
@@ -81,6 +94,17 @@ const directoryRequest = new Request('https://landreview.example/api/odisha/loca
 const directoryResult = await directorySite.fetch(directoryRequest);
 assert.equal(directoryResult.status,200);
 assert.equal((await directoryResult.json()).options[0].code,'2');
+const mapReader=makeBhunakshaReader(async (url,options)=>{
+  if (url.pathname.endsWith('ScalarDatahandler')) {assert.equal(url.searchParams.get('selections'),'3,11,8,102,');return new Response('<option value="01">01</option>');}
+  assert.equal(options.body.get('giscode'),'03110810201');
+  return Response.json({features:[{properties:{...geometry.demo.features[0].properties,info:'Discarded map metadata'},geometry:geometry.demo.features[0].geometry}]});
+});
+const mapSite=makeLandReviewWorker({assets:{},matchRows,readMap:mapReader,requireIdentity:false});
+const mapRequest=sheet=>new Request('https://landreview.example/api/odisha/maps',{method:'POST',headers:{origin:'https://landreview.example','content-type':'application/json'},body:JSON.stringify({location:'3-11-102-8',sheet})});
+assert.deepEqual(await (await mapSite.fetch(mapRequest(''))).json(),{sheets:['01']});
+const map=await (await mapSite.fetch(mapRequest('01'))).json();
+assert.equal(map.features[0].properties.kide,'101/2');
+assert.equal(map.features[0].properties.info,undefined);
 
 const pdf=await makeMapPDF(data.summary,geometry,new Map([[parcelKey(sample),matches[0]]]),false);
 assert.equal((await PDFLib.PDFDocument.load(pdf)).getPageCount(),1);

@@ -1,9 +1,16 @@
 export const normalize = value => String(value ?? '').normalize('NFC').replace(/[\u200c\u200d]/gu, '').trim().replace(/\s+/gu, ' ').toLowerCase();
 export const parcelKey = row => `${row.gis}/${row.id}`;
+export const liveNameLimit = 1000;
 const edge = '[\\p{L}\\p{M}\\p{N}]';
 const esc = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const compile = values => [...new Map(values.map(x => [normalize(x), x]).filter(([key]) => key)).entries()]
   .map(([key, value]) => [value, new RegExp(`(?<!${edge})${esc(key)}(?!${edge})`, 'u')]);
+
+function matchTerms(values) {
+  const patterns = compile(values);
+  const prefilter = patterns.length>12 ? new RegExp(`(?<!${edge})(?:${patterns.map(([name])=>esc(normalize(name))).join('|')})(?!${edge})`,'u') : null;
+  return source => source && (!prefilter || prefilter.test(source)) ? patterns.filter(([,pattern])=>pattern.test(source)).map(([name])=>name) : [];
+}
 
 export function extractCaste(info, groups) {
   const values = [...String(info ?? '').matchAll(/ଜା\s*[:ଃ]\s*/gu)].map(match => info.slice(match.index + match[0].length)
@@ -18,12 +25,12 @@ export function extractCaste(info, groups) {
 }
 
 export function matchRows(rows, rules) {
-  const surname = compile(rules.surnames ?? []);
-  const full = compile(rules.names ?? []);
+  const surname = matchTerms(rules.surnames ?? []);
+  const full = matchTerms(rules.names ?? []);
   return rows.map(row => {
     const source = row.status === 'Retrieved' ? normalize(row.info) : '';
-    const surnameHits = source ? surname.filter(([, pattern]) => pattern.test(source)).map(([name]) => name) : [];
-    const fullHits = source ? full.filter(([, pattern]) => pattern.test(source)).map(([name]) => name) : [];
+    const surnameHits = surname(source);
+    const fullHits = full(source);
     const caste = extractCaste(row.info, rules.caste ?? []);
     const eligible = !rules.useCaste || caste.status === 'Matches supplied caste labels';
     return { surname: surnameHits, full: fullHits, caste, surnameSelected: eligible && !!surnameHits.length,

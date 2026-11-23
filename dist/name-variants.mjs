@@ -76,3 +76,24 @@ export function proposeNames(terms,languages,transliterator=globalThis.Sanscript
   }
   return [...new Map(results.map(item=>[`${normalize(item.original)}|${item.language}|${normalize(item.spelling)}`,item])).values()];
 }
+
+export function proposeNameOrders(terms, localized) {
+  const sources = [...localized,...terms.map(original=>({original,spelling:original,language:'',curated:false}))];
+  const seen = new Set(sources.map(item=>normalize(item.spelling)));
+  const suggestions = [];
+  for (const item of sources) {
+    const words = item.spelling.trim().split(/\s+/u);
+    if (words.length<2 || words.length>8 || words.some(word=>!/^\p{L}/u.test(word))) continue;
+    const parts = words.length===2 ? words : [words[0],words.slice(1,-1).join(' '),words.at(-1)];
+    const orders = parts.length===2 ? [[1,0]] : [[2,1,0],[2,0,1],[0,2,1],[1,0,2],[1,2,0]];
+    for (const order of orders) {
+      const spelling=order.map(index=>parts[index]).join(' ');
+      const normalized=normalize(spelling);
+      if (!seen.has(normalized)) {
+        seen.add(normalized);
+        suggestions.push({...item,spelling,reordered:true});
+      }
+    }
+  }
+  return suggestions;
+}
