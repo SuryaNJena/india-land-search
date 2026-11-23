@@ -43,7 +43,7 @@ class PortalError extends Error {
 }
 
 export function makeBhulekhReader(fetcher = fetch, delay = ms => new Promise(resolve=>setTimeout(resolve,ms))) {
-  return async function readTenants(location) {
+  return async function readBhulekh(location, {directory=false} = {}) {
     const cookies = new Map();
     let last = 0;
     async function page(path, body, referer = portalOrigin + '/') {
@@ -94,28 +94,35 @@ export function makeBhulekhReader(fetcher = fetch, delay = ms => new Promise(res
       current = await post(current,prefix+'LinkButton1');
     }
     if (current.url.pathname.toLowerCase()==='/index.aspx') current=await page('/RoRView.aspx',undefined,current.url.href);
-    const selectors = [['ddlDistrict',location.districtCode],['ddlTahsil',location.tehsilCode],['ddlVillage',location.villageCode]];
-    for (const [selector,code] of selectors) {
+    const labels = {}, selectors = [['ddlDistrict','district'],['ddlTahsil','tehsil'],['ddlVillage','village']];
+    const choices = selector => current.form.selects.get(prefix+selector)?.filter(option=>/^0*[1-9]\d{0,5}$/.test(option.value) && option.label);
+    for (const [selector,field] of selectors) {
       const name = prefix+selector;
-      const option = current.form.selects.get(name)?.find(option=>/^\d+$/.test(option.value) && Number(option.value)===Number(code));
-      if (!option) throw new PortalError(`Bhulekh did not return the expected ${selector.slice(3).toLowerCase()} selector for this village.`);
+      const options = choices(selector);
+      if (!options) throw new PortalError(`Bhulekh did not return its ${field} selector.`);
+      const code = location[`${field}Code`];
+      if (directory && !code) return {level:field,options:options.map(({value,label})=>({code:String(Number(value)),label}))};
+      const option = options.find(option=>Number(option.value)===Number(code));
+      if (!option) throw new PortalError(`Bhulekh did not list that ${field} in the selected location.`,404);
+      labels[field]=option.label;
       current = await post(current,name,name,option.value);
     }
     current = await post(current,prefix+'rbtnRORSearchtype$2',prefix+'rbtnRORSearchtype','Tenant');
     const options = current.form.selects.get(prefix+'ddlBindData');
     if (current.form.fields.get(prefix+'rbtnRORSearchtype')!=='Tenant' || !options?.length) throw new PortalError('Bhulekh did not return the tenant list.');
-    return {officialVillage:current.form.selects.get(prefix+'ddlVillage')?.find(option=>option.selected)?.label,
+    return {labels,
       tenants:options.filter(option=>option.value && option.value!=='0' && option.value!=='-1' && option.label).map(option=>option.label)};
   };
 }
 
-export function makeLandReviewWorker({assets,locations,matchRows,readTenants=makeBhulekhReader(), requireIdentity=true}) {
-  const cache = new Map(), known = new Map(locations.map(x=>[x.id,x]));
-  let inFlight = null, pausedUntil = 0;
+export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(), requireIdentity=true}) {
+  const cache = new Map();
+  let busy = false, pausedUntil = 0;
   const json = (status, value, headers = {}) => Response.json(value,{status,headers:{'Cache-Control':'no-store',...headers}});
   return {async fetch(request) {
     const url = new URL(request.url);
-    if (url.pathname !== '/api/odisha/tenant-search') {
+    const directory = url.pathname === '/api/odisha/locations';
+    if (!directory && url.pathname !== '/api/odisha/tenant-search') {
       const asset = Object.hasOwn(assets,url.pathname) ? assets[url.pathname] : null;
       if (!asset || !['GET','HEAD'].includes(request.method)) return new Response('Not found',{status:404});
       return new Response(request.method==='HEAD'?null:asset.text,{headers:{'Content-Type':asset.type,'X-Content-Type-Options':'nosniff'}});
@@ -139,27 +146,38 @@ export function makeLandReviewWorker({assets,locations,matchRows,readTenants=mak
       }
       input=JSON.parse(text+decoder.decode());
     } catch { return json(400,{error:'Enter a valid search.'}); }
-    const location=known.get(input?.location), names=input?.names;
-    if (!location || !Array.isArray(names) || !names.length || names.length>30 || !names.every(x=>typeof x==='string' && x.trim() && x.length<=140)) {
-      return json(400,{error:'Choose a supported village and enter up to 30 names of 140 characters each.'});
+    const parts = typeof input?.location==='string' && input.location ? input.location.split('-') : [];
+    if ((!directory && parts.length!==3) || (directory && parts.length>2) || parts.some(part=>!/^[1-9]\d{0,5}$/.test(part))) {
+      return json(400,{error:'Choose the district, tehsil and village from Bhulekh.'});
+    }
+    const [districtCode,tehsilCode,villageCode] = parts;
+    const location = {id:parts.join('-'),districtCode,tehsilCode,villageCode};
+    const names=input?.names;
+    if (!directory && (!Array.isArray(names) || !names.length || names.length>30 || !names.every(x=>typeof x==='string' && x.trim() && x.length<=140))) {
+      return json(400,{error:'Enter up to 30 names of 140 characters each.'});
     }
     try {
-      let data=cache.get(location.id);
-      if (!data || Date.now()-data.at>300000) {
+      const key=`${directory?'directory':'tenants'}/${location.id}`;
+      let data=cache.get(key);
+      if (!data || Date.now()-data.at>(directory?3600000:300000)) {
         if (Date.now()<pausedUntil) return json(429,{error:'Bhulekh is limiting live requests. Try again later.'},{'Retry-After':'60'});
-        if (inFlight && inFlight.id!==location.id) return json(429,{error:'Another live lookup is running. Try again shortly.'},{'Retry-After':'10'});
-        if (!inFlight) {
-          const promise=Promise.resolve().then(()=>readTenants(location)).then(value=>{
-            const entry={...value,at:Date.now()}; cache.set(location.id,entry); return entry;
-          }).catch(error=>{if(error.status===429)pausedUntil=Date.now()+60000;throw error;}).finally(()=>{inFlight=null;});
-          inFlight={id:location.id,promise};
+        if (busy) return json(429,{error:'Another live lookup is running. Try again shortly.'},{'Retry-After':'10'});
+        busy=true;
+        try {
+          data={...await readTenants(location,{directory}),at:Date.now()};
+          cache.delete(key);
+          if (cache.size===40) cache.delete(cache.keys().next().value);
+          cache.set(key,data);
+        } finally {
+          busy=false;
         }
-        data=await inFlight.promise;
       }
+      if (directory) return json(200,{level:data.level,options:data.options});
       const matches=matchRows(data.tenants.map(info=>({status:'Retrieved',info})),{names});
       const hits=matches.flatMap((match,i)=>match.fullSelected?[{tenant:data.tenants[i],matched:match.full}]:[]);
-      return json(200,{location,officialVillage:data.officialVillage,checked:data.tenants.length,hits,checkedAt:new Date(data.at).toISOString()});
+      return json(200,{location:{...location,...data.labels},checked:data.tenants.length,hits,checkedAt:new Date(data.at).toISOString()});
     } catch(error) {
+      if (error.status===429) pausedUntil=Date.now()+60000;
       return json(error.status??502,{error:error instanceof PortalError?error.message:'Bhulekh did not complete the live lookup. Try again shortly.'});
     }
   }};

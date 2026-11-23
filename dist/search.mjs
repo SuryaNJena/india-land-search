@@ -58,12 +58,6 @@ const placeFilters = criteria => locationFields.map(field => [field, searchTerms
 const includesPlace = (filters, place) => filters.every(([field,wanted]) =>
   !wanted.length || place[field].some(value=>wanted.includes(placeKey(value))));
 
-export function selectLiveLocations(locations, criteria) {
-  const filters = placeFilters(criteria);
-  return locations.filter(place => includesPlace(filters,Object.fromEntries(locationFields.map(field=>
-    [field,[place[field],place[`${field}Code`]]]))));
-}
-
 export function findRecords(workspace, index, criteria) {
   const names = searchTerms(criteria.names);
   const filters = placeFilters(criteria);

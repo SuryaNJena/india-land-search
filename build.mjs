@@ -1,6 +1,5 @@
 import {mkdir,readFile,readdir,writeFile} from 'node:fs/promises';
 import {extname} from 'node:path';
-import {odishaLocations} from './dist/odisha-locations.mjs';
 
 const dist = new URL('./dist/',import.meta.url);
 const types = {'.html':'text/html','.css':'text/css','.mjs':'text/javascript','.js':'text/javascript','.txt':'text/plain'};
@@ -17,7 +16,7 @@ const app = await readFile(new URL('./worker/odisha.mjs',import.meta.url),'utf8'
 const matcher = await readFile(new URL('core.mjs',dist),'utf8');
 const manifest = await readFile(new URL('./.openai/hosting.json',import.meta.url),'utf8');
 await Promise.all([mkdir(new URL('server/',dist),{recursive:true}),mkdir(new URL('.openai/',dist),{recursive:true})]);
-const bundle = `${matcher}\n${app}\nexport default makeLandReviewWorker({assets:${JSON.stringify(assets)},locations:${JSON.stringify(odishaLocations)},matchRows});\n`;
+const bundle = `${matcher}\n${app}\nexport default makeLandReviewWorker({assets:${JSON.stringify(assets)},matchRows});\n`;
 await Promise.all([
   writeFile(new URL('server/index.js',dist),bundle),
   writeFile(new URL('.openai/hosting.json',dist),manifest)
