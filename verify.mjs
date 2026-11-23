@@ -8,7 +8,7 @@ import {portals} from './dist/portals.mjs';
 import {statePaths} from './dist/india-states.mjs';
 import {assignImportState, criteriaFrom, findRecords, searchIndex} from './dist/search.mjs';
 import {proposeNames,proposeNameOrders,recordLanguages,suggestedLanguages} from './dist/name-variants.mjs';
-import {makeLandReviewWorker,readBhulekhForm,makeBhulekhReader,makeBhunakshaReader,officialRoR} from './worker/odisha.mjs';
+import {makeLandReviewWorker,readBhulekhForm,makeBhulekhReader,makeBhunakshaReader,officialMapBase,officialRoR} from './worker/odisha.mjs';
 
 const require=createRequire(import.meta.url);
 globalThis.JSZip=require('./dist/vendor/jszip.js');
@@ -99,6 +99,8 @@ const mapReader=makeBhunakshaReader(async (url,options)=>{
   assert.equal(options.body.get('giscode'),'03110810201');
   return Response.json({features:[{properties:{...geometry.demo.features[0].properties,info:'Discarded map metadata'},geometry:geometry.demo.features[0].geometry}]});
 });
+assert.equal(officialMapBase('20'),'https://app3bhunakshaodisha.nic.in/bhunaksha/');
+assert.equal(officialMapBase('19'),'https://bhunakshaodisha.nic.in:8443/bhunaksha/');
 const mapSite=makeLandReviewWorker({assets:{},matchRows,readMap:mapReader,requireIdentity:false});
 const mapRequest=sheet=>new Request('https://landreview.example/api/odisha/maps',{method:'POST',headers:{origin:'https://landreview.example','content-type':'application/json'},body:JSON.stringify({location:'3-11-102-8',sheet})});
 assert.deepEqual(await (await mapSite.fetch(mapRequest(''))).json(),{sheets:['01']});

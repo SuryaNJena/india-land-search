@@ -117,13 +117,28 @@ export function makeBhulekhReader(fetcher = fetch, delay = ms => new Promise(res
   };
 }
 
-const mapHosts = ['https://app4bhunakshaodisha.nic.in:8443/bhunaksha/','https://bhunakshaodisha.nic.in:8443/bhunaksha/'];
+// District assignments from the official BhuNaksha Odisha district picker.
+const mapServers = [
+  ['app4',443,['7','8','18']], ['app4',8443,['3','17','29']],
+  ['app3',443,['20','23','26']], ['app3',8443,['5','24','28']],
+  ['app2',443,['11','22','27']], ['app2',8443,['12','15','30']],
+  ['app1',443,['1','10','16']], ['app1',8443,['2','9','25']],
+  ['',8443,['4','14','19']]
+];
+
+export function officialMapBase(districtCode) {
+  const [server,port]=mapServers.find(([, ,districts])=>districts.includes(districtCode)) ?? ['',443];
+  return `https://${server}bhunakshaodisha.nic.in${port===443?'':`:${port}`}/bhunaksha/`;
+}
 
 export function makeBhunakshaReader(fetcher=fetch) {
   return async function readMap(location,sheet) {
     const {districtCode,tehsilCode,riCode,villageCode}=location;
-    const districtHost = districtCode==='19' ? [...mapHosts].reverse() : mapHosts;
-    for (const base of districtHost) {
+    const primary=officialMapBase(districtCode);
+    const standard=new URL(primary); standard.port='';
+    const legacy=['6','13','21'].includes(districtCode)?'http://bhunakshaodisha.nic.in/bhunaksha/':'https://app4bhunakshaodisha.nic.in:8443/bhunaksha/';
+    const sources=new Set([...(sheet?[primary,standard.href]:[standard.href,primary]),legacy]);
+    for (const base of sources) {
       try {
         if (!sheet) {
           const path=new URL('ScalarDatahandler',base);
@@ -131,7 +146,7 @@ export function makeBhunakshaReader(fetcher=fetch) {
           const response=await fetcher(path,{redirect:'error',signal:AbortSignal.timeout(7000)});
           if (!response.ok) { await response.body?.cancel(); continue; }
           const sheets=[...new Set([...String(await response.text()).matchAll(/<option\b([^>]+)>/gi)]
-            .map(([,text])=>attributes(text).get('value')).filter(value=>/^\d{1,3}$/.test(value??'')))];
+            .map(([,text])=>attributes(text).get('value')).filter(value=>/^\d{1,3}$/.test(value??'') && Number(value)>0))].sort((a,b)=>Number(a)-Number(b));
           if (sheets.length) return {sheets};
           continue;
         }
@@ -148,7 +163,7 @@ export function makeBhunakshaReader(fetcher=fetch) {
           properties:{id:String(properties.id),kide:String(properties.kide??'')},geometry
         }));
         if (parcels.length) return {gis,sheet,features:parcels};
-      } catch { /* Try the other official Odisha map host. */ }
+      } catch { /* Try the alternate official Odisha map endpoint. */ }
     }
     throw new PortalError(sheet?'BhuNaksha did not return this map sheet.':'BhuNaksha did not return any map sheets for this village.');
   };
@@ -163,7 +178,7 @@ export function officialRoR(location,khata,type) {
 
 export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),nameLimit=1000,requireIdentity=true}) {
   const cache = new Map(), mapCache = new Map();
-  let busy = false, pausedUntil = 0;
+  let busyUntil = 0, pausedUntil = 0;
   const json = (status, value, headers = {}) => Response.json(value,{status,headers:{'Cache-Control':'no-store',...headers}});
   return {async fetch(request) {
     const url = new URL(request.url);
@@ -223,15 +238,16 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       let data=cache.get(key);
       if (!data || Date.now()-data.at>(directory?3600000:300000)) {
         if (Date.now()<pausedUntil) return json(429,{error:'Bhulekh is limiting live requests. Try again later.'},{'Retry-After':'60'});
-        if (busy) return json(429,{error:'Another live lookup is running. Try again shortly.'},{'Retry-After':'10'});
-        busy=true;
+        if (Date.now()<busyUntil) return json(429,{error:'Another live lookup is running. Try again shortly.'},{'Retry-After':'10'});
+        const lease=Date.now()+30000;
+        busyUntil=lease;
         try {
           data={...await readTenants(location,{directory}),at:Date.now()};
           cache.delete(key);
           if (cache.size===40) cache.delete(cache.keys().next().value);
           cache.set(key,data);
         } finally {
-          busy=false;
+          if (busyUntil===lease) busyUntil=0;
         }
       }
       if (directory) return json(200,{level:data.level,options:data.options});
