@@ -176,22 +176,30 @@ export function officialRoR(location,khata,type) {
   return url.href;
 }
 
-export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),mapSnapshots={villages:{}},nameLimit=1000,requireIdentity=true}) {
+export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),mapSnapshots={villages:{}},nameLimit=1000,requireIdentity=true,readIndex,fetchReport=fetch}) {
   const cache = new Map(), mapCache = new Map();
   let busyUntil = 0, pausedUntil = 0;
   const json = (status, value, headers = {}) => Response.json(value,{status,headers:{'Cache-Control':'no-store',...headers}});
-  return {async fetch(request) {
+  return {async fetch(request, env = {}) {
     const url = new URL(request.url);
     const directory = url.pathname === '/api/odisha/locations';
     const map = url.pathname === '/api/odisha/maps';
-    if (!directory && !map && url.pathname !== '/api/odisha/tenant-search') {
+    const indexed = url.pathname === '/api/odisha/index-search';
+    const report = url.pathname === '/api/odisha/ror';
+    const origin = request.headers.get('origin');
+    const pages = indexed && env.LANDREVIEW_PAGES_ORIGIN && env.LANDREVIEW_PAGES_ORIGIN===origin;
+    const cors = pages ? {'Access-Control-Allow-Origin':origin,Vary:'Origin'} : {};
+    if (pages && request.method==='OPTIONS') return new Response(null,{status:204,headers:{...cors,
+      'Access-Control-Allow-Methods':'POST','Access-Control-Allow-Headers':'Content-Type','Access-Control-Max-Age':'600'}});
+    if (!directory && !map && !indexed && !report && url.pathname !== '/api/odisha/tenant-search') {
       const asset = Object.hasOwn(assets,url.pathname) ? assets[url.pathname] : null;
       if (!asset || !['GET','HEAD'].includes(request.method)) return new Response('Not found',{status:404});
       return new Response(request.method==='HEAD'?null:asset.text,{headers:{'Content-Type':asset.type,'X-Content-Type-Options':'nosniff'}});
     }
     if (request.method!=='POST') return json(405,{error:'Use POST for the tenant search.'},{Allow:'POST'});
-    if (request.headers.get('origin')!==url.origin) return json(403,{error:'Run the search from the LandReview Site.'});
-    if (requireIdentity && !request.headers.get('oai-authenticated-user-id')) return json(401,{error:'Sign in with ChatGPT to run a live search.'});
+    if (origin!==url.origin && !pages) return json(403,{error:'Run the search from the LandReview Site.'});
+    const signedIn=Boolean(request.headers.get('oai-authenticated-user-id'));
+    if (requireIdentity && !indexed && !report && !(map && env.DB) && !signedIn) return json(401,{error:'Sign in with ChatGPT to run a live search.'});
     if (!request.headers.get('content-type')?.startsWith('application/json')) return json(415,{error:'Expected a JSON search.'});
     let input;
     try {
@@ -208,13 +216,85 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       }
       input=JSON.parse(text+decoder.decode());
     } catch { return json(400,{error:'Enter a valid search.'}); }
+    if (indexed) {
+      const {names,location='',offset=0}=input??{};
+      if (!Array.isArray(names) || !names.length || names.length>Math.min(nameLimit,100) ||
+          !names.every(name=>typeof name==='string' && name.trim() && name.length<=140) ||
+          typeof location!=='string' || (location && !/^[1-9]\d{0,5}(?:-[1-9]\d{0,5}){2}$/.test(location)) ||
+          !Number.isInteger(offset) || offset<0 || offset>15000) {
+        return json(400,{error:'Use up to 100 spellings and a valid village filter.'},cors);
+      }
+      try {
+        const data=await readIndex?.(env.DB,{names,location,offset});
+        if (data?.invalid) return json(400,{error:'Enter a name containing letters or digits.'},cors);
+        if (!data) return json(503,{error:'The statewide Odisha land-record index has not been loaded.'},cors);
+        return json(200,{...data,hits:data.hits.map(hit=>({...hit,
+          front:officialRoR(hit.location,hit.khata,'front'),back:officialRoR(hit.location,hit.khata,'back')}))},cors);
+      } catch {
+        return json(503,{error:'The Odisha land-record index is temporarily unavailable.'},cors);
+      }
+    }
     const parts = typeof input?.location==='string' && input.location ? input.location.split('-') : [];
     if ((map ? parts.length!==4 : directory ? parts.length>2 : parts.length!==3) || parts.some(part=>!/^[1-9]\d{0,5}$/.test(part))) {
       return json(400,{error:'Choose the district, tehsil and village from Bhulekh.'});
     }
     const [districtCode,tehsilCode,villageCode,riCode] = parts;
     const location = {id:parts.join('-'),districtCode,tehsilCode,villageCode,riCode};
+    if (report) {
+      const {khata,side}=input;
+      const official=typeof khata==='string' && officialRoR(location,khata,side);
+      if (!official) return json(400,{error:'Select an indexed khata and a record side.'});
+      const db=env.DB;
+      if (!db) return json(503,{error:'The Odisha index is unavailable.'});
+      try {
+        const holding=await db.prepare('SELECT 1 FROM landreview_holdings h JOIN landreview_active a ON a.version=h.version WHERE h.village=? AND h.khata=? LIMIT 1').bind(location.id,khata).first();
+        if (!holding) return json(404,{error:'This khata is unavailable in the index.'});
+        const now=Date.now(), lease=now+20000;
+        const lock=await db.prepare('INSERT INTO landreview_upstream VALUES (?,?) ON CONFLICT(portal) DO UPDATE SET until=excluded.until WHERE landreview_upstream.until<=? RETURNING until').bind('bhulekh',lease,now).first();
+        if (!lock) return json(429,{error:'Another Bhulekh request is running or the portal has asked us to wait.'},{'Retry-After':'20'});
+        let release=now+1000;
+        try {
+          const response=await fetchReport(official,{headers:{accept:'text/html'},redirect:'error',signal:AbortSignal.timeout(12000)});
+          if ([403,429,503].includes(response.status)) {
+            const retry=response.headers.get('Retry-After');
+            const expires=retry && /^\d+$/.test(retry) ? Date.now()+Number(retry)*1000 : Date.parse(retry??'');
+            release=Math.max(Date.now()+60000,Number.isFinite(expires)?expires:0);
+            await response.body?.cancel();
+            return json(429,{error:'Bhulekh is unavailable or limiting requests.'},{'Retry-After':String(Math.ceil((release-Date.now())/1000))});
+          }
+          if (!response.ok || Number(response.headers.get('Content-Length'))>1024*1024) {
+            await response.body?.cancel();
+            return json(502,{error:'Bhulekh did not return the selected record.'});
+          }
+          const reader=response.body?.getReader(), decoder=new TextDecoder();
+          let bytes=0, html='';
+          if (!reader) return json(502,{error:'Bhulekh returned an empty record.'});
+          for (;;) {
+            const {done,value}=await reader.read();
+            if (done) break;
+            bytes+=value.byteLength;
+            if (bytes>1024*1024) {await reader.cancel();return json(502,{error:'The official record exceeded the printable size limit.'});}
+            html+=decoder.decode(value,{stream:true});
+          }
+          html+=decoder.decode();
+          if (!/id=["']ContentArea["']/i.test(html)) return json(502,{error:'Bhulekh did not return the selected record.'});
+          return json(200,{html});
+        } finally {
+          await db.prepare('UPDATE landreview_upstream SET until=? WHERE portal=? AND until=?').bind(release,'bhulekh',lease).run();
+        }
+      } catch {
+        return json(502,{error:'The official record could not be retrieved.'});
+      }
+    }
     if (map) {
+      if (requireIdentity && !signedIn) {
+        try {
+          const valid=await env.DB.prepare('SELECT 1 FROM landreview_villages v JOIN landreview_active a ON a.version=v.version WHERE v.code=? AND v.ri=?').bind(parts.slice(0,3).join('-'),riCode).first();
+          if (!valid) return json(404,{error:'This map location is unavailable in the index.'});
+        } catch {
+          return json(503,{error:'The index could not verify this map location.'});
+        }
+      }
       const sheet=input.sheet??'';
       if (typeof sheet!=='string' || (sheet && !/^\d{1,3}$/.test(sheet))) return json(400,{error:'Choose a BhuNaksha sheet.'});
       const key=`${location.id}/${sheet}`, cached=mapCache.get(key);

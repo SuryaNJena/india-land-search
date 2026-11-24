@@ -1,10 +1,11 @@
-import {drawMap} from './maps.mjs';
+import {drawMap,makeMapPDF} from './maps.mjs';
+import {download} from './files.mjs';
 
-export function mountLiveOdishaMap(root,locations,escape,tag) {
-  root.innerHTML=`<summary>BhuNaksha village map</summary><div class="toolbar"><label class="label">Village<select id="bhu-village">${locations.map((place,i)=>`<option value="${i}">${escape(place.village)} · ${escape(place.tehsil)}</option>`).join('')}</select></label><label class="label">Sheet<select id="bhu-sheet" disabled></select></label></div><p id="bhu-status" role="status"></p><button class="plain-link" type="button" id="bhu-retry" hidden>Retry map</button><div class="map-frame" id="bhu-canvas-frame" hidden><canvas id="bhu-canvas" width="900" height="590" aria-label="BhuNaksha village map. Click a parcel to read its plot number."></canvas></div><p class="muted">${tag('https://bhunakshaodisha.nic.in/','Open official BhuNaksha portal')}</p>`;
+export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots) {
+  root.innerHTML=`<summary>BhuNaksha village map</summary><div class="toolbar"><label class="label">Village<select id="bhu-village">${locations.map((place,i)=>`<option value="${i}">${escape(place.village)} · ${escape(place.tehsil)}</option>`).join('')}</select></label><label class="label">Sheet<select id="bhu-sheet" disabled></select></label></div><p id="bhu-status" role="status"></p><button class="plain-link" type="button" id="bhu-retry" hidden>Retry map</button><div class="map-frame" id="bhu-canvas-frame" hidden><canvas id="bhu-canvas" width="900" height="590" aria-label="BhuNaksha village map. Click a parcel to read its plot number."></canvas></div><button class="button secondary" type="button" id="bhu-export" hidden>Download matched sheet overview</button><p class="muted">${tag('https://bhunakshaodisha.nic.in/','Open official BhuNaksha portal')}</p>`;
   const village=root.querySelector('#bhu-village'), sheet=root.querySelector('#bhu-sheet');
   const canvas=root.querySelector('#bhu-canvas'), status=root.querySelector('#bhu-status'), frame=root.querySelector('#bhu-canvas-frame');
-  const retry=root.querySelector('#bhu-retry');
+  const retry=root.querySelector('#bhu-retry'), exportMap=root.querySelector('#bhu-export');
   let pending, loaded=false, geometry, paths=[];
 
   async function request(place,sheetCode,signal) {
@@ -16,14 +17,31 @@ export function mountLiveOdishaMap(root,locations,escape,tag) {
   }
 
   const render = selected=>{
-    paths=drawMap(canvas,geometry.features,geometry.gis,new Map(),{labels:geometry.features.length<600,plain:true,selected});
+    const place=locations[Number(village.value)];
+    const plots=matchedPlots?.get(place.id);
+    const highlights=new Map(geometry.features.filter(feature=>plots?.has(feature.properties.kide))
+      .map(feature=>[`${geometry.gis}/${feature.properties.id}`,{level:'full'}]));
+    paths=drawMap(canvas,geometry.features,geometry.gis,highlights,{labels:geometry.features.length<600,plain:!highlights.size,selected});
+    exportMap.hidden=!highlights.size;
+    exportMap.onclick=async()=>{
+      exportMap.disabled=true;
+      try {
+        const {gis,sheet}=geometry;
+        const pdf=await makeMapPDF([{gis,sheet,name:place.village,village:place.villageCode}],{[gis]:geometry},highlights,false);
+        download(`LandReview_${place.id}_sheet-${sheet}.pdf`,pdf,'application/pdf');
+      } catch {
+        status.textContent='The map overview could not be exported.';
+      } finally {
+        exportMap.disabled=false;
+      }
+    };
   };
 
   async function load(sheetCode) {
     pending?.abort();
     const abort = new AbortController(); pending=abort;
     const place=locations[Number(village.value)];
-    frame.hidden=true; sheet.disabled=true; retry.hidden=true;
+    frame.hidden=true; sheet.disabled=true; retry.hidden=true; exportMap.hidden=true;
     status.textContent=`Loading ${sheetCode?`sheet ${sheetCode}`:'map sheets'} from BhuNaksha…`;
     try {
       if (!sheetCode) {

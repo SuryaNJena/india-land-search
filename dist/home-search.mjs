@@ -6,6 +6,9 @@ import {criteriaFrom, findRecords, locationFields, searchIndex} from './search.m
 import {mountNameReview} from './name-review.mjs';
 import {mountOdishaScope} from './odisha-scope.mjs';
 import {mountLiveOdishaMap} from './live-odisha-map.mjs';
+import {mountVillageFinder} from './village-finder.mjs';
+import {runtime} from './runtime.mjs';
+import {mountIndexedResults} from './indexed-results.mjs';
 
 const storageKey = 'landreview.home-search';
 const fields = {district:'District', tehsil:'Tehsil / taluk', ri:'RI / revenue circle', village:'Villages'};
@@ -34,6 +37,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
     if (known.size === 1) criteria.state = [...known][0];
   }
   root.innerHTML = `<div class="card-head"><div><h2>Search names in land records</h2><p>Choose a state and enter a surname or full name. Add a district, tehsil, RI, or village if you know it.</p></div></div>
+    <details class="live-location" id="village-finder"></details>
     <form id="home-search-form" novalidate>
       <div class="search-fields">
         <label class="label">State or union territory<select name="state" required><option value="">Choose a state</option>${portals.map(p => `<option>${escape(p.name)}</option>`).join('')}</select></label>
@@ -42,7 +46,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
       </div>
       <div class="name-review" id="home-name-review" hidden></div>
       <details class="live-location" id="odisha-location" hidden></details>
-      <div class="actions"><button type="submit" class="button primary" aria-describedby="home-search-feedback">Search records</button><button type="button" id="search-bhulekh" class="button secondary" aria-describedby="home-search-feedback" hidden>Search Bhulekh live</button><div id="home-portal-links" class="actions"></div></div>
+      <div class="actions"><button type="submit" class="button primary" aria-describedby="home-search-feedback">Search records</button><button type="button" id="search-index" class="button secondary" hidden>Search Odisha index</button><button type="button" id="search-bhulekh" class="button secondary" aria-describedby="home-search-feedback" hidden>Search Bhulekh live</button><div id="home-portal-links" class="actions"></div></div>
       <p id="home-search-feedback" role="status"></p>
       <p class="muted" id="home-search-scope"></p>
     </form>
@@ -55,17 +59,29 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
   const scopeElement = root.querySelector('#odisha-location');
   const submitButton=form.querySelector('[type=submit]');
   const liveButton=form.querySelector('#search-bhulekh');
+  const indexButton=form.querySelector('#search-index');
   const feedback=form.querySelector('#home-search-feedback');
   const control = key => form.elements.namedItem(key);
   const loadFields = () => Object.entries(criteria).forEach(([key, value]) => { control(key).value = value; });
-  let liveSearch;
+  let liveSearch, indexedSearch, selectedVillage;
   const review = mountNameReview(root.querySelector('#home-name-review'),escape,clearResults);
   const odisha = mountOdishaScope(scopeElement,escape,clearResults);
+  const refreshVillageFinder = mountVillageFinder(root.querySelector('#village-finder'),escape,place=>{
+    selectState(place.state);
+    clearResults();
+    selectedVillage=place;
+    for (const field of locationFields) criteria[field]=place[field]??'';
+    loadFields(); saveSearch(); refreshScope();
+    feedback.textContent=place.portalCode || !runtime.hosted
+      ? `Location filled from ${place.village}.`
+      : `Location filled from ${place.village}. Choose it in Bhulekh to run a village-specific live search.`;
+  });
   loadFields();
   review.update(criteria.state,criteria.names);
 
   function clearResults() {
     liveSearch?.abort(); liveSearch=undefined;
+    indexedSearch?.abort(); indexedSearch=undefined;
     submitButton.disabled=liveButton.disabled=false;
     feedback.textContent='';
     if (submitted) { submitted=false; showResults(); }
@@ -77,14 +93,17 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
     const portal = portals.find(p => p.name === criteria.state);
     root.querySelector('#home-portal-links').innerHTML = portal ? tag(portal.record, `Open ${portal.label}`) : '';
     const inState = index.filter(x => x.state === criteria.state);
-    const live = criteria.state==='Odisha';
+    const live = criteria.state==='Odisha' && (runtime.hosted || runtime.indexBase);
+    refreshVillageFinder(criteria.state);
     const hasLocal = inState.length>0;
     submitButton.textContent = live && !hasLocal ? 'Search live Odisha records' : 'Search loaded records';
-    liveButton.hidden = !live || !hasLocal;
-    scopeElement.hidden=!live;
-    form.querySelectorAll('.location-input').forEach(label=>{label.hidden=live && !hasLocal;});
+    liveButton.hidden = !live || !runtime.hosted;
+    indexButton.hidden = !live || !hasLocal;
+    liveButton.textContent='Search selected villages on Bhulekh';
+    scopeElement.hidden=!live || !runtime.hosted;
+    form.querySelectorAll('.location-input').forEach(label=>{label.hidden=live && !hasLocal && !selectedVillage;});
     form.querySelector('#home-search-scope').textContent = live
-      ? 'Bhulekh searches by village. Choose villages from any Odisha district. A statewide name index is unavailable.'
+      ? 'Search the Odisha index by name, or choose a verified village for a scoped lookup.'
       : criteria.state ? 'Search covers loaded records for this state. The official portal is available for fresh lookups.' : '';
     for (const field of locationFields) {
       const options = [...new Set(inState.flatMap(x => x.location[field].slice(0, 1)))].sort((a, b) => a.localeCompare(b));
@@ -144,8 +163,8 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
     const state = criteria.state;
     if (!submitted || !state) { results.innerHTML = ''; return; }
     const found = findRecords(workspace, index, reviewedCriteria());
-    if (state==='Odisha' && !found.stateCount) {
-      results.innerHTML = '<div class="empty"><strong>Your Odisha search is ready.</strong><p>Review suggested spellings and select the villages you want to check.</p></div>';
+    if (state==='Odisha' && (runtime.hosted || runtime.indexBase) && !found.stateCount) {
+      results.innerHTML = '<div class="empty"><strong>Your Odisha search is ready.</strong><p>Review suggested spellings. Leave the location blank to search statewide.</p></div>';
       return;
     }
     if (!found.stateCount) {
@@ -180,6 +199,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
   function selectState(state) {
     if (criteria.state === state) return;
     clearResults();
+    selectedVillage=undefined;
     criteria = criteriaFrom({state, names:criteria.names});
     submitted = false;
     loadFields(); review.update(criteria.state,criteria.names); refreshScope(); showResults();
@@ -227,11 +247,12 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
     const {name, value} = event.target;
     if (name !== 'state' && Object.hasOwn(criteria,name)) {
       criteria[name] = value;
+      if (locationFields.includes(name)) selectedVillage=undefined;
       if (name==='names') review.update(criteria.state,value);
       clearResults();
     }
   };
-  function startSearch(forceLive = false) {
+  function startSearch(scopedPortalSearch = false, forceIndex = false) {
     if (liveSearch) return;
     feedback.textContent='';
     if (!criteria.state) {
@@ -249,19 +270,39 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
     }
     saveSearch();
     const found = criteria.state==='Odisha' && !workspace?.demo ? findRecords(workspace,index,reviewedCriteria()) : null;
-    if (forceLive || found && !found.scopedCount) {
+    if (scopedPortalSearch || forceIndex || (runtime.hosted || runtime.indexBase) && found && !found.scopedCount) {
       if (names.length>liveNameLimit || names.some(x=>x.length>140)) {
         feedback.textContent=`Search up to ${count.format(liveNameLimit)} spellings of 140 characters each.`;
         control('names').focus(); return;
       }
-      const targets=odisha.targets();
-      if (!targets.length) {
-        feedback.textContent='Choose a district, tehsil, and village above, then search again.';
-        odisha.focusLocation(); return;
+      if (scopedPortalSearch) {
+        const targets=selectedVillage?.portalCode ?
+          [{id:selectedVillage.portalCode,village:selectedVillage.village}] : odisha.targets();
+        if (!targets.length) {
+          feedback.textContent='Choose a village in the Bhulekh picker.';
+          odisha.focusLocation();
+          return;
+        }
+        indexedSearch?.abort(); indexedSearch=undefined;
+        submitted=true;
+        void runLive(targets,names);
+        results.setAttribute('tabindex','-1'); results.focus();
+        return;
+      }
+      if ((selectedVillage && !selectedVillage.portalCode || !selectedVillage && locationFields.some(field=>criteria[field].trim()))) {
+        feedback.textContent='Choose a village with a verified Bhulekh code, or clear the location fields to search statewide.';
+        return;
       }
       submitted=true;
-      void runLive(targets,names);
+      if (names.length>100) {
+        feedback.textContent='Choose up to 100 spellings for an index search.';
+        return;
+      }
+      indexedSearch?.abort();
+      indexedSearch=new AbortController();
+      void mountIndexedResults(results,{names,location:selectedVillage?.portalCode??'',escape,tag,signal:indexedSearch.signal});
     } else {
+      indexedSearch?.abort(); indexedSearch=undefined;
       submitted=true;
       showResults();
     }
@@ -269,6 +310,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
   }
   form.onsubmit=event=>{event.preventDefault();startSearch();};
   liveButton.onclick=()=>startSearch(true);
+  indexButton.onclick=()=>startSearch(false,true);
   mapPicker.ontoggle = showMaps;
   refreshScope(); showResults();
 }
