@@ -8,11 +8,11 @@
 | CP2 Diagram | The [TRD](TRD.md) shows the proposed statewide architecture and documents the shipped village-based Worker. The statewide data source is still a launch dependency. |
 | CP3 Test | `node --test` exercises 8 focused unit tests, 8 characterization tests, and release tests for village discovery and the SQLite index. `verify.mjs` covers the broader offline build and data workflows. The [test plan](TEST-PLAN.md) links these checks to the requirements and records pending launch acceptance. The [TRD](TRD.md) records the bounded public-portal source check. |
 | CP4 Fix | The live-search button now accepts reviewed spelling checkboxes and opens the village picker when a location is missing. The published map viewer reports source availability and dates saved geometry. Browser QA confirmed the search flow with a sample and later displayed the saved Anda sheet 01 on the published Site. |
-| CP5 Pull request | The local Site repository has deployment commit history. The public GitHub repository is [SuryaNJena/india-land-search](https://github.com/SuryaNJena/india-land-search). The release branch keeps the original deployment history and adds individually labelled checkpoint commits. |
+| CP5 Pull request | The local Site repository has deployment commit history. The public GitHub repository is [SuryaNJena/india-land-search](https://github.com/SuryaNJena/india-land-search). The release branch keeps the original deployment history and adds individually labelled checkpoint commits. See [draft PR #1](https://github.com/SuryaNJena/india-land-search/pull/1) for the checkpoint links and launch gates. |
 
 ## Release verification
 
-The GitHub Pages build was tested in the browser under a repository-style subpath. Searching for `ଭରତପଡ଼ା` with the person field empty filled Odisha, Cuttack, Mahanga, Kurujanga, and Bharatpada from the verified directory entry. The anonymous index route is exercised with synthetic holdings. Production statewide coverage and live map and RoR validation still depend on a verified deployed source.
+The GitHub Pages build was tested in the browser under a repository-style subpath. Searching for `ଭରତପଡ଼ା` with the person field empty filled Odisha, Cuttack, Mahanga, Kurujanga, and Bharatpada from the verified directory entry. The anonymous index route is exercised with synthetic holdings. A one-village Bhulekh collection pilot on 24 November 2026 checkpointed 2,549 tenant entries for Bharatapada 102. A repeat invocation skipped the completed checkpoint. No tenant data from the pilot is included in the repository. Production statewide coverage and live map and RoR validation still depend on a verified deployed source.
 
 ## Capabilities and models
 
