@@ -44,6 +44,6 @@ Keep `CT-01` as the characterization of the signed-in village connector. When an
 | AT-09 | Simulate a throttled or temporarily unavailable portal with `Retry-After` in seconds and HTTP-date formats. Confirm all acquisition jobs for that portal honor the wait, keep their checkpoints, and resume without duplicating finished villages. Verify an access denial stops acquisition for review. | BR-02, BR-06, TR-08 |
 | AT-10 | In a fresh browser, search a village with no person's name or location filters. Verify local-script and known Latin spellings, disambiguate same-name villages, and confirm that selection fills only verified filters. Confirm no land-record portal requests occur during discovery. | BR-08, TR-09 |
 
-## Pending GitHub Pages smoke check
+## GitHub Pages smoke check
 
 Serve the static build at a repository subpath. Verify that assets load, village lookup and local workspace import work, and official portal links are visible. With no search API configured, confirm that village lookup sends no requests to Site Worker routes. If live search is enabled, verify the Pages origin and run the signed-out search flow against the configured API.

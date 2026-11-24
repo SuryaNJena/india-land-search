@@ -39,6 +39,10 @@ Use the same browser modules for ChatGPT Sites and GitHub Pages. The Pages build
 
 Use the [Local Government Directory](https://data.gov.in/catalog/local-government-directory-lgd) for the administrative hierarchy. Keep LGD locality IDs separate from Bhulekh and BhuNaksha identifiers and verify the crosswalk against the Odisha portals. Keep the RI empty where the mapping has not been verified. The village directory can answer place searches without contacting the land-record portals or importing a workspace.
 
+## Release branch implementation
+
+The release branch includes the Odisha LGD catalogue, reproducible Pages artifact, D1 schema and index reader, private intake tools, and indexed plot links and map/PDF review. The release dataset contains place names only. It cannot serve statewide ownership results until verified tenant records are imported. The [deployment instructions](DEPLOYMENT.md) describe both hosting configurations and the outstanding production checks.
+
 ## Odisha source strategy
 
 - **Bhulekh finds candidate holdings.** Traverse the official district, tehsil, and village selectors in the public session. Collect the tenant list at village scope and keep the source khata and locality codes. Serve statewide name queries from the resulting index so each public search puts no acquisition load on the portals. Retrieve the official RoR for the holdings the user selects.
