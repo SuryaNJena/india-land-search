@@ -1,9 +1,10 @@
 import {normalize,parcelKey,safeURL,sourceCaste,suggestSurname,validateWorkspace,matchRows} from './core.mjs';
-import {download,localStore,zipWorkspace,importFile,exportWorkbook,mergeROR,exportRORBundle} from './files.mjs';
+import {download,localStore,zipWorkspace,importFile,exportWorkbook,mergeROR,savedHoldings,combineSavedHoldings,exportRORBundle} from './files.mjs';
 import {drawMap,makeMapPDF,colours} from './maps.mjs';
 import {portals,directoryURL} from './portals.mjs';
 import {renderHomeSearch} from './home-search.mjs';
 import {assignImportState} from './search.mjs';
+import {demoNames, demoPlace, loadDemoWorkspace} from './demo.mjs';
 
 const $ = id => document.getElementById(id);
 const escape = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -18,22 +19,10 @@ let workspace = null, matches = [], byKey = new Map(), selected = 'overview', st
 let importState = '';
 let plotPage = 0, query = '', rowFilter = 'all', plotSheet = '', rorPage = 0, mapSheet = '', lastView = 'overview';
 const size = 40;
+const demoSession = new URLSearchParams(location.search).get('demo')==='1';
+const demoLink = '<a class="button secondary" href="?demo=1">Try guided demo</a>';
 const worker = typeof Worker !== 'undefined' ? new Worker('./matcher.mjs',{type:'module'}) : null;
 const status = (message = '', error = false) => { $('status').hidden = !message; $('status').textContent=message;$('status').classList.toggle('error',error); };
-
-function synthetic() {
-  const gis='DEMO-01';
-  const people=['ଆଶା ଜେନା ଜା: ଖଣ୍ଡାୟତ','ଗୋପାଳ ଯେନା ଜା: ମହାଲାଏକ','ମାୟା ଜେନା ଜା: ପାଣ','କିରଣ ସାହୁ ଜା: ଖଣ୍ଡାୟତ','ନିଳା ଜେନା ଜା: ଖଣ୍ଡାୟତ','ଦୀପ ନାୟକ','', 'ଆଶା ଜେନା ଜା: ଖଣ୍ଡାୟତ'];
-  const features=[],rows=[];
-  const vertices=Array.from({length:5},(_,x)=>Array.from({length:4},(_,y)=>[x*59+y*4+((x+y)%3)*9,y*53+x*2+((x*3+y)%4)*7]));
-  for(let x=0;x<4;x++)for(let y=0;y<3;y++){
-    const i=rows.length, id=String(101+i), ring=[vertices[x][y],vertices[x+1][y],vertices[x+1][y+1],vertices[x][y+1],vertices[x][y]];
-    const info=people[i%people.length];
-    features.push({type:'Feature',properties:{id,kide:id},geometry:{type:'Polygon',coordinates:[ring]}});
-    rows.push({id,gis,plot:id,village:'Sample village',village_code:'DEMO',sheet:'01',khata:String(9+i%4),info,status:info?'Retrieved':'No plot information',confirmed:'Unreviewed'});
-  }
-  return {title:'Sample workspace',demo:true,state:'Odisha',rows,summary:[{gis,name:'Sample village',sheet:'01',village:'DEMO',count:rows.length}],geometry:{[gis]:{features}},pdfs:{},rules:{...defaultRules(),surnames:['ଜେନା','ଯେନା'],names:['ଆଶା ଜେନା'],useCaste:true}};
-}
 
 function matched(data) {
   if (!worker) return Promise.resolve(matchRows(data.rows,data.rules));
@@ -84,23 +73,39 @@ function overview() {
   const search = '<section id="home-search" class="card home-search"></section>';
   const mountSearch = () => renderHomeSearch($('home-search'), {workspace,escape,tag,openPlot:showPlot,importRecords:chooseImport});
   if (!workspace) {
-    $('view').innerHTML = `${search}<section class="card"><div class="card-head"><div><h2>Records and maps</h2><p>Open an official portal, import records you already have, or explore with fictional plots.</p></div></div><div class="actions"><button class="button secondary" id="load-example">Try sample data</button><button class="button secondary" id="go-portals">Browse state portals</button></div></section>`;
+    $('view').innerHTML = `${search}<section class="card"><div class="card-head"><div><h2>Records and maps</h2><p>Open an official portal, import records you already have, or explore with fictional plots.</p></div></div><div class="actions">${demoLink}<button class="button secondary" id="go-portals">Browse state portals</button></div></section>`;
     mountSearch();
-    $('load-example').onclick=()=>task('Loading sample records…',async()=>{await activate(synthetic());render();status('Fictional sample records loaded.');});
     $('go-portals').onclick=()=>navigate('portals');
     return;
   }
   const count = workspace?.rows.length ?? 0, first = maps()[0];
-  $('view').innerHTML=`${search}<section class="hero"><div><h2>${escape(workspace.title)}</h2><p>${workspace.demo?'Explore the workflow with fictional plots.':'Review parcel matches, inspect source text, and export maps and Records of Rights.'}</p><div class="actions"><button class="button primary" id="review-plots">Review plots</button></div></div><canvas id="hero-map" width="420" height="220" aria-label="Decorative parcel map"></canvas></section>
+  const guide=workspace.demo?`<section class="card demo-guide"><h2>Guided LandReview demo</h2><p>All example holdings, maps, and RoRs are fictional. This demo runs entirely in this tab.</p><div class="actions"><button type="button" class="button primary" id="demo-place">Find sample village</button><button type="button" class="button secondary" id="demo-names">Review name variants</button><button type="button" class="button secondary" id="demo-map">Open matched map</button><button type="button" class="button secondary" id="demo-ror">Open sample RoRs</button><a class="button secondary" href="?">Return to LandReview</a></div></section>`:'';
+  $('view').innerHTML=`${guide}${search}<section class="hero"><div><h2>${escape(workspace.title)}</h2><p>${workspace.demo?'Explore the workflow with fictional plots.':'Review parcel matches, inspect source text, and export maps and Records of Rights.'}</p><div class="actions"><button class="button primary" id="review-plots">Review plots</button></div></div><canvas id="hero-map" width="420" height="220" aria-label="Decorative parcel map"></canvas></section>
   <div class="stats">${metric(count,'Plot entries')}${metric(matchingCount('surname'),'Surname criteria')}${metric(matchingCount('full'),'Specific-name criteria','accent')}${metric(Object.keys(workspace?.pdfs||{}).length,'Saved RoR PDFs')}</div>
   <div class="layout"><section class="card"><div class="card-head"><div><h2>Village overview</h2><p>${first?`${escape(first.name)} · Sheet ${escape(first.sheet)}`:'Parcel geometry from your workspace'}</p></div><button class="button secondary" id="go-maps">Open maps</button></div>${first?'<div class="map-frame"><canvas width="850" height="540" id="overview-map" aria-label="Village overview map"></canvas></div>'+legend():empty('Import a workspace with parcel geometry to view a map.')}</section>
   <div class="stack"><section class="card"><div class="card-head"><div><h2>Review criteria</h2><p>${workspace?.rules.useCaste?'Name and source caste labels':'Name matching'}</p></div><button id="go-names" class="button secondary">Edit</button></div><ul class="list"><li>Approved surnames <strong>${workspace?.rules.surnames.length??0}</strong></li><li>Specific name variants <strong>${workspace?.rules.names.length??0}</strong></li><li>Map sheets <strong>${maps().length}</strong></li></ul></section><section class="card"><h2>State portals</h2><p>Find the official land-record service for any state or union territory. Import the files you obtain there.</p><button id="go-portals" class="button secondary">Browse portals</button></section></div></div>`;
-  const art = first ? workspace.geometry[first.gis] : synthetic().geometry['DEMO-01'];
-  const heroGis = first?.gis??'DEMO-01';
-  const artResults = first ? byKey : new Map([['DEMO-01/103',{level:'full'}],['DEMO-01/106',{level:'surname'}],['DEMO-01/109',{level:'full'}],['DEMO-01/108',{level:'none'}],['DEMO-01/111',{level:'surname'}]]);
-  drawMap($('hero-map'),art.features,heroGis,artResults);
-  if(first)drawMap($('overview-map'),art.features,heroGis,byKey,{labels:art.features.length<250});
+  if (first) {
+    const art=workspace.geometry[first.gis];
+    drawMap($('hero-map'),art.features,first.gis,byKey);
+    drawMap($('overview-map'),art.features,first.gis,byKey,{labels:art.features.length<250});
+  }
   mountSearch();
+  $('demo-place')?.addEventListener('click',()=>{
+    const finder=$('village-finder');
+    finder.open=true;
+    const input=finder.querySelector('input[type="search"]');
+    input.value=demoPlace.village;
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    input.focus();
+  });
+  $('demo-names')?.addEventListener('click',()=>{
+    const input=$('home-search-form').elements.namedItem('names');
+    input.value=['Asha Jena','Gopal Yena',...demoNames].join('\n');
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    $('variant-heading')?.focus();
+  });
+  $('demo-map')?.addEventListener('click',()=>navigate('maps'));
+  $('demo-ror')?.addEventListener('click',()=>navigate('ror'));
   $('review-plots')?.addEventListener('click',()=>navigate('plots'));
   $('go-maps').onclick=()=>navigate('maps');$('go-names').onclick=()=>navigate('names');$('go-portals').onclick=()=>navigate('portals');
 }
@@ -184,18 +189,30 @@ function mapView() {
   const sheets=maps();
   if(!sheets.length){$('view').innerHTML=empty('Import a LandReview workspace with cadastral geometry to open village maps.');return;}
   if(!sheets.some(m=>m.gis===mapSheet))mapSheet=sheets[0].gis;
-  $('view').innerHTML=`<section class="card"><div class="card-head"><div><h2>Village overviews</h2><p>Select a parcel to read the source record.</p></div><div class="actions"><button id="map-export" class="button primary">Export map PDF</button></div></div><div class="toolbar"><select id="map-sheet" aria-label="Village sheet">${sheets.map(s=>`<option value="${escape(s.gis)}" ${s.gis===mapSheet?'selected':''}>${escape(s.name)} · Sheet ${escape(s.sheet)}</option>`).join('')}</select><label class="check"><input id="plain-map" type="checkbox"> Uncoloured</label><label class="check"><input id="ignore-kurujanga" type="checkbox" checked> Exclude Kurujanga from PDF</label></div><div class="map-frame"><canvas id="map" width="1000" height="660" aria-label="Parcel map. Plot records are also available in the plot list."></canvas></div>${legend()}</section>`;
+  $('view').innerHTML=`<section class="card"><div class="card-head"><div><h2>Village overviews</h2><p>Select a parcel to read the source record.</p></div><div class="actions"><button id="map-export" class="button primary">Export map PDF</button></div></div><div class="toolbar"><select id="map-sheet" aria-label="Village sheet">${sheets.map(s=>`<option value="${escape(s.gis)}" ${s.gis===mapSheet?'selected':''}>${escape(s.name)} · Sheet ${escape(s.sheet)}</option>`).join('')}</select><label class="check"><input id="plain-map" type="checkbox"> Uncoloured</label><label class="check"><input id="matched-sheets-only" type="checkbox" checked> Export only sheets with name matches</label></div><div class="map-frame"><canvas id="map" width="1000" height="660" aria-label="Parcel map. Plot records are also available in the plot list."></canvas></div>${legend()}</section>`;
   let hits=[];
   const redraw=()=>{hits=drawMap($('map'),workspace.geometry[mapSheet].features,mapSheet,byKey,{labels:true,plain:$('plain-map').checked});};
   $('map-sheet').onchange=e=>{mapSheet=e.target.value;redraw();};$('plain-map').onchange=redraw;
   $('map').onclick=e=>{const c=$('map'),bounds=c.getBoundingClientRect(),x=(e.clientX-bounds.left)*c.width/bounds.width,y=(e.clientY-bounds.top)*c.height/bounds.height,ctx=c.getContext('2d');const selected=hits.findLast(h=>ctx.isPointInPath(h.path,x,y,'evenodd'));if(selected){const i=workspace.rows.findIndex(r=>parcelKey(r)===selected.key);if(i>=0)showPlot(i);}};
-  $('map-export').onclick=()=>task('Rendering village map PDF…',async()=>{const selected=$('ignore-kurujanga').checked?sheets.filter(s=>String(s.village)!=='105'||normalize(s.name)!=='kurujanga'):sheets;const bytes=await makeMapPDF(selected,workspace.geometry,byKey,$('plain-map').checked);download('LandReview_Village_Maps.pdf',bytes,'application/pdf');status(`Map PDF exported with ${selected.length} overview pages.`);});
+  $('map-export').onclick=()=>task('Rendering village map PDF…',async()=>{const selected=$('matched-sheets-only').checked?sheets.filter(s=>workspace.geometry[s.gis].features.some(feature=>['full','surname'].includes(byKey.get(parcelKey({gis:s.gis,id:feature.properties?.id}))?.level))):sheets;if(!selected.length)throw Error('No sheets have name matches. Clear the sheet filter to export every overview.');const bytes=await makeMapPDF(selected,workspace.geometry,byKey,$('plain-map').checked);download('LandReview_Village_Maps.pdf',bytes,'application/pdf');status(`Map PDF exported with ${selected.length} overview pages.`);});
   redraw();
 }
 
 function ror() {
   const indices=matches.flatMap((m,i)=>m.fullSelected?[i]:[]);
-  $('view').innerHTML=`<section class="card"><div class="card-head"><div><h2>Specific-name selection</h2><p>Download the saved front-and-back PDFs and the index for the current selection.</p></div><button id="ror-export" class="button primary" ${indices.length?'':'disabled'}>Export RoR ZIP</button></div><div id="ror-results"></div></section>`;
+  const holdings=savedHoldings(indices.map(i=>workspace.rows[i]),workspace?.pdfs);
+  const choice=holdings.length?`<fieldset class="holding-choices"><legend>Choose khatas for the combined PDF</legend>${holdings.map((holding,i)=>`<label class="check"><input type="checkbox" data-holding="${i}" ${holding.document?'checked':'disabled'}> ${escape(holding.village)} · Khata ${escape(holding.khata)} · ${escape(holding.plots.join(', '))}${holding.document?'':' · PDF missing'}</label>`).join('')}</fieldset>`:'';
+  $('view').innerHTML=`<section class="card"><div class="card-head"><div><h2>Specific-name selection</h2><p>Download the saved front-and-back PDFs and the index for the current selection.</p></div><div class="actions"><button id="ror-combined" class="button primary">Download selected RoRs (PDF)</button><button id="ror-export" class="button secondary" ${indices.length?'':'disabled'}>Export RoR ZIP</button></div></div>${choice}<div id="ror-results"></div></section>`;
+  const picked=()=>[...$('view').querySelectorAll('[data-holding]:checked')].map(box=>holdings[Number(box.dataset.holding)]);
+  const update=()=>$('ror-combined').disabled=!picked().length;
+  $('view').querySelector('.holding-choices')?.addEventListener('change',update);
+  update();
+  $('ror-combined').onclick=()=>task('Assembling selected Records of Rights…',async()=>{
+    const selection=picked();
+    const bytes=await combineSavedHoldings(selection);
+    download(workspace.demo?'LandReview_Fictional_RoRs.pdf':'LandReview_Selected_RoRs.pdf',bytes,'application/pdf');
+    status(`Combined RoR PDF downloaded with ${selection.length} khatas.`);
+  });
   const renderPage=()=>{$('ror-results').innerHTML=table(indices.slice(rorPage*size,(rorPage+1)*size),true)+paged(indices.length,rorPage);bindTable($('ror-results'),rorPage,p=>{rorPage=p;renderPage();});};renderPage();
   $('ror-export').onclick=()=>task('Preparing RoR PDFs and index…',async()=>{const rows=indices.map(i=>workspace.rows[i]);const n=rows.filter(r=>workspace.pdfs?.[parcelKey(r)]).length;download('LandReview_RoR_Selection.zip',await exportRORBundle(rows,indices.map(i=>matches[i]),workspace.pdfs));status(`RoR ZIP exported with ${n} saved PDFs and ${rows.length} index entries.`);});
 }
@@ -218,6 +235,11 @@ document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>navigate(b.dataset.vi
 $('import').onclick=()=>chooseImport();
 $('file').onchange=()=>{const file=$('file').files[0],state=importState;$('file').value='';importState='';if(!file)return;task('Validating and importing records…',async()=>{await activate(assignImportState(await importFile(file),state));const saved=await persist();selected='overview';render();status(`Imported ${number.format(workspace.rows.length)} records. ${saved?'Saved in this browser.':'Use Back up workspace to retain this session.'}`);});};
 $('backup').onclick=()=>task('Building workspace backup…',async()=>{download('LandReview_Workspace_Backup.zip',await zipWorkspace(workspace));status('Workspace backup downloaded.');});
-render();
-try {store=await localStore();const stored=await store.read();if(stored&&!workspace&&!busy){await activate(stored);render();}}
-catch {status('Browser storage is unavailable. Use workspace backups to keep your data.',true);}
+if (demoSession) {
+  $('import').hidden=true;
+  await task('Loading fictional records…',async()=>{await activate(await loadDemoWorkspace());render();});
+} else {
+  render();
+  try {store=await localStore();const stored=await store.read();if(stored&&!workspace&&!busy){await activate(stored);render();}}
+  catch {status('Browser storage is unavailable. Use workspace backups to keep your data.',true);}
+}

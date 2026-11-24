@@ -6,7 +6,7 @@ const key = 'landreview.home-name-review';
 let saved;
 try { saved=JSON.parse(localStorage.getItem(key)); } catch { /* Review remains available in this tab. */ }
 
-export function mountNameReview(root, escape, onEdit) {
+export function mountNameReview(root, escape, onEdit, persistent = true) {
   let state='', text='', choice='', drafts=[], approval;
   const signature = () => JSON.stringify([state,searchTerms(text).map(normalize),choice]);
   const languages = () => choice ? [choice] : suggestedLanguages(state);
@@ -17,8 +17,10 @@ export function mountNameReview(root, escape, onEdit) {
 
   function record(spellings) {
     approval={signature:signature(),state,choice,spellings};
-    saved=approval;
-    try { localStorage.setItem(key,JSON.stringify(approval)); } catch { /* Review remains available in this tab. */ }
+    if (persistent) {
+      saved=approval;
+      try { localStorage.setItem(key,JSON.stringify(approval)); } catch { /* Review remains available in this tab. */ }
+    }
     onEdit();
     root.querySelector('#variant-status').textContent=summary(spellings.length);
   }
@@ -54,12 +56,12 @@ export function mountNameReview(root, escape, onEdit) {
   }
 
   function update(nextState,nextText) {
-    if (nextState!==state) choice=saved?.state===nextState && Object.hasOwn(recordLanguages,saved.choice) ? saved.choice : '';
+    if (nextState!==state) choice=persistent && saved?.state===nextState && Object.hasOwn(recordLanguages,saved.choice) ? saved.choice : '';
     state=nextState; text=nextText;
     const terms=searchTerms(text).slice(0,30);
     const localized=proposeNames(terms,languages());
     drafts=[...localized,...proposeNameOrders(terms,localized)];
-    if (saved?.signature===signature() && approval?.signature!==signature()) approval=saved;
+    if (persistent && saved?.signature===signature() && approval?.signature!==signature()) approval=saved;
     render();
   }
 

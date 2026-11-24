@@ -28,7 +28,7 @@ async function readDirectory() {
     ({id,village,local,district,tehsil,state,portalCode,riCode,ri,aliases})),source};
 }
 
-export function mountVillageFinder(root, escape, choose) {
+export function mountVillageFinder(root, escape, choose, samplePlace) {
   root.innerHTML = `<summary>Find a village by name</summary>
     <label class="label">Village name<input type="search" maxlength="100" placeholder="English or local script" autocomplete="off"></label>
     <label><input type="checkbox"> Limit to the selected state</label>
@@ -46,14 +46,14 @@ export function mountVillageFinder(root, escape, choose) {
     if (key(query).length < 2) { status.textContent='Enter at least two characters.'; return; }
     status.textContent='Finding villages…';
     try {
-      directory ??= readDirectory().catch(error=>{directory=undefined;throw error;});
-      const {rows,source} = await directory;
+      if (!samplePlace) directory ??= readDirectory().catch(error=>{directory=undefined;throw error;});
+      const {rows,source} = samplePlace ? {rows:[samplePlace],source:'Fictional demo directory'} : await directory;
       if (revision !== request || !root.isConnected) return;
       const {total,results} = findVillages(rows,query,filter.checked?state:'');
       status.textContent = total
         ? `Showing ${results.length} of ${total} matches · ${source}`
         : `No village matched in this directory · ${source}`;
-      matches.innerHTML = results.map((row,i)=>`<button type="button" class="button secondary" data-village="${i}">${escape(row.village)}${row.local?` · ${escape(row.local)}`:''} <span class="muted">${escape([row.tehsil,row.district,row.state,row.portalCode ? `Bhulekh ${row.portalCode}` : `LGD ${row.id}`].join(', '))}</span></button>`).join('');
+      matches.innerHTML = results.map((row,i)=>`<button type="button" class="button secondary" data-village="${i}">${escape(row.village)}${row.local?` · ${escape(row.local)}`:''} <span class="muted">${escape([row.tehsil,row.district,row.state,samplePlace ? 'Sample record' : row.portalCode ? `Bhulekh ${row.portalCode}` : `LGD ${row.id}`].join(', '))}</span></button>`).join('');
       matches.querySelectorAll('[data-village]').forEach(button=>{
         button.onclick=()=>choose(results[Number(button.dataset.village)]);
       });

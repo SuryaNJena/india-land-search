@@ -181,6 +181,47 @@ export async function mergeROR(front, back) {
   return output.save();
 }
 
+export function savedHoldings(rows, pdfs) {
+  const groups=new Map();
+  for (const row of rows) {
+    const khata=String(row.khata??'').trim();
+    if (!khata) continue;
+    const sheetLocation=/^\d{11}$/.test(row.gis??'') ? row.gis.slice(0,9) : '';
+    const location=sheetLocation
+      ? [row.state, sheetLocation]
+      : [row.state, row.district_code||row.district, row.tehsil_code||row.tehsil,
+        row.ri_code||row.ri, row.village_code||row.village||row.gis];
+    const key=JSON.stringify([...location,khata]);
+    const group=groups.get(key)??{key,khata,village:row.village,plots:[]};
+    if (row.plot && !group.plots.includes(row.plot)) group.plots.push(row.plot);
+    group.document ??= pdfs?.[parcelKey(row)];
+    groups.set(key,group);
+  }
+  return [...groups.values()];
+}
+
+export async function combineSavedHoldings(holdings) {
+  if (!holdings.length) throw Error('Select at least one khata.');
+  const {PDFDocument}=asPDF();
+  const combined=await PDFDocument.create();
+  const seen=new Set();
+  for (const holding of holdings) {
+    if (seen.has(holding.key)) continue;
+    seen.add(holding.key);
+    const label=`${holding.village}, khata ${holding.khata}`;
+    if (!holding.document) throw Error(`A saved front-and-back PDF is missing for ${label}.`);
+    let source;
+    try { source=await PDFDocument.load(holding.document.bytes); }
+    catch { throw Error(`The saved PDF could not be opened for ${label}.`); }
+    if (source.getPageCount()<2) throw Error(`The saved PDF needs both sides for ${label}.`);
+    if (source.getForm().getFields().some(field=>field.constructor.name==='PDFSignature')) {
+      throw Error(`Keep the signed original separate for ${label}.`);
+    }
+    for (const page of await combined.copyPages(source,source.getPageIndices())) combined.addPage(page);
+  }
+  return combined.save();
+}
+
 export async function exportRORBundle(rows, matches, pdfs) {
   const zip = getZip();
   const csv = value => `"${String(value ?? '').replace(/"/g,'""')}"`;

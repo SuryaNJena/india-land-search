@@ -74,7 +74,7 @@ export async function makeMapPDF(sheets,geometry,results,plain) {
       const label=text(feature.properties?.kide);
       if(label) page.drawText(label,{x:centre[0]-font.widthOfTextAtSize(label,6)/2,y:1058-centre[1],size:6,font,color:colour('#243c33')});
     }
-    page.drawText('LandReview | Source cadastral geometry | Local sheet coordinates | Review copy',{x:40,y:35,size:9,font});
+    page.drawText(sheet.demo?'LandReview | FICTIONAL DEMO - NOT AN OFFICIAL MAP':'LandReview | Source cadastral geometry | Local sheet coordinates | Review copy',{x:40,y:35,size:9,font});
   }
   if (!doc.getPageCount()) throw Error('This workspace has no importable map geometry.');
   return doc.save();
