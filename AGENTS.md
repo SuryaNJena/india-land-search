@@ -14,7 +14,7 @@ Run these commands from the repository root with Node.js 24. To preview the inte
 - `node verify.mjs` runs the broader offline checks with synthetic and saved fixtures.
 - `node verify.mjs <path-to-Odisha-workspace.zip>` also checks record import, known match counts, and map and RoR exports against the separately stored workspace.
 - `node build.mjs` bundles the browser assets and Worker into `dist/server/index.js` and smoke-tests the homepage. Edit the tracked source files and regenerate this output.
-- `python -m http.server 8000 --bind 127.0.0.1 --directory dist` previews the browser interface. Live Odisha lookup requires a signed-in request to the hosted Worker.
+- `node build-pages.mjs` and `node scripts/smoke-pages.mjs` build and check the portable demo under a subpath. Run `node scripts/package-release.mjs <output.zip>` to create its runnable release. The browser smoke command and hosted setup are in [deployment](docs/DEPLOYMENT.md).
 
 ## Coding and Testing Conventions
 

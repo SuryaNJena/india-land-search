@@ -1,5 +1,11 @@
 # LandReview deployment
 
+## Portable challenge release
+
+Download `LandReview-portable.zip` from [GitHub Releases](https://github.com/SuryaNJena/india-land-search/releases), extract it, and run `node serve.mjs` with Node.js 24. The server prints a loopback URL to the signed-out demo. To rebuild, run `node build-pages.mjs` followed by `node scripts/package-release.mjs <output.zip>`. Push a new version tag to run verification and attach the archive. The weekly smoke workflow uses fictional records and performs no government portal requests.
+
+Run `node scripts/smoke-pages.mjs` against `pages-out/` or an extracted release's `site` directory. For the full browser check, provide `LANDREVIEW_PLAYWRIGHT` as the absolute path to Playwright's `index.mjs`, install its Chromium browser, and run `node scripts/smoke-browser.mjs`. Set `LANDREVIEW_SMOKE_EVIDENCE` to collect screenshots and downloaded PDFs.
+
 ## GitHub Pages
 
 1. Merge the release in GitHub. In the repository's Pages settings, select GitHub Actions as the source.

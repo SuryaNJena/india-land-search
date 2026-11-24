@@ -29,7 +29,11 @@ Characterization tests capture behavior in the current release so changes can be
 
 Keep `CT-01` as the characterization of the signed-in village connector. When anonymous statewide search ships, give its public route its own acceptance test.
 
-## Pending launch acceptance
+## Challenge release acceptance
+
+`tests/demo.test.mjs` checks village-scoped synthetic matching, duplicate khatas, missing and single-sided documents, and map page count. The Actions browser smoke checks location autofill, spelling review, search, and downloaded PDFs under the portable release subpath. It fails on browser errors or outbound traffic. The expected files are one colored map page and four RoR pages for two fictional khatas.
+
+## Pending production acceptance
 
 | ID | Scenario and expected outcome | Requirement |
 | --- | --- | --- |

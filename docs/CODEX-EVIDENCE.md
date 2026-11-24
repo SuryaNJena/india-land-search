@@ -1,27 +1,39 @@
 # LandReview Codex evidence pack
 
-**Scope** Public submission draft. This file records the current evidence and separates it from future launch requirements. Review it before publishing.
+## Problem
 
-| Checkpoint | Evidence |
+An Odisha family may know a name in English or Odia and only part of the location. Bhulekh's documented path asks for district, tahasil, and village before tenant lookup. LandReview can start with one village name and a jurisdiction-qualified match. The local workspace keeps spellings, colored map evidence, and front/back documents together. This comparison describes the steps and information each workflow requires. [Bhulekh manual](https://bhulekh.ori.nic.in/Bhulekh%20Portal%20User%20Manual.pdf)
+
+## Lifecycle evidence
+
+These eight headings are a working mapping from Understand to Automate. Confirm the organizer's exact labels in the attendee handout. The original CP1–CP5 history remains visible in [PR #1](https://github.com/SuryaNJena/india-land-search/pull/1).
+
+| Stage | Decision, artifact, and verified result |
 | --- | --- |
-| CP1 Explain | The stakeholder interview established anonymous access, statewide Odisha name-only lookup, public result fields, and one combined RoR PDF for every selected khata. See the [BRD](BRD.md). |
-| CP2 Diagram | The [TRD](TRD.md) shows the proposed statewide architecture and documents the shipped village-based Worker. The statewide data source is still a launch dependency. |
-| CP3 Test | `node --test` exercises 8 focused unit tests, 8 characterization tests, and release tests for village discovery and the SQLite index. `verify.mjs` covers the broader offline build and data workflows. The [test plan](TEST-PLAN.md) links these checks to the requirements and records pending launch acceptance. The [TRD](TRD.md) records the bounded public-portal source check. |
-| CP4 Fix | The live-search button now accepts reviewed spelling checkboxes and opens the village picker when a location is missing. The published map viewer reports source availability and dates saved geometry. Browser QA confirmed the search flow with a sample and later displayed the saved Anda sheet 01 on the published Site. |
-| CP5 Pull request | The local Site repository has deployment commit history. The public GitHub repository is [SuryaNJena/india-land-search](https://github.com/SuryaNJena/india-land-search). The release branch keeps the original deployment history and adds individually labelled checkpoint commits. See [draft PR #1](https://github.com/SuryaNJena/india-land-search/pull/1) for the checkpoint links and launch gates. |
+| Understand | Chose language-aware matching, search from partial localities, and a combined evidence packet. Stakeholder answers established signed-out access, official result fields, and a separate statewide ownership requirement. [BRD](BRD.md) · CP1 `43bb7c4` |
+| Plan and design | Separated public place data and source links from the versioned ownership index. Planned distinct stale, partial, and unavailable states. [Architecture](TRD.md) · CP2 `6a99dff` |
+| Build | Built place discovery and scope autofill, the D1-backed search route, both hosting builds, and a two-khata fictional demo. [Deployment](DEPLOYMENT.md) · CP4 `a68ea4c` |
+| Test | Pinned matching, throttling, checksum rejection, and front-before-back export before extending the app. The new tests cover duplicate and incomplete khatas and vector map export. [Test plan](TEST-PLAN.md) · CP3 `19a7d89` |
+| Debug | Browser testing exposed a secondary live-search control on the static page and confirmed the fix. A separate check showed an Odia Bharatpada alias filling all verified locality fields while the person field was blank. [PR evidence](https://github.com/SuryaNJena/india-land-search/pull/1) |
+| Review | An independent Codex review flagged the license-only default branch, missing sample PDFs, and incomplete model log. The release adds synthetic RoRs and a verified metadata table. [Release checklist](RELEASE-CHECKLIST.md) |
+| Deploy | Site baseline `08bdc8a` served signed-in village lookup. The portable challenge build provides a signed-out demo with a runnable ZIP. [Baseline Site](https://landreview-odisha.thinwave16.chatgpt.site) · [GitHub Releases](https://github.com/SuryaNJena/india-land-search/releases) |
+| Automate | Actions checks builds, packages the release, and exercises the demo under a subpath with browser screenshots and PDF downloads. A weekly offline schedule is configured. Separately, the one-village pilot checkpointed 2,549 entries and skipped that village on rerun. [CI](https://github.com/SuryaNJena/india-land-search/actions/workflows/quality.yml) · [Pilot record](https://github.com/SuryaNJena/india-land-search/commit/b98e6c57718b3fbf0f4283d1f953669d8bf8306d) |
 
-## Release verification
+## Capability use
 
-The GitHub Pages build was tested in the browser under a repository-style subpath. Searching for `ଭରତପଡ଼ା` with the person field empty filled Odisha, Cuttack, Mahanga, Kurujanga, and Bharatpada from the verified directory entry. The anonymous index route is exercised with synthetic holdings. A one-village Bhulekh collection pilot on 24 November 2026 checkpointed 2,549 tenant entries for Bharatapada 102. A repeat invocation skipped the completed checkpoint. No tenant data from the pilot is included in the repository. Production statewide coverage and live map and RoR validation still depend on a verified deployed source.
+- **Codex workspace and shell** established baseline tests and reproduced the build, sample map, and PDFs.
+- **Computer Use** verified village-name input, district and tehsil autofill, and that the person field stayed empty. A browser smoke test now also exercises fictional search, map and PDF exports with no external requests.
+- **GitHub and Sites tools** preserved commit history, opened the review, and identified exactly which commit the existing live Site serves.
+- **Subagents and web research** independently reviewed the submission, verified data-source limits, and built portable packaging and automated smoke. The research distinguishes administrative names, land geometry, and records governed by the source owner. [Data sources](DATA-SOURCES.md)
 
-## Capabilities and models
+## Models and reasoning effort
 
-Codex used the shared workspace and shell for repository inspection, implementation, builds, and tests. The Sites connector packaged, published, and checked the Site. Computer Use verified selected browser workflows. Official documentation and scoped source checks informed the portal integration.
+These settings were verified in Codex turn metadata. Explanations of task fit are retrospective where the original choice was undocumented.
 
-This documentation and test pass used Codex on the GPT-6 model family. The exact assistant model variant and historical model identifiers are unverified. The running application's name suggestions use deterministic rules, curated spellings, and Sanscript.
+| Work | Model | Effort | Task fit and proof |
+| --- | --- | --- | --- |
+| Bounded Odisha plot, map, and PDF exploration, 1–2 November | `gpt-6-astra` | Medium | Focused source and rendering work. Later verification used official links and a bounded connector check. |
+| Requirements, characterization, architecture, and PR, 22–24 November | `gpt-6.2-sol` | High | Cross-file design and implementation with a tested baseline. See CP1–CP5 and linked CI. |
+| Challenge release, independent evidence audit, build automation, and source research, 24 November | `gpt-6.2-sol` | Ultra | Cross-cutting acceptance with parallel evidence, source, and packaging work. The evidence subagent inherited the setting. |
 
-## Reproduction and publication
-
-1. Follow the [contributor guide](../AGENTS.md) to run the offline suite and build. Use the separately stored, authorized workspace only for the optional parity check.
-2. The [published Site](https://landreview-odisha.thinwave16.chatgpt.site) is linked to the Sites source history. The baseline release used `08bdc8a`. Its signed-in Odisha village search does not meet the anonymous statewide launch requirements.
-3. Include synthetic screenshots, test output, and source and deployment references in the public submission. Keep private workspaces, credentials, and personal search results out of the evidence pack.
+Other historical settings remain unverified. Name suggestions in the running application use curated rules and Sanscript. The submitted artifacts contain fictional records and sanitized evidence.

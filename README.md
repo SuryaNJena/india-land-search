@@ -1,21 +1,32 @@
 # LandReview
 
-ChatGPT Sites workspace with browser-local imports, matching and exports. The published bundle includes a synthetic sample and a portal directory. Existing records can be imported at runtime from a LandReview ZIP, legacy JSON or an Excel workbook with a Plots tab.
+Find an Odisha village, review English and Odia name variants, inspect matched plots, and assemble a map and Record of Rights (RoR) packet. LandReview also reviews records you already have and links to official portals across India.
 
-The browser stores the current workspace in IndexedDB. Use **Back up workspace** to keep a portable copy. The workspace ZIP format v1 includes `manifest.json`, `workspace.json` and optional plotwise PDFs. File sizes and SHA-256 checksums are verified before a workspace replaces the current one.
+## Try the challenge demo
 
-Start on the homepage with a state and one or more names. The Site proposes spellings in the browser using the selected record language, curated variants and [Sanscript](https://github.com/indic-transliteration/sanscript.js) v1.3.3 under MIT. It also proposes alternate orders of each name, keeping multiword middle names together. Checked spellings take effect at search time. Select all includes the name-order suggestions and Clear all keeps the typed entries.
+1. Download `LandReview-portable.zip` from the [latest release](https://github.com/SuryaNJena/india-land-search/releases/latest) and extract it.
+2. Run `node serve.mjs` from the extracted folder using Node.js 24. Open the printed demo URL in a browser.
+3. Click **Find sample village**, choose **Anandapur Sample**, and select **Review name variants**. Approve spellings or use **Clear all**, then choose **Search loaded records**.
+4. Open the matched map and export its overview. In **Records of Rights**, choose **Download selected RoRs (PDF)** to download both sides of two fictional khatas in one file.
 
-For Odisha, the live connector fetches district, tehsil, and village choices on demand from Bhulekh and accepts villages anywhere the portal lists them. Users can pick several villages per search without importing any file. The Worker holds the official public RoR session and matches names against returned tenant labels. It requires ChatGPT sign-in. The [public Bhulekh manual](https://bhulekh.ori.nic.in/Bhulekh%20Portal%20User%20Manual.pdf) describes choosing a village before searching by tenant. The release branch includes an anonymous D1-backed search route. It needs a verified statewide dataset before public launch. The homepage reports the actual village coverage. Other jurisdictions use the official links and loaded records until their own adapters are available.
+The demo uses fictional records and runs without an account, uploads, or government portal requests. The regular app includes a public Odisha village directory and official links for map-point and plot-ID lookups. Verified RI and land-record portal codes cover selected villages. Statewide live ownership search needs verified production data. [Data-source research](docs/DATA-SOURCES.md)
 
-Matching live Odisha tenant entries carry the official RoR front and back links when Bhulekh supplies a khata number. The BhuNaksha viewer loads cadastral geometry by village and sheet after the search. It displays parcel boundaries and plot numbers for the selected sheet. If direct access fails, it can render dated, geometry-only copies of Bharatapada and Anda sheets 01–03, collected from the public BhuNaksha portal. The browser also offers the official portal link for villages without a saved copy.
+## Develop and verify
 
-The optional India map fills the state selector. Loaded cadastral sheets provide a parcel and sheet picker for available district, tehsil, revenue circle and village values. The India map uses simplified, projected paths derived from [geoBoundaries India ADM1](https://www.geoboundaries.org/api/current/gbOpen/IND/ADM1/), sourced from DataMeet India and the Election Commission of India under [CC BY 2.5 India](https://creativecommons.org/licenses/by/2.5/in/). The boundaries are for locating a search, not for cadastral use.
+Use Node.js 24 from the repository root.
 
-Name candidates use curated variants and local phonetic rules for Odia, Hindi, Marathi, Bengali and Telugu. Other scripts accept manual input. Apply approved rules to update search, map and RoR selections. The app writes a fresh XLSX and draws vector map overviews. A fresh RoR ZIP includes imported documents and source links. The site provides official portal links for fresh records and supports manual file import.
+```sh
+node --test
+node verify.mjs
+node build.mjs
+node build-pages.mjs
+node scripts/smoke-pages.mjs
+```
 
-See [deployment instructions](docs/DEPLOYMENT.md) for the optional GitHub Pages build and private statewide index setup.
+The static build works under a repository subpath. See the [deployment guide](docs/DEPLOYMENT.md), [contributor guide](AGENTS.md), [release checklist](docs/RELEASE-CHECKLIST.md), and [Codex evidence pack](docs/CODEX-EVIDENCE.md).
 
-Run `node verify.mjs` for local checks. Optionally pass the separate Odisha workspace ZIP to run the full-snapshot checks. Run `node build.mjs` to package the Sites Worker and browser assets into `dist/server/index.js`. Serving `dist/` over ordinary loopback HTTP previews the interface. The live lookup requires the Worker entry point and a signed-in Site request. Deploy with the Sites Worker workflow using the project in `.openai/hosting.json`.
+## Records and attribution
 
-Run `node --test` for the unit and characterization suites. See the [business requirements](docs/BRD.md), [technical requirements](docs/TRD.md), [test plan](docs/TEST-PLAN.md), and [Codex evidence pack](docs/CODEX-EVIDENCE.md) for the launch scope and current verification.
+Imported LandReview ZIP, compatible JSON, and Excel workspaces stay in the browser. Workspaces back up to a checksum-validated ZIP. Retain original signed documents and verify records using the official source.
+
+Name suggestions use curated rules and [Sanscript](https://github.com/indic-transliteration/sanscript.js) v1.3.3 under MIT. The reference India map uses simplified [geoBoundaries India ADM1](https://www.geoboundaries.org/api/current/gbOpen/IND/ADM1/) paths sourced from DataMeet India and the Election Commission of India under [CC BY 2.5 India](https://creativecommons.org/licenses/by/2.5/in/).
