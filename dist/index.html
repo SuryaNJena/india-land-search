@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Review land records, surname variants, cadastral maps and Records of Rights in your browser.">
+  <title>LandReview</title><link rel="stylesheet" href="style.css">
+  <script defer src="vendor/jszip.js"></script><script defer src="vendor/pdf-lib.js"></script>
+  <script defer src="vendor/sanscript.js"></script>
+  <script type="module" src="app.mjs"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-icon" aria-hidden="true">◫</span><div>LandReview<small>LAND RECORDS WORKSPACE</small></div></div>
+    <nav aria-label="Workspace navigation">
+      <button class="nav active" data-view="overview"><span aria-hidden="true">▦</span> Home</button>
+      <button class="nav" data-view="plots"><span aria-hidden="true">≡</span> Plot records</button>
+      <button class="nav" data-view="names"><span aria-hidden="true">Aa</span> Name matching</button>
+      <button class="nav" data-view="maps"><span aria-hidden="true">▧</span> Village maps</button>
+      <button class="nav" data-view="ror"><span aria-hidden="true">▤</span> Records of Rights</button>
+      <button class="nav" data-view="portals"><span aria-hidden="true">◎</span> State portals</button>
+    </nav>
+    <div class="sidebar-foot"><span class="local-dot"></span><div>Browser storage<small>Back up to move between devices</small></div></div>
+  </aside>
+  <main>
+    <header class="top"><div><div id="crumb">Land records</div><h1 id="heading">Home</h1></div>
+      <div class="top-actions"><button id="backup" class="button secondary" disabled>Back up workspace</button><button id="import" class="button secondary">Import records</button><input id="file" type="file" accept=".zip,.json,.xlsx,.xlsm" hidden></div>
+    </header>
+    <div id="status" role="status" aria-live="polite" hidden></div>
+    <div id="view"></div>
+  </main>
+  <dialog id="detail"><form method="dialog"><button class="button secondary" aria-label="Close plot details">Close</button></form><div id="detail-content"></div></dialog>
+</body></html>
