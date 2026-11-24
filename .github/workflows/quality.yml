@@ -1,10 +1,18 @@
 name: Verify LandReview
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
 permissions:
   contents: read
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -14,3 +22,54 @@ jobs:
       - run: node verify.mjs
       - run: node build.mjs
       - run: node build-pages.mjs
+      - name: Package and smoke-test the extracted offline release
+        run: |
+          node scripts/package-release.mjs "$RUNNER_TEMP/LandReview-portable.zip"
+          unzip -q "$RUNNER_TEMP/LandReview-portable.zip" -d "$RUNNER_TEMP/landreview-portable"
+          node scripts/smoke-pages.mjs "$RUNNER_TEMP/landreview-portable/site"
+      - name: Install browser tooling
+        run: |
+          npm install --prefix "$RUNNER_TEMP/landreview-browser" --no-audit --no-fund --no-package-lock playwright@1.56.1
+          node "$RUNNER_TEMP/landreview-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Verify the signed-out demo in Chromium
+        run: node scripts/smoke-browser.mjs "$RUNNER_TEMP/landreview-portable/site"
+        env:
+          LANDREVIEW_PLAYWRIGHT: ${{ runner.temp }}/landreview-browser/node_modules/playwright/index.mjs
+          LANDREVIEW_SMOKE_EVIDENCE: ${{ runner.temp }}/landreview-evidence
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LandReview-portable
+          path: ${{ runner.temp }}/LandReview-portable.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LandReview-browser-evidence
+          path: ${{ runner.temp }}/landreview-evidence
+          if-no-files-found: error
+  attach-release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: landreview-release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: LandReview-portable
+          path: ${{ runner.temp }}/landreview-release
+      - name: Attach the verified archive to the tagged release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bundle="$RUNNER_TEMP/landreview-release/LandReview-portable.zip"
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" "$bundle" --verify-tag --repo "$GITHUB_REPOSITORY" --title "LandReview $GITHUB_REF_NAME" --generate-notes
+          elif gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq 'LandReview-portable.zip'; then
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern 'LandReview-portable.zip' --dir "$RUNNER_TEMP/existing-release"
+            cmp "$bundle" "$RUNNER_TEMP/existing-release/LandReview-portable.zip"
+          else
+            gh release upload "$GITHUB_REF_NAME" "$bundle" --repo "$GITHUB_REPOSITORY"
+          fi
