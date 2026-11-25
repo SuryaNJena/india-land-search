@@ -107,7 +107,7 @@ const styles=''
   +'.lr-parcel-map .lr-map-legend i{display:inline-block;width:.8rem;height:.8rem;margin-right:.22rem;border:1px solid #465747;border-radius:2px}'
   +'.lr-parcel-map a{margin-right:.7rem}';
 
-export function mountParcelBasemap(root,{geographic,highlights=new Set(),tileTemplate=standardTiles,pinState={},localOnly=false}={}) {
+export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBoundary=false,highlights=new Set(),tileTemplate=standardTiles,pinState={},localOnly=false}={}) {
   if (root.tagName==='DETAILS') {
     root.innerHTML='<summary>Geographic map and location pin</summary><div class="lr-parcel-map"></div>';
   }
@@ -166,10 +166,27 @@ export function mountParcelBasemap(root,{geographic,highlights=new Set(),tileTem
   let center=initialCenter, zoom=7, pin, pinMode=false, tiles=false, start, dirty=true;
   let tileFailures=0;
   let gpsRequest=0;
-  const bounds=featureBounds(matchingFeatures.length?matchingFeatures:features);
+  const extent=geographicRaster?.bounds;
+  const rasterPoints=geographicRaster?.projection==='EPSG:3857' &&
+    Array.isArray(extent) && extent.length===4 && extent[0]<extent[2] && extent[1]<extent[3]
+    ? [[extent[0],extent[3]],[extent[2],extent[1]]] : [];
+  const imaging=rasterPoints.length && rasterPoints.every(validPosition);
+  const raster=imaging?new Image():null;
+  if (raster) {
+    raster.alt='Official BhuNaksha cadastral layer';
+    raster.style.position='absolute';
+    raster.style.maxWidth='none';
+    raster.style.pointerEvents='none';
+    raster.onerror=()=>{if (canvas.isConnected) status.textContent='The official geographic overlay image is unavailable.';};
+    raster.src=geographicRaster.url;
+    raster.hidden=true;
+    viewport.insertBefore(raster,canvas);
+  }
+  const bounds=featureBounds(matchingFeatures.length?matchingFeatures:features,raster? rasterPoints:[]);
   coverage.textContent=features.length
-    ? matchingFeatures.length+' matched geographic parcels · '+geographic.source
-    : 'Geographic parcel boundaries are unavailable for this sheet. You can use this map to place a reference pin.';
+    ? referenceBoundary ? geographic.source : features.length+' geographic parcels · '+matchingFeatures.length+' matched · '+geographic.source
+    : raster ? geographicRaster.source
+      : 'Geographic parcel boundaries are unavailable for this sheet. You can use this map to place a reference pin.';
   downloadButton.hidden=!matchingFeatures.length;
   panel.querySelector('.lr-map-legend').hidden=!matchingFeatures.length;
 
@@ -217,6 +234,11 @@ export function mountParcelBasemap(root,{geographic,highlights=new Set(),tileTem
       return [x-cx+width/2,y-cy+height/2];
     }
     drawTiles(width,height);
+    if (raster) {
+      const [left,top]=pixel(rasterPoints[0]), [right,bottom]=pixel(rasterPoints[1]);
+      raster.hidden=false;
+      Object.assign(raster.style,{left:left+'px',top:top+'px',width:(right-left)+'px',height:(bottom-top)+'px'});
+    }
     for (const feature of features) {
       const level=matched(feature);
       const path=new Path2D();
@@ -232,8 +254,8 @@ export function mountParcelBasemap(root,{geographic,highlights=new Set(),tileTem
       ctx.lineWidth=level?2:1;
       ctx.strokeStyle=level==='surname'?'#8f5a14':level?'#5e417c':'#61786b';
       ctx.stroke(path);
-      const plot=feature.properties.kide;
-      if (level && plot && zoom>=15) {
+      const plot=referenceBoundary ? feature.properties.name : feature.properties.kide;
+      if (plot && (referenceBoundary || level && zoom>=15)) {
         const ring=polygons(feature.geometry)[0][0];
         const selectedBounds=featureBounds([feature]);
         const [x,y]=pixel([(selectedBounds[0]+selectedBounds[2])/2,(selectedBounds[1]+selectedBounds[3])/2]);
@@ -261,7 +283,8 @@ export function mountParcelBasemap(root,{geographic,highlights=new Set(),tileTem
   function fit(frames=pin?[pin]:[]) {
     const [width,height]=dimensions();
     if (!width || !height) return;
-    const frame=frames.length?featureBounds(matchingFeatures.length?matchingFeatures:features,frames):bounds;
+    const frame=frames.length?featureBounds(matchingFeatures.length?matchingFeatures:features,
+      raster?[...rasterPoints,...frames]:frames):bounds;
     ({center,zoom}=fitViewport(frame,width,height));
     dirty=false;
     draw();

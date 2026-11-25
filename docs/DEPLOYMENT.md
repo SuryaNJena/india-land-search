@@ -6,9 +6,9 @@ Use GitHub Actions as the repository's Pages source. Merge changes through a PR.
 The **Publish India Land Search on GitHub Pages** workflow builds and deploys
 relevant changes from `main`. Use **Run workflow** to republish manually.
 
-The build publishes `pages-out/` with the app, vendored JavaScript, the village
-catalogue, and dated public cadastral geometry. The browser connects only to
-its own origin for app resources. Under **State portals → Odisha maps and RoR lookup**, the browser loads official BhuNaksha images or Bhulekh reports on demand. Use the exact Plot Info link to open the official viewer response in another tab. The Pages release requires no backend or account. [Odisha source interfaces](ODISHA-OFFICIAL-INTERFACES.md)
+The build publishes `pages-out/` with the installable app, vendored JavaScript, the village catalogue, and dated public cadastral geometry. The content security policy permits app resources from the same origin, direct RoR previews from Bhulekh, official BhuNaksha forms and images, and OpenStreetMap tiles when enabled.
+
+Choose **State portals → Odisha maps and RoR lookup** to view an official sheet and open the exact Plot Info response. The Pages release needs no backend or account. [Odisha source interfaces](ODISHA-OFFICIAL-INTERFACES.md)
 
 ## Browser data
 
@@ -20,8 +20,7 @@ this way.
 
 Search coverage comes from the loaded records. Geometry from the bundled
 BhuNaksha snapshots is available for selected Odisha sheets. Imports can supply
-other sheets and saved Plot Info. To obtain a fresh RoR, open its official link
-or find it through **State portals**, then import the records or add the PDFs.
+other sheets and saved Plot Info. Look up known Odisha khatas directly or follow **State portals** for records from other locations. Successful standalone lookups can also be reviewed in **Workspace**.
 
 ## Local preview and portable release
 
@@ -34,7 +33,6 @@ Run `node build-pages.mjs` and serve `pages-out/` over HTTP. Run
 Run `node scripts/package-release.mjs <output.zip>` to package the build.
 Extract the ZIP and run `node serve.mjs` with Node.js 24 for a local demo.
 
-## Hosted edition
+## Separate hosted edition
 
-The separate Sites Worker retains signed-out lookup and is outside the Pages bundle.
-See [the migration decision](GITHUB-PAGES-MIGRATION.md).
+The separate hosted build uses the Sites Worker and database schema for signed-out or verified indexed lookups. Build it with `node build.mjs`. See [the migration decision](GITHUB-PAGES-MIGRATION.md) and [browser support and source checks](STANDALONE-ODISHA-LOOKUPS.md).

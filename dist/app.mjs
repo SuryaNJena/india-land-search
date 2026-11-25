@@ -1,25 +1,29 @@
 import {normalize,parcelKey,safeURL,sourceCaste,suggestSurname,validateWorkspace,matchRows} from './core.mjs';
-import {download,localStore,zipWorkspace,importFile,exportWorkbook,mergeROR,savedHoldings,combineSavedHoldings,exportRORBundle} from './files.mjs';
+import {download,localStore,savedLookupStore,zipWorkspace,importFile,exportWorkbook,mergeROR,savedHoldings,combineSavedHoldings,exportRORBundle} from './files.mjs';
 import {drawMap,makeMapPDF,colours} from './maps.mjs';
 import {portals,directoryURL} from './portals.mjs';
 import {mountOfficialOdisha} from './official-odisha.mjs';
 import {renderHomeSearch} from './home-search.mjs';
 import {assignImportState} from './search.mjs';
+import {mountOdishaLookup} from './odisha-lookup.mjs';
+import {mountLookupWorkspace,saveLookup} from './lookup-workspace.mjs';
 import {demoNames, demoPlace, loadDemoWorkspace} from './demo.mjs';
 import {mountWorkspaceSheet,withPublicGeometry} from './workspace-maps.mjs';
 import {plotNumber} from './sheet-overlays.mjs';
 
+if (navigator.serviceWorker) void navigator.serviceWorker.register('./offline-worker.js').catch(()=>{});
+
 const $ = id => document.getElementById(id);
 const escape = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const number = new Intl.NumberFormat('en-IN');
-const labels = {overview:'Home',plots:'Plot records',names:'Name matching',maps:'Village maps',ror:'Records of Rights',portals:'State portals'};
+const labels = {overview:'Home',plots:'Plot records',names:'Name matching',maps:'Village maps',ror:'Records of Rights',workspace:'Workspace',portals:'State portals'};
 const tag = (url,title) => safeURL(url) ? `<a href="${escape(safeURL(url))}" target="_blank" rel="noopener noreferrer">${escape(title)}</a>` : '';
 const legend = () => `<div class="legend">${Object.entries({full:'Specific name',surname:'Surname',none:'Not selected',missing:'Missing info'}).map(([key,value])=>`<span><i style="background:${colours[key]}"></i>${value}</span>`).join('')}</div>`;
 const empty = message => `<div class="empty">${escape(message)}</div>`;
 const defaultRules = () => ({surnames:[],names:[],useCaste:false,caste:sourceCaste});
 
 let workspace = null, matches = [], byKey = new Map(), selected = 'overview', store, busy = false, request = 0;
-let importState = '';
+let importState = '', pendingLookup;
 let plotPage = 0, query = '', rowFilter = 'all', plotSheet = '', rorPage = 0, mapSheet = '', lastView = 'overview';
 const size = 40;
 const demoSession = new URLSearchParams(location.search).get('demo')==='1';
@@ -76,7 +80,7 @@ function chooseImport(state = '') {
 
 function overview() {
   const search = '<section id="home-search" class="card home-search"></section>';
-  const mountSearch = () => renderHomeSearch($('home-search'), {workspace,escape,tag,openPlot:showPlot,openMap:hits=>navigate('maps',{hits}),openOfficial:village=>navigate('portals',{village}),importRecords:chooseImport});
+  const mountSearch = () => renderHomeSearch($('home-search'), {workspace,escape,tag,openPlot:showPlot,openMap:hits=>navigate('maps',{hits}),openOfficial:village=>navigate('portals',{village}),importRecords:chooseImport,onSave:saveLookup});
   if (!workspace) {
     $('view').innerHTML = `${search}<section class="card"><div class="card-head"><div><h2>Records and maps</h2><p>Open an official portal, import records you already have, or explore with fictional plots.</p></div></div><div class="actions">${demoLink}<button class="button secondary" id="go-portals">Open official sources</button></div></section>`;
     mountSearch();
@@ -126,11 +130,37 @@ const bindTable = (body,page,handler) => {
   $('previous').onclick=()=>handler(page-1);$('next').onclick=()=>handler(page+1);
 };
 
+const officialLookup = () => demoSession ? '' : '<section class="card" id="official-odisha-lookup"></section>';
+
+function openSavedLookup(item) {
+  const view={map:'maps',plot:'plots',ror:'ror'}[item.kind];
+  if (!view) return;
+  pendingLookup=item;
+  navigate(view);
+}
+
+function mountOfficialLookup(mode) {
+  const root=$('official-odisha-lookup');
+  if (!root) return;
+  const initial=pendingLookup;
+  pendingLookup=undefined;
+  mountOdishaLookup(root,mode,{escape,tag,onSave:saveLookup,initial});
+}
+
+function lookupWorkspace() {
+  $('view').innerHTML='<div id="lookup-workspace"></div>';
+  mountLookupWorkspace($('lookup-workspace'),{escape,onOpen:openSavedLookup});
+}
+
 function plots() {
-  $('view').innerHTML=`<section class="card"><div class="card-head"><div><h2>Review plot records</h2><p>Search a village, plot number, name, or phrase from the original record.</p></div><button id="excel" class="button secondary" ${workspace?'':'disabled'}>Export Excel</button></div><div class="toolbar"><input type="search" id="search" aria-label="Search plot records" placeholder="Search plots or owner text" value="${escape(query)}"><select id="plot-sheet" aria-label="Filter by sheet"><option value="">All village sheets</option>${(workspace?.summary??[]).map(s=>`<option value="${escape(s.gis)}" ${plotSheet===s.gis?'selected':''}>${escape(s.name)} · ${escape(s.sheet)}</option>`).join('')}</select><select id="row-filter" aria-label="Filter by match"><option value="all">All records</option><option value="full">Specific name</option><option value="surname">Surname criteria</option><option value="review">Mixed or missing caste</option></select></div><div id="plot-results"></div></section>`;
+  if (!workspace) {
+    $('view').innerHTML=officialLookup();
+    mountOfficialLookup('plots');
+    return;
+  }
+  $('view').innerHTML=`${officialLookup()}<section class="card"><div class="card-head"><div><h2>Review plot records</h2><p>Search a village, plot number, name, or phrase from the original record.</p></div><button id="excel" class="button secondary" ${workspace?'':'disabled'}>Export Excel</button></div><div class="toolbar"><input type="search" id="search" aria-label="Search plot records" placeholder="Search plots or owner text" value="${escape(query)}"><select id="plot-sheet" aria-label="Filter by sheet"><option value="">All village sheets</option>${(workspace?.summary??[]).map(s=>`<option value="${escape(s.gis)}" ${plotSheet===s.gis?'selected':''}>${escape(s.name)} · ${escape(s.sheet)}</option>`).join('')}</select><select id="row-filter" aria-label="Filter by match"><option value="all">All records</option><option value="full">Specific name</option><option value="surname">Surname criteria</option><option value="review">Mixed or missing caste</option></select></div><div id="plot-results"></div></section>`;
   $('row-filter').value=rowFilter;
   const results=()=>{
-    if(!workspace){$('plot-results').innerHTML=empty('Import records to start reviewing plots.');return;}
     const normalized=normalize(query), indices=[];
     workspace.rows.forEach((r,i)=>{const m=matches[i];if(plotSheet&&r.gis!==plotSheet)return;if(rowFilter==='full'&&!m.fullSelected||rowFilter==='surname'&&!m.surnameSelected||rowFilter==='review'&&!['Mixed / review','Missing'].includes(m.caste.status))return;if(!normalized||normalize(`${r.village} ${r.plot} ${r.khata} ${r.info}`).includes(normalized))indices.push(i);});
     $('plot-results').innerHTML=table(indices.slice(plotPage*size,(plotPage+1)*size))+paged(indices.length,plotPage);
@@ -139,7 +169,8 @@ function plots() {
   $('search').oninput=e=>{query=e.target.value;plotPage=0;results();};
   $('plot-sheet').onchange=e=>{plotSheet=e.target.value;plotPage=0;results();};
   $('row-filter').onchange=e=>{rowFilter=e.target.value;plotPage=0;results();};
-  $('excel').onclick=()=>task('Creating Excel workbook…',async()=>{download('LandReview_Plots.xlsx',await exportWorkbook(workspace.rows,matches,workspace.state));status(`Excel exported with ${number.format(workspace.rows.length)} plot entries.`);});
+  $('excel').onclick=()=>task('Creating Excel workbook…',async()=>{download('India_Land_Search_Plots.xlsx',await exportWorkbook(workspace.rows,matches,workspace.state));status(`Excel exported with ${number.format(workspace.rows.length)} plot entries.`);});
+  mountOfficialLookup('plots');
   results();
 }
 
@@ -170,7 +201,20 @@ function showPlot(i, searchMatches) {
 
 const split = input => [...new Map(input.split(/\n|;/u).map(x=>[normalize(x),x.trim()]).filter(([x])=>x)).values()];
 function names() {
-  if(!workspace){$('view').innerHTML=empty('Import a workspace or load the sample before editing matching rules.');return;}
+  if (!workspace) {
+    $('view').innerHTML='<section class="card home-search" id="name-lookup"><p role="status">Opening name review…</p></section>';
+    const root=$('name-lookup');
+    void savedLookupStore.list().catch(()=>[]).then(items=>{
+      if (!root.isConnected) return;
+      const plots=items.filter(item=>item.kind==='plot' && item.data?.info);
+      const local=plots.length ? {state:'Odisha',rows:plots.map(item=>({
+        ...item.place,state:'Odisha',gis:item.place.id+'/'+item.place.riCode+'/'+item.sheet,id:item.key,
+        sheet:item.sheet,plot:item.number,khata:item.data.khata,info:item.data.info,status:'Retrieved'
+      }))} : null;
+      renderHomeSearch(root,{workspace:local,escape,tag,openPlot:i=>openSavedLookup(plots[i]),openOfficial:village=>navigate('portals',{village}),importRecords:chooseImport,onSave:saveLookup});
+    });
+    return;
+  }
   const rules=workspace.rules;
   $('view').innerHTML=`<div class="layout"><section class="card"><div class="card-head"><div><h2>Approved matching rules</h2><p>Use one spelling per line. The specific-name list can include middle-name and surname combinations.</p></div></div><label class="label">Surname variants<textarea id="surname-lines" rows="4">${escape(rules.surnames.join('\n'))}</textarea></label><label class="label">Specific full-name variants<textarea id="full-lines" rows="7">${escape(rules.names.join('\n'))}</textarea></label><label class="check"><input id="use-caste" type="checkbox" ${rules.useCaste?'checked':''}> Require an approved source caste label</label><label class="label">Caste label groups<textarea id="caste-lines" rows="3" placeholder="Separate equivalent spellings with commas">${escape((rules.caste??[]).map(g=>g.aliases.join(', ')).join('\n'))}</textarea></label><button id="apply-rules" class="button primary">Apply and rematch</button></section><section class="card"><div class="card-head"><div><h2>Suggest surname spellings</h2><p>Approve a spelling after checking it against the local record.</p></div></div><label class="label">English or local-script surname<input id="surname-input" placeholder="Jena"></label><label class="label">Record language<select id="language"><option value="or">Odia</option><option value="hi">Hindi</option><option value="mr">Marathi</option><option value="bn">Bengali</option><option value="te">Telugu</option><option value="manual">Other script (enter spelling)</option></select></label><button id="suggest" class="button secondary">Find variants</button><div id="candidates" aria-live="polite"></div></section></div>`;
   $('suggest').onclick=()=>{
@@ -209,11 +253,12 @@ function mapView(searchHits) {
   const matched=sheet=>parcels.get(sheet.gis).some(feature=>['full','surname'].includes(matchesMap.get(parcelKey({gis:sheet.gis,id:feature.properties?.id}))?.level));
   const sheets=searchHits?maps().filter(matched):maps();
   if (!sheets.length) {
-    $('view').innerHTML=empty(searchHits?'No matched parcels have corresponding map geometry.':'Import a workspace containing geometry or records covered by the bundled Odisha sheets.');
+    $('view').innerHTML=officialLookup()+(searchHits?empty('No matched parcels have corresponding map geometry.'):'');
+    mountOfficialLookup('maps');
     return;
   }
   if (!sheets.some(sheet=>sheet.gis===mapSheet)) mapSheet=sheets[0].gis;
-  $('view').innerHTML=`<section class="card"><div class="card-head"><div><h2>Village overviews</h2><p>${searchHits?'Showing the current name search matches.':'Select a parcel to read the saved source record.'}</p></div><button id="map-export" class="button primary">Export map PDF</button></div>
+  $('view').innerHTML=`${officialLookup()}<section class="card"><div class="card-head"><div><h2>Village overviews</h2><p>${searchHits?'Showing the current name search matches.':'Select a parcel to read the saved source record.'}</p></div><button id="map-export" class="button primary">Export map PDF</button></div>
     <div class="toolbar"><select id="map-sheet" aria-label="Village sheet">${sheets.map(sheet=>`<option value="${escape(sheet.gis)}" ${sheet.gis===mapSheet?'selected':''}>${escape(sheet.name)} · Sheet ${escape(sheet.sheet)}</option>`).join('')}</select>
     <label class="check"><input id="plain-map" type="checkbox"> Uncoloured</label><label class="check"><input id="matched-sheets-only" type="checkbox" checked> Export only sheets with name matches</label></div><p id="sheet-source" class="muted"></p><div id="workspace-sheet"></div>${legend()}</section>`;
   const pinState={};
@@ -239,14 +284,20 @@ function mapView(searchHits) {
     download('India_Land_Search_Village_Maps.pdf',bytes,'application/pdf');
     status(`Map PDF exported with ${selection.length} overview pages.`);
   });
+  mountOfficialLookup('maps');
   openSheet();
 }
 
 function ror() {
+  if (!workspace) {
+    $('view').innerHTML=officialLookup();
+    mountOfficialLookup('ror');
+    return;
+  }
   const indices=matches.flatMap((m,i)=>m.fullSelected?[i]:[]);
   const holdings=savedHoldings(indices.map(i=>workspace.rows[i]),workspace?.pdfs);
   const choice=holdings.length?`<fieldset class="holding-choices"><legend>Choose khatas for the combined PDF</legend>${holdings.map((holding,i)=>`<label class="check"><input type="checkbox" data-holding="${i}" ${holding.document?'checked':'disabled'}> ${escape(holding.village)} · Khata ${escape(holding.khata)} · ${escape(holding.plots.join(', '))}${holding.document?'':' · PDF missing'}</label>`).join('')}</fieldset>`:'';
-  $('view').innerHTML=`<section class="card"><div class="card-head"><div><h2>Specific-name selection</h2><p>Download the saved front-and-back PDFs and the index for the current selection.</p></div><div class="actions"><button id="ror-combined" class="button primary">Download selected RoRs (PDF)</button><button id="ror-export" class="button secondary" ${indices.length?'':'disabled'}>Export RoR ZIP</button></div></div>${choice}<div id="ror-results"></div></section>`;
+  $('view').innerHTML=`${officialLookup()}<section class="card"><div class="card-head"><div><h2>Specific-name selection</h2><p>Download the saved front-and-back PDFs and the index for the current selection.</p></div><div class="actions"><button id="ror-combined" class="button primary">Download selected RoRs (PDF)</button><button id="ror-export" class="button secondary" ${indices.length?'':'disabled'}>Export RoR ZIP</button></div></div>${choice}<div id="ror-results"></div></section>`;
   const picked=()=>[...$('view').querySelectorAll('[data-holding]:checked')].map(box=>holdings[Number(box.dataset.holding)]);
   const update=()=>$('ror-combined').disabled=!picked().length;
   $('view').querySelector('.holding-choices')?.addEventListener('change',update);
@@ -254,11 +305,12 @@ function ror() {
   $('ror-combined').onclick=()=>task('Assembling selected Records of Rights…',async()=>{
     const selection=picked();
     const bytes=await combineSavedHoldings(selection);
-    download(workspace.demo?'LandReview_Fictional_RoRs.pdf':'LandReview_Selected_RoRs.pdf',bytes,'application/pdf');
+    download(workspace.demo?'India_Land_Search_Fictional_RoRs.pdf':'India_Land_Search_Selected_RoRs.pdf',bytes,'application/pdf');
     status(`Combined RoR PDF downloaded with ${selection.length} khatas.`);
   });
   const renderPage=()=>{$('ror-results').innerHTML=table(indices.slice(rorPage*size,(rorPage+1)*size),true)+paged(indices.length,rorPage);bindTable($('ror-results'),rorPage,p=>{rorPage=p;renderPage();});};renderPage();
-  $('ror-export').onclick=()=>task('Preparing RoR PDFs and index…',async()=>{const rows=indices.map(i=>workspace.rows[i]);const n=rows.filter(r=>workspace.pdfs?.[parcelKey(r)]).length;download('LandReview_RoR_Selection.zip',await exportRORBundle(rows,indices.map(i=>matches[i]),workspace.pdfs));status(`RoR ZIP exported with ${n} saved PDFs and ${rows.length} index entries.`);});
+  mountOfficialLookup('ror');
+  $('ror-export').onclick=()=>task('Preparing RoR PDFs and index…',async()=>{const rows=indices.map(i=>workspace.rows[i]);const n=rows.filter(r=>workspace.pdfs?.[parcelKey(r)]).length;download('India_Land_Search_RoR_Selection.zip',await exportRORBundle(rows,indices.map(i=>matches[i]),workspace.pdfs));status(`RoR ZIP exported with ${n} saved PDFs and ${rows.length} index entries.`);});
 }
 
 function portalView() {
@@ -273,13 +325,13 @@ function render() {
   $('crumb').textContent=workspace?.title||'Land records';
   $('backup').disabled=!workspace||busy;
   document.querySelectorAll('.nav').forEach(b=>{const active=b.dataset.view===selected;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
-  ({overview,plots,names,maps:()=>mapView(mapSearchHits),ror,portals:portalView})[selected]();
+  ({overview,plots,names,maps:()=>mapView(mapSearchHits),ror,workspace:lookupWorkspace,portals:portalView})[selected]();
 }
 
 document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>navigate(b.dataset.view));
 $('import').onclick=()=>chooseImport();
 $('file').onchange=()=>{const file=$('file').files[0],state=importState;$('file').value='';importState='';if(!file)return;task('Validating and importing records…',async()=>{await activate(assignImportState(await importFile(file),state));const saved=await persist();selected='overview';render();status(`Imported ${number.format(workspace.rows.length)} records. ${saved?'Saved in this browser.':'Use Back up workspace to retain this session.'}`);});};
-$('backup').onclick=()=>task('Building workspace backup…',async()=>{download('LandReview_Workspace_Backup.zip',await zipWorkspace(workspace));status('Workspace backup downloaded.');});
+$('backup').onclick=()=>task('Building workspace backup…',async()=>{download('India_Land_Search_Workspace_Backup.zip',await zipWorkspace(workspace));status('Workspace backup downloaded.');});
 if (demoSession) {
   $('import').hidden=true;
   await task('Loading fictional records…',async()=>{await activate(await loadDemoWorkspace());render();});

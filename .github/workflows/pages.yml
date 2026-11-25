@@ -5,6 +5,7 @@ on:
     paths:
       - 'dist/**'
       - 'worker/odisha-map-snapshots.json'
+      - 'scripts/offline-assets.mjs'
       - 'build-pages.mjs'
       - 'scripts/smoke-pages.mjs'
       - '.github/workflows/pages.yml'

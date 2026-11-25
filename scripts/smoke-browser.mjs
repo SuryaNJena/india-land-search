@@ -32,8 +32,104 @@ try {
   let page = await context.newPage();
   page.setDefaultTimeout(8000);
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto(new URL('?demo=1',url).href);
   const click = name => page.getByRole('button',{name,exact:true}).click();
+  await page.goto(url.href);
+  await click('Name matching');
+  await page.getByRole('heading',{name:'Search names in land records',exact:true}).waitFor();
+  await page.getByLabel('State or union territory').selectOption('Odisha');
+  await page.getByLabel('Names or surnames').fill('Samal');
+  await page.getByText(/in the spelling dictionary/).waitFor();
+  for (const name of ['Village maps','Plot records','Records of Rights']) {
+    await click(name);
+    await page.locator('[data-odisha-field="districtCode"]').waitFor();
+    await page.locator('[data-odisha-field="tehsilCode"]').waitFor();
+    await page.locator('[data-odisha-field="villageCode"]').waitFor();
+  }
+  await click('Workspace');
+  await page.getByRole('heading',{name:'Workspace',exact:true}).waitFor();
+
+  await click('Home');
+  await page.getByLabel('State or union territory').selectOption('Odisha');
+  await page.getByText(/Pick a location on the map/).click();
+  await page.getByLabel('Boundary district').selectOption('cuttack');
+  await page.getByLabel('Boundary tehsil').selectOption('Mahanga');
+  await page.getByLabel('Filter village names').fill('Bharatpada');
+  await page.getByLabel('Boundary village').selectOption({label:'Bharatpada · Mahanga'});
+  await page.getByRole('link',{name:'Village location in OpenStreetMap'}).waitFor();
+  await page.getByText('Village boundary on OpenStreetMap',{exact:true}).click();
+  await page.getByText('Bharatpada · Survey of India reference village boundary',{exact:true}).waitFor();
+  if (evidence) {
+    await mkdir(evidence,{recursive:true});
+    await page.locator('#odisha-boundary-picker').screenshot({path:resolve(evidence,'09-odisha-village-boundaries.png')});
+  }
+  await click('Use this village');
+  assert.equal(await page.locator('[name="village"]').inputValue(),'Bharatpada');
+
+  const chooseLocation=async ()=>{
+    await page.locator('[data-odisha-field="districtCode"]').selectOption('Cuttack');
+    await page.locator('[data-odisha-field="tehsilCode"]').selectOption('Mahanga');
+    await page.locator('[data-odisha-field="villageCode"]').selectOption('399616');
+  };
+  await click('Village maps');
+  await chooseLocation();
+  await click('Open village map');
+  await page.locator('.bhu-interactive #bhu-canvas').waitFor();
+  await page.locator('.bhu-interactive .bhu-map-zoom').getByRole('button',{name:'Zoom in'}).click();
+  await page.getByText('141%',{exact:true}).waitFor();
+  await page.locator('.bhu-interactive .bhu-map-zoom').getByRole('button',{name:'Fit sheet'}).click();
+  await page.getByText('Village map loaded.',{exact:true}).waitFor();
+  await page.getByText('Official BhuNaksha layers',{exact:true}).click();
+  await page.getByText('Layers are drawn over the official native sheet.',{exact:true}).waitFor();
+  await page.getByRole('searchbox',{name:'Plot number on this sheet'}).fill('9');
+  await click('Find plot');
+  await page.getByRole('heading',{name:'Plot Info · 9',exact:true}).waitFor();
+  assert.equal(new URL(await page.locator('#bhu-plot-info a').getAttribute('href')).searchParams.get('plotno'),'9');
+  await click('Plot records');
+  await chooseLocation();
+  await page.getByLabel('Plot number',{exact:true}).fill('9');
+  await click('Find Plot Info');
+  const plotLink=page.getByRole('link',{name:'Open official Plot Info',exact:true});
+  assert.equal(new URL(await plotLink.getAttribute('href')).port,'8443');
+  await page.getByLabel('Add the Plot Info JSON saved from BhuNaksha').setInputFiles({
+    name:'plot-fixture.json',mimeType:'application/json',
+    buffer:Buffer.from(JSON.stringify({has_data:'Y',ID:'fixtureparcel',gisCode:'03110810201',plotNo:'9',info:'Synthetic plot record'}))
+  });
+  await page.getByText('Plot Info loaded.',{exact:true}).waitFor();
+  const directSides=[];
+  await page.route('https://bhulekh.ori.nic.in/ViewRoR.aspx?**',async route=>{
+    const requested=new URL(route.request().url());
+    assert.equal(requested.searchParams.get('KhataNo'),'42');
+    const side=requested.searchParams.get('type');
+    directSides.push(side);
+    await route.fulfill({status:200,headers:{'Content-Type':'text/html','Access-Control-Allow-Origin':'*'},
+      body:side==='front'?'<div id="ContentArea">Fictional report front</div>':'<div id="ContentArea"><table id="gvRorBack"><tr><td>Fictional back schedule</td></tr></table></div>'});
+  });
+  await click('Records of Rights');
+  await chooseLocation();
+  await page.getByLabel('Khata number',{exact:true}).fill('42');
+  await click('Load front and back');
+  await page.getByText('Both RoR pages are ready.',{exact:true}).waitFor();
+  assert.deepEqual(directSides,['front','back']);
+  await page.reload();
+  await click('Workspace');
+  const saved=page.locator('#lookup-items [data-lookup-open]');
+  await saved.nth(2).waitFor();
+  assert.equal(await saved.count(),3);
+  await click('Name matching');
+  await page.getByLabel('Names or surnames').fill('Synthetic plot record');
+  await click('Clear all');
+  await click('Search loaded records');
+  await page.getByRole('heading',{name:'1 matching plot entry',exact:true}).waitFor();
+  await click('Workspace');
+  await page.getByRole('button',{name:/Open Khata 42/}).click();
+  await page.getByText('Back page and plot schedule',{exact:true}).click();
+  await page.getByText('Fictional back schedule',{exact:true}).waitFor();
+  assert.deepEqual(directSides,['front','back']);
+  await click('Workspace');
+  await page.getByLabel('Select all shown').check();
+  await click('Remove selected');
+  await saved.first().waitFor({state:'detached'});
+  await page.goto(new URL('?demo=1',url).href);
   await click('Find sample village');
   await page.getByRole('button',{name:/Anandapur Sample.*Cuttack/}).first().click();
   const filters = await page.locator('#home-search-form').evaluate(form =>
@@ -84,7 +180,7 @@ try {
   const recordsDownload = page.waitForEvent('download');
   await click('Download selected RoRs (PDF)');
   const records = await recordsDownload;
-  assert.equal(records.suggestedFilename(),'LandReview_Fictional_RoRs.pdf');
+  assert.equal(records.suggestedFilename(),'India_Land_Search_Fictional_RoRs.pdf');
   const {PDFDocument} = createRequire(import.meta.url)('../dist/vendor/pdf-lib.js');
   assert.equal((await PDFDocument.load(await readFile(await map.path()))).getPageCount(), 1);
   assert.equal((await PDFDocument.load(await readFile(await records.path()))).getPageCount(), 4);
@@ -93,6 +189,7 @@ try {
     await map.saveAs(resolve(evidence,map.suggestedFilename()));
     await page.screenshot({path:resolve(evidence,'03-roR-export.png'),fullPage:true});
   }
+  await page.evaluate(()=>localStorage.removeItem('landreview.home-search'));
   await page.goto(url.href);
   await page.getByLabel('State or union territory').selectOption('Odisha');
   await page.getByLabel('Names or surnames').fill('ଫିକ୍ସଚର');
@@ -239,8 +336,8 @@ try {
   await click('Load map image');
   await page.getByText('Live BhuNaksha sheet image.',{exact:true}).waitFor();
   await click('Find official Plot Info');
-  const plotLink=await page.getByRole('link',{name:'Open exact BhuNaksha Plot Info in a new tab'}).getAttribute('href');
-  assert.equal(new URL(plotLink).searchParams.get('plotno'),'58');
+  const exactPlotLink=await page.getByRole('link',{name:'Open exact BhuNaksha Plot Info in a new tab'}).getAttribute('href');
+  assert.equal(new URL(exactPlotLink).searchParams.get('plotno'),'58');
   const fixtureRoR='https://bhulekh.ori.nic.in/ViewRoR.aspx?DistCode=4&TehCode=1&VillCode=1&KhataNo=12%2F3&type=front';
   await page.getByLabel('Add the Plot Info JSON saved from that tab',{exact:true}).setInputFiles({
     name:'plot.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({
@@ -291,6 +388,7 @@ try {
     return route.fulfill({json:{location:{id:location,districtCode:'19',tehsilCode:'3',villageCode:code,village,district:'Fixture district',tehsil:'Fixture tehsil'},checked:1,
       hits:code==='79'?[{tenant:'ଫିକ୍ସଚର ଜେନା',matched:['ଫିକ୍ସଚର'],khata:''}]:[]}});
   });
+  await page.evaluate(()=>localStorage.removeItem('landreview.home-search'));
   await page.goto(url.href);
   await page.getByLabel('State or union territory').selectOption('Odisha');
   await page.getByLabel('Names or surnames').fill('ଫିକ୍ସଚର');
@@ -330,7 +428,15 @@ try {
   assert.deepEqual(usedLocations,['','19','19-3','','19','19-3']);
   assert.equal(await page.locator('a[href^="/signin-with-chatgpt"]').count(),0);
   if (evidence) await page.screenshot({path:resolve(evidence,'06-anonymous-live-odisha.png'),fullPage:true});
-  assert.deepEqual(external, [], 'The browser smoke made an external request');
+  assert.deepEqual(external, [], 'The browser smoke made an unmocked external request');
+  const install=await browser.newContext({serviceWorkers:'allow'});
+  const offline=await install.newPage();
+  await offline.goto(url.href);
+  await offline.waitForFunction(()=>Boolean(navigator.serviceWorker.controller));
+  await install.setOffline(true);
+  await offline.reload({waitUntil:'domcontentloaded'});
+  await offline.getByRole('heading',{name:'Search names in land records',exact:true}).waitFor();
+  await install.close();
   assert.deepEqual(errors, [], 'The browser smoke raised a page error');
   console.log('Browser smoke passed: workspaces, name variants and dictionary, official maps and RoR, and signed-out Odisha search with batch fallback.');
 } finally {

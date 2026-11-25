@@ -18,17 +18,70 @@ export function download(name, payload, type = 'application/octet-stream') {
   setTimeout(() => URL.revokeObjectURL(link.href), 30000);
 }
 
-export function localStore() {
-  const open = indexedDB.open('landreview', 1);
-  return new Promise((resolve,reject) => {
-    open.onupgradeneeded = () => open.result.createObjectStore('workspace');
+let localDatabase;
+
+function openLocalDatabase() {
+  if (localDatabase) return localDatabase;
+  const pending = new Promise((resolve,reject) => {
+    const open = indexedDB.open('landreview', 2);
+    let blocked = false;
+    open.onblocked = () => {
+      blocked = true;
+      reject(Error('Close other India Land Search tabs and try again to update browser storage.'));
+    };
+    open.onupgradeneeded = () => {
+      const database = open.result;
+      if (!database.objectStoreNames.contains('workspace')) database.createObjectStore('workspace');
+      if (!database.objectStoreNames.contains('lookups')) database.createObjectStore('lookups', {keyPath:'key'});
+    };
     open.onerror = () => reject(open.error);
-    open.onsuccess = () => resolve({
-      read() { return new Promise((ok,fail) => { const r = open.result.transaction('workspace').objectStore('workspace').get('active'); r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error); }); },
-      write(data) { return new Promise((ok,fail) => { const tx = open.result.transaction('workspace','readwrite'); tx.objectStore('workspace').put(data, 'active'); tx.oncomplete = ok; tx.onerror = () => fail(tx.error); tx.onabort = () => fail(tx.error); }); }
-    });
+    open.onsuccess = () => {
+      const database=open.result;
+      if (blocked) { database.close(); return; }
+      database.onversionchange = () => {
+        database.close();
+        if (localDatabase===pending) localDatabase=undefined;
+      };
+      database.onclose = () => {
+        if (localDatabase===pending) localDatabase=undefined;
+      };
+      resolve(database);
+    };
+  });
+  localDatabase=pending;
+  void pending.catch(() => { if (localDatabase===pending) localDatabase=undefined; });
+  return pending;
+}
+
+async function storeRequest(name, mode, operation) {
+  const database=await openLocalDatabase();
+  return new Promise((resolve,reject) => {
+    const transaction=database.transaction(name, mode);
+    let request;
+    transaction.oncomplete=()=>resolve(request?.result);
+    transaction.onabort=()=>reject(transaction.error ?? Error('Browser storage was interrupted.'));
+    try {
+      request=operation(transaction.objectStore(name));
+    } catch (error) {
+      reject(error);
+      transaction.abort();
+    }
   });
 }
+
+export async function localStore() {
+  await openLocalDatabase();
+  return {
+    read:()=>storeRequest('workspace','readonly',store=>store.get('active')),
+    write:data=>storeRequest('workspace','readwrite',store=>store.put(data,'active'))
+  };
+}
+
+export const savedLookupStore = {
+  list:()=>storeRequest('lookups','readonly',store=>store.getAll()),
+  put:item=>storeRequest('lookups','readwrite',store=>store.put(item)),
+  remove:keys=>storeRequest('lookups','readwrite',store=>keys.forEach(key=>store.delete(key)))
+};
 
 export async function zipWorkspace(data) {
   const zip = getZip();
@@ -57,7 +110,7 @@ export async function importFile(file) {
   }
   const zip = await getZip().loadAsync(await file.arrayBuffer());
   if (/\.xlsx?m$/i.test(file.name) || /\.xlsx$/i.test(file.name)) return importWorkbook(zip);
-  if (!zip.file('manifest.json') || !zip.file('workspace.json')) throw Error('This ZIP is not a LandReview workspace. Select LandReview_Odisha_Workspace.zip or a Site backup.');
+  if (!zip.file('manifest.json') || !zip.file('workspace.json')) throw Error('This ZIP is not an India Land Search workspace. Choose a workspace backup.');
   const manifest = await readJSON(zip.file('manifest.json'));
   if (manifest.format !== 'landreview' || manifest.version !== 1) throw Error('Unsupported workspace version.');
   const list = Object.entries(manifest.files ?? {});

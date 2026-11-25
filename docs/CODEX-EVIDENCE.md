@@ -1,8 +1,8 @@
-# LandReview Codex evidence pack
+# India Land Search Codex evidence pack
 
 ## Problem
 
-An Odisha family may know a name in English or Odia and only part of the location. Bhulekh's documented path asks for district, tahasil, and village before tenant lookup. LandReview can start with one village name and a jurisdiction-qualified match. The local workspace keeps spellings, colored map evidence, and front/back documents together. This comparison describes the steps and information each workflow requires. [Bhulekh manual](https://bhulekh.ori.nic.in/Bhulekh%20Portal%20User%20Manual.pdf)
+An Odisha family may know a name in English or Odia and only part of the location. Bhulekh's documented path asks for district, tahasil, and village before tenant lookup. India Land Search can start with one village name and a jurisdiction-qualified match. The local workspace keeps spellings, colored map evidence, and front/back documents together. This comparison describes the steps and information each workflow requires. [Bhulekh manual](https://bhulekh.ori.nic.in/Bhulekh%20Portal%20User%20Manual.pdf)
 
 ## Lifecycle evidence
 

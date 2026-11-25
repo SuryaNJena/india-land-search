@@ -8,6 +8,7 @@ import {mountOdishaScope} from './odisha-scope.mjs';
 import {loadBhulekhLocations,requestBhulekh,walkBhulekhVillages} from './odisha-live-search.mjs';
 import {mountLiveOdishaMap} from './live-odisha-map.mjs';
 import {mountVillageFinder} from './village-finder.mjs';
+import {mountOdishaBoundaries} from './odisha-boundaries.mjs';
 import {runtime} from './runtime.mjs';
 import {mountIndexedResults} from './indexed-results.mjs';
 import {demoPlace} from './demo.mjs';
@@ -35,7 +36,7 @@ function parcelAt(canvas, event, hits) {
   return hits.findLast(({path}) => context.isPointInPath(path, x, y, 'evenodd'))?.key;
 }
 
-export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMap, openOfficial, importRecords}) {
+export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMap, openOfficial, importRecords, onSave}) {
   const index = searchIndex(workspace);
   if (!criteria.state && workspace) {
     const known = new Set(index.map(x => x.state).filter(Boolean));
@@ -72,7 +73,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
   const review = mountNameReview(root.querySelector('#home-name-review'),escape,clearResults,!workspace?.demo,
     workspace ? (state,names)=>countObservedNames(index.filter(entry=>entry.state===state).map(entry=>workspace.rows[entry.index]),names) : undefined);
   const odisha = runtime.hosted && !workspace?.demo ? mountOdishaScope(scopeElement,escape,clearResults) : null;
-  const refreshVillageFinder = mountVillageFinder(root.querySelector('#village-finder'),escape,place=>{
+  const applyVillage=place=>{
     selectState(place.state);
     clearResults();
     selectedVillage=place;
@@ -81,7 +82,8 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     feedback.textContent=workspace?.demo || place.portalCode || !runtime.hosted
       ? `Location filled from ${place.village}.`
       : `Location filled from ${place.village}. Choose it in Bhulekh to run a village-specific live search.`;
-  },workspace?.demo ? demoPlace : undefined);
+  };
+  const refreshVillageFinder=mountVillageFinder(root.querySelector('#village-finder'),escape,applyVillage,workspace?.demo ? demoPlace : undefined);
   loadFields();
   review.update(criteria.state,criteria.names);
 
@@ -102,7 +104,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
         tag('https://www.odishakyl.in/mapview.php','Find a plot on Odisha’s official map')+
         tag('https://bhulekh.ori.nic.in/SearchYourPlot.aspx','Look up a known plot ID') : '';
     root.querySelector('#home-portal-links').innerHTML = portal && !workspace?.demo ? tag(portal.record, `Open ${portal.label}`)+officialTools : '';
-    root.querySelector('[data-odisha-sources]')?.addEventListener('click',()=>openOfficial(selectedVillage));
+    root.querySelector('[data-odisha-sources]')?.addEventListener('click',()=>openOfficial?.(selectedVillage));
     const inState = index.filter(x => x.state === criteria.state);
     const live = !workspace?.demo && criteria.state==='Odisha' && (runtime.hosted || runtime.indexBase);
     refreshVillageFinder(criteria.state);
@@ -194,7 +196,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
       if (maps.length) {
         const holdings=new Map(completed.filter(item=>item.location.riCode)
           .map(item=>[item.location.id,item.hits.map(hit=>hit.khata).filter(Boolean)]));
-        mountLiveOdishaMap(results.querySelector('.live-map'),maps,escape,tag,new Map(),holdings,names);
+        mountLiveOdishaMap(results.querySelector('.live-map'),maps,escape,tag,new Map(),holdings,names,{onSave});
       }
       results.querySelector('#cancel-live')?.addEventListener('click',()=>{
         liveSearch?.abort();
@@ -269,7 +271,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
       return;
     }
     if (!found.stateCount) {
-      results.innerHTML = `<div class="empty"><strong>No ${escape(state)} records loaded</strong><p>Use the state portal to obtain records. Import a LandReview workspace, compatible JSON, or a workbook with a Plots tab to run this saved search.</p>${workspace && !workspace.demo ? '<p>Importing a new file replaces the records open in this browser. Back up the current workspace to keep a copy.</p>' : ''}<button class="button secondary">Import records for ${escape(state)}</button></div>`;
+      results.innerHTML = `<div class="empty"><strong>No ${escape(state)} records loaded</strong><p>Use the state portal to obtain records. Import an India Land Search workspace, compatible JSON, or a workbook with a Plots tab to run this saved search.</p>${workspace && !workspace.demo ? '<p>Importing a new file replaces the records open in this browser. Back up the current workspace to keep a copy.</p>' : ''}<button class="button secondary">Import records for ${escape(state)}</button></div>`;
       results.querySelector('button').onclick = () => importRecords(state);
       return;
     }
@@ -316,7 +318,9 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     const paths = Object.entries(statePaths).map(([name, path]) => `<path d="${path}" data-state="${escape(name)}" tabindex="0" role="button" aria-label="${escape(name)}" aria-pressed="${name === criteria.state}"><title>${escape(name)}</title></path>`).join('');
     mapBox.innerHTML = `<div class="picker-maps"><div><h3>Choose a state on the India map</h3><div class="state-map"><svg viewBox="0 0 490 490" aria-label="India state and union territory picker">${paths}</svg></div><p class="muted">Reference boundaries from ${tag('https://www.geoboundaries.org/api/current/gbOpen/IND/ADM1/', 'geoBoundaries')} and DataMeet, adapted under ${tag('https://creativecommons.org/licenses/by/2.5/in/', 'CC BY 2.5 India')}.</p></div>
       <div><h3>Pinpoint on a parcel sheet</h3>${visibleSheets.length ? `<label class="label">Map sheet<select id="home-sheet">${visibleSheets.map(s => `<option value="${escape(s.gis)}">${escape(s.name)} · Sheet ${escape(s.sheet)}</option>`).join('')}</select></label><div class="map-frame"><canvas id="home-parcel-map" width="750" height="490" aria-label="Select a parcel to fill the location fields"></canvas></div><p id="home-map-status" class="muted" role="status">Click a parcel to fill the location fields.</p><button type="button" id="use-sheet" class="button secondary">Use this sheet's location</button>` : `<p>${criteria.state ? 'Load a workspace containing parcel maps for this state, or use its official map.' : 'Choose a state to see any parcel sheets loaded for it.'}</p>`}
-      ${tag(portals.find(p => p.name === criteria.state)?.map, 'Open official cadastral map')}</div></div>`;
+      ${tag(portals.find(p => p.name === criteria.state)?.map, 'Open official cadastral map')}</div></div>${criteria.state==='Odisha' && !workspace?.demo?'<section class="live-location" id="odisha-boundary-picker"></section>':''}`;
+    const boundaries=mapBox.querySelector('#odisha-boundary-picker');
+    if (boundaries) mountOdishaBoundaries(boundaries,{tag,onChoose:applyVillage});
     mapBox.querySelectorAll('[data-state]').forEach(shape => {
       const choose = () => { selectState(shape.dataset.state); showMaps(); mapBox.querySelector('[aria-pressed="true"]')?.focus(); };
       shape.onclick = choose;

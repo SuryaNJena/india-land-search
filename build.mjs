@@ -1,8 +1,9 @@
 import {mkdir,readFile,readdir,writeFile} from 'node:fs/promises';
 import {extname} from 'node:path';
+import {configureOfflineWorker} from './scripts/offline-assets.mjs';
 
 const dist = new URL('./dist/',import.meta.url);
-const types = {'.html':'text/html','.css':'text/css','.mjs':'text/javascript','.js':'text/javascript','.txt':'text/plain','.json':'application/json'};
+const types = {'.html':'text/html','.css':'text/css','.mjs':'text/javascript','.js':'text/javascript','.txt':'text/plain','.json':'application/json','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'};
 const assets = {};
 for (const folder of ['', 'vendor/']) {
   const directory = new URL(folder,dist);
@@ -12,6 +13,8 @@ for (const folder of ['', 'vendor/']) {
   }
 }
 assets['/'] = assets['/index.html'];
+assets['/offline-worker.js'].text=configureOfflineWorker(assets['/offline-worker.js'].text,
+  Object.fromEntries(Object.entries(assets).map(([path,asset])=>[path.slice(1),asset.text])));
 const statewide = await readFile(new URL('./worker/statewide.mjs',import.meta.url),'utf8');
 const endpoints=await readFile(new URL('odisha-endpoints.mjs',dist),'utf8');
 const app=(await readFile(new URL('./worker/odisha.mjs',import.meta.url),'utf8'))
