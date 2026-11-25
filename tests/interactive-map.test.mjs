@@ -67,3 +67,72 @@ test('Plot Info matches by parcel ID and RoR matches by exact plot number',()=>{
   const fromInfo=new Set([gis+'/parcel-b','19030807902/parcel-a']);
   assert.deepEqual([...sheetHighlights(sheet,['12'],fromInfo).keys()],[gis+'/parcel-b',gis+'/parcel-c']);
 });
+
+function officialViewerRecord() {
+  return {has_data:'Y',ID:parcel.id,gisCode:gis,plotNo:'୧୨ / ୩',
+    info:'Verified fixture owner\nରକବା : 1 acre',plotInfoLinks:'<a href="'+report()+'">RoR</a>'};
+}
+
+test('Empty REST retrieves exact Plot Info through the official viewer lookup',async ()=>{
+  const calls=[];
+  const read=portal.makeBhunakshaPlotReader(async (url,options)=>{
+    calls.push({url,options});
+    return calls.length===1?new Response(null,{status:204}):Response.json(officialViewerRecord());
+  });
+  const result=await read(location,'01',parcel);
+  assert.equal(result.info,'Verified fixture owner\nରକବା : 1 acre');
+  assert.equal(result.khata,'7/1');
+  assert.deepEqual(calls.map(({url,options})=>[url.port,url.pathname,options.method]),[
+    ['8443','/bhunaksha/rest/MapInfo/getPlotInfo','POST'],
+    ['8443','/bhunaksha/ScalarDatahandler','GET']
+  ]);
+  assert.deepEqual(Object.fromEntries(calls[1].url.searchParams),{OP:'5',state:'21',levels:'19,3,8,79,01,',plotno:'12/3'});
+  assert.equal(calls[1].options.body,undefined);
+});
+
+test('Viewer fallback rejects a nearby subdivision or a parcel from another sheet',async ()=>{
+  for (const mismatch of [{plotNo:'12'},{gisCode:'19030807902'},{ID:'other-parcel'}]) {
+    let calls=0;
+    const read=portal.makeBhunakshaPlotReader(async ()=>{
+      return ++calls===1?new Response(null,{status:204}):Response.json({...officialViewerRecord(),...mismatch});
+    });
+    await assert.rejects(read(location,'01',parcel),/verify/i);
+    assert.equal(calls,2);
+  }
+});
+
+test('Plot Info fallback respects portal throttles and offers the district viewer',async ()=>{
+  const calls=[];
+  const readPlot=portal.makeBhunakshaPlotReader(async (url)=>{
+    calls.push(url);
+    return calls.length===1?new Response(null,{status:204}):new Response(null,{status:429,headers:{'Retry-After':'17'}});
+  });
+  const worker=portal.makeLandReviewWorker({assets:{},readPlot,requireIdentity:false});
+  const send=()=>worker.fetch(new Request('https://land.example/api/odisha/maps',{
+    method:'POST',headers:{'content-type':'application/json',origin:'https://land.example'},
+    body:JSON.stringify({location:location.id,sheet:'01',parcel})
+  }));
+  const result=await send();
+  assert.equal(result.status,429);
+  assert.equal(result.headers.get('Retry-After'),'17');
+  assert.equal((await result.json()).portal,'https://bhunakshaodisha.nic.in:8443/bhunaksha/#home-pane');
+  assert.equal((await send()).status,429);
+  assert.equal(calls.length,2);
+});
+
+test('Viewer no-data and transport failure remain distinct and neither fabricates a report link',async ()=>{
+  for (const [viewer,status] of [[{has_data:'N'},404],[null,502]]) {
+    const readPlot=portal.makeBhunakshaPlotReader(async(url)=>url.pathname.endsWith('/ScalarDatahandler') && viewer
+      ? Response.json(viewer) : new Response(null,{status:204}));
+    const worker=portal.makeLandReviewWorker({assets:{},readPlot,requireIdentity:false});
+    const result=await worker.fetch(new Request('https://land.example/api/odisha/maps',{
+      method:'POST',headers:{'content-type':'application/json',origin:'https://land.example'},
+      body:JSON.stringify({location:location.id,sheet:'01',parcel})
+    }));
+    assert.equal(result.status,status);
+    const data=await result.json();
+    assert.match(data.portal,/\.nic\.in:8443\/bhunaksha/);
+    assert.equal(data.front,undefined);
+    assert.equal(data.back,undefined);
+  }
+});
