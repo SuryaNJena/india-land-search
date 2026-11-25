@@ -48,7 +48,7 @@ export async function mountIndexedResults(root,{names,location,escape,tag,signal
       root.querySelector('[data-next]').onclick=()=>{offset=next;void showPage();};
       if (runtime.hosted && maps.length) {
         const plots=new Map(maps.map(place=>[place.id,new Set(hits.filter(hit=>hit.location.id===place.id).flatMap(hit=>hit.plots))]));
-        mountLiveOdishaMap(root.querySelector('.live-map'),maps,escape,tag,plots);
+        mountLiveOdishaMap(root.querySelector('.live-map'),maps,escape,tag,plots,new Map(),names);
       }
     } catch (error) {
       if (!signal.aborted) root.innerHTML=`<h3>Odisha land records</h3><p role="status">${escape(error.message)}</p>${tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal')}`;
