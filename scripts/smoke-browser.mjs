@@ -141,9 +141,40 @@ try {
   await page.getByText('Different name',{exact:true}).waitFor();
   assert.equal(await page.getByRole('link',{name:'Open official BhuNaksha viewer',exact:true}).count(),0);
   assert.deepEqual(requests.slice(-2),[{id:'b',number:'12/3'},{id:'b',number:'12/3'}]);
+  await page.route(new URL('runtime.mjs',url).href,route=>route.fulfill({
+    contentType:'text/javascript',body:"export const runtime={hosted:true,indexBase:'',pages:false};"
+  }));
+  const usedLocations=[];
+  await page.route('**/api/odisha/locations',route=>{
+    assert.equal(route.request().headers()['oai-authenticated-user-id'],undefined);
+    const {location}=route.request().postDataJSON();
+    usedLocations.push(location);
+    const option={'':['19','Fixture district'],'19':['3','Fixture tehsil'],'19-3':['79','Fixture village']}[location];
+    return route.fulfill({json:{options:[{code:option[0],label:option[1]}]}});
+  });
+  await page.route('**/api/odisha/tenant-search',route=>{
+    assert.equal(route.request().headers()['oai-authenticated-user-id'],undefined);
+    assert.deepEqual(route.request().postDataJSON(),{location:'19-3-79',names:['ଫିକ୍ସଚର']});
+    return route.fulfill({json:{location:{id:'19-3-79',districtCode:'19',tehsilCode:'3',villageCode:'79',village:'Fixture village',district:'Fixture district',tehsil:'Fixture tehsil'},checked:1,
+      hits:[{tenant:'ଫିକ୍ସଚର ଜେନା',matched:['ଫିକ୍ସଚର'],khata:''}]}});
+  });
+  await page.goto(url.href);
+  await page.getByLabel('State or union territory').selectOption('Odisha');
+  await page.getByLabel('Names or surnames').fill('ଫିକ୍ସଚର');
+  await page.getByText('Choose villages from Bhulekh',{exact:true}).click();
+  await page.locator('#directory-district').selectOption('19');
+  await page.locator('#directory-tehsil').selectOption('3');
+  await page.locator('#directory-village').selectOption('79');
+  await click('Add village');
+  await click('Search selected villages on Bhulekh');
+  await page.getByRole('heading',{name:'Live Odisha tenant search',exact:true}).waitFor();
+  await page.getByText('ଫିକ୍ସଚର ଜେନା',{exact:false}).waitFor();
+  assert.deepEqual(usedLocations,['','19','19-3']);
+  assert.equal(await page.locator('a[href^="/signin-with-chatgpt"]').count(),0);
+  if (evidence) await page.screenshot({path:resolve(evidence,'06-anonymous-live-odisha.png'),fullPage:true});
   assert.deepEqual(external, [], 'The browser smoke made an external request');
   assert.deepEqual(errors, [], 'The browser smoke raised a page error');
-  console.log('Signed-out browser smoke passed: village filters, name matching, map PDF, two-khata RoR PDF, and interactive Odisha map with no external requests.');
+  console.log('Signed-out browser smoke passed: village filters, name matching, map PDF, two-khata RoR PDF, interactive Odisha map, and signed-out Odisha tenant search with no live portal calls.');
 } finally {
   if (browser) await browser.close();
   await new Promise((accept,reject)=>server.close(error=>error?reject(error):accept()));

@@ -14,7 +14,7 @@ const location = '3-11-102';
 function post(route, body, headers = {}) {
   return new Request(`${origin}/api/odisha/${route}`, {
     method:'POST',
-    headers:{origin, 'content-type':'application/json', 'oai-authenticated-user-id':'fixture-account', ...headers},
+    headers:{origin, 'content-type':'application/json', ...headers},
     body:JSON.stringify(body)
   });
 }
@@ -25,10 +25,9 @@ function tenantFixture() {
   ]};
 }
 
-test('CT-01 current hosted lookup requires identity and an explicit village', async () => {
+test('CT-01 live lookup requires an explicit village and the site origin', async () => {
   const worker = makeLandReviewWorker({assets:{}, matchRows, async readTenants(){assert.fail('Portal must not be called');}});
   const body = {names:['ଜେନା'], location};
-  assert.equal((await worker.fetch(post('tenant-search', body, {'oai-authenticated-user-id':''}))).status, 401);
   assert.equal((await worker.fetch(post('tenant-search', {...body, location:''}))).status, 400);
   assert.equal((await worker.fetch(post('tenant-search', body, {origin:'https://elsewhere.example'}))).status, 403);
 });

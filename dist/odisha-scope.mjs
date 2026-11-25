@@ -1,5 +1,4 @@
 const storageKey = 'landreview.odisha-villages';
-const signIn = '<a class="button secondary" target="_top" href="/signin-with-chatgpt?return_to=%2F">Continue with ChatGPT</a>';
 const fields = ['district','tehsil','village'];
 const labels = {district:'District',tehsil:'Tehsil',village:'Village'};
 const script = /[\u0b01-\u0b7f]/u;
@@ -54,7 +53,6 @@ export function mountOdishaScope(root,escape,onEdit) {
       if (!choices) {
         const response=await fetch('/api/odisha/locations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:key}),signal:abort.signal});
         const item=await response.json();
-        if (response.status===401) {status.innerHTML=`Sign in to load official locations. ${signIn}`;retry.hidden=false;retry.onclick=()=>load(field);return;}
         if (!response.ok) throw Error(item.error || 'Bhulekh is unavailable.');
         choices=item.options;
         directory.set(key,choices);

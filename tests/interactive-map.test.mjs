@@ -38,11 +38,10 @@ test('The map route validates identity, serves one parcel, and respects BhuNaksh
       if(calls===2) throw limited;
       return {info:'Fixture Plot Info'};
     }});
-  const send=(value,user='fixture')=>worker.fetch(new Request('https://land.example/api/odisha/maps',{
-    method:'POST',headers:{'content-type':'application/json',origin:'https://land.example','oai-authenticated-user-id':user},
+  const send=value=>worker.fetch(new Request('https://land.example/api/odisha/maps',{
+    method:'POST',headers:{'content-type':'application/json',origin:'https://land.example'},
     body:JSON.stringify({location:location.id,sheet:'01',parcel:value})
   }));
-  assert.equal((await send(parcel,'')).status,401);
   assert.equal((await send({id:'../parcel',number:'12/3'})).status,400);
   assert.deepEqual(await (await send(parcel)).json(),{info:'Fixture Plot Info'});
   const throttle=await send(parcel);
@@ -107,7 +106,7 @@ test('Plot Info fallback respects portal throttles and offers the district viewe
     calls.push(url);
     return calls.length===1?new Response(null,{status:204}):new Response(null,{status:429,headers:{'Retry-After':'17'}});
   });
-  const worker=portal.makeLandReviewWorker({assets:{},readPlot,requireIdentity:false});
+  const worker=portal.makeLandReviewWorker({assets:{},readPlot});
   const send=()=>worker.fetch(new Request('https://land.example/api/odisha/maps',{
     method:'POST',headers:{'content-type':'application/json',origin:'https://land.example'},
     body:JSON.stringify({location:location.id,sheet:'01',parcel})
@@ -124,7 +123,7 @@ test('Viewer no-data and transport failure remain distinct and neither fabricate
   for (const [viewer,status] of [[{has_data:'N'},404],[null,502]]) {
     const readPlot=portal.makeBhunakshaPlotReader(async(url)=>url.pathname.endsWith('/ScalarDatahandler') && viewer
       ? Response.json(viewer) : new Response(null,{status:204}));
-    const worker=portal.makeLandReviewWorker({assets:{},readPlot,requireIdentity:false});
+    const worker=portal.makeLandReviewWorker({assets:{},readPlot});
     const result=await worker.fetch(new Request('https://land.example/api/odisha/maps',{
       method:'POST',headers:{'content-type':'application/json',origin:'https://land.example'},
       body:JSON.stringify({location:location.id,sheet:'01',parcel})
