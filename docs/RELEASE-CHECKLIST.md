@@ -1,4 +1,4 @@
-# LandReview release checklist
+# India Land Search release checklist
 
 ## Challenge release
 

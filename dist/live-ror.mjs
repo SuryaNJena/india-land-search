@@ -1,7 +1,7 @@
 const tags=new Set('TABLE THEAD TBODY TFOOT TR TD TH DIV P SPAN BR HR B STRONG I EM U H1 H2 H3 H4 H5 UL OL LI CENTER FONT'.split(' '));
 const discard=new Set('SCRIPT STYLE IFRAME OBJECT INPUT BUTTON LINK IMG NOSCRIPT TEMPLATE SVG'.split(' '));
 
-function copyReport(doc, html, side) {
+export function copyReport(doc, html, side) {
   const parsed=new DOMParser().parseFromString(html,'text/html');
   const panel=parsed.querySelector('#ContentArea');
   if (!panel) throw Error('The official record page was unavailable.');
@@ -22,7 +22,7 @@ function copyReport(doc, html, side) {
   return copy(side==='back'?schedule:panel);
 }
 
-export async function printHoldings(holdings,status,button) {
+export async function printHoldings(holdings,status,button,readSide) {
   if (!holdings.length) return;
   if (holdings.length>20) {status.textContent='Select up to 20 khatas per PDF.';return;}
   const windowRef=window.open('','_blank');
@@ -42,19 +42,24 @@ export async function printHoldings(holdings,status,button) {
     for (const hit of holdings) for (const side of ['front','back']) {
       active=`${hit.location.village}, khata ${hit.khata}, ${side}`;
       status.textContent=`Loading ${active}…`;
-      const response=await fetch('/api/odisha/ror',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({location:hit.location.id,khata:hit.khata,side})});
-      const result=await response.json();
-      if (!response.ok) throw Error(result.error||'The official record could not be loaded.');
+      let html;
+      if (readSide) html=await readSide(hit,side);
+      else {
+        const response=await fetch('/api/odisha/ror',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({location:hit.location.id,khata:hit.khata,side})});
+        const result=await response.json();
+        if (!response.ok) throw Error(result.error||'The official record could not be loaded.');
+        html=result.html;
+      }
       const section=doc.createElement('section');
       const heading=doc.createElement('h1');
       heading.textContent=`${hit.location.village} · Khata ${hit.khata} · RoR ${side}`;
       const source=doc.createElement('a');
       source.href=hit[side];
       source.textContent='Official Bhulekh record';
-      section.append(heading,source,copyReport(doc,result.html,side));
+      section.append(heading,source,copyReport(doc,html,side));
       report.append(section);
-      await new Promise(resolve=>setTimeout(resolve,1000));
+      if (!readSide) await new Promise(resolve=>setTimeout(resolve,1000));
     }
     doc.body.replaceChildren(report);
     await doc.fonts.ready;

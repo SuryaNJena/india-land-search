@@ -1,4 +1,4 @@
-# LandReview technical requirements
+# India Land Search technical requirements
 
 **Status** Draft for design review. The shipped baseline and proposed launch changes are identified separately. See the [BRD](BRD.md) for stakeholder decisions.
 
@@ -15,7 +15,7 @@
 flowchart LR
     Source[Bhulekh village lists or suitable bulk source] --> Import[Checkpoint collection and validate coverage]
     Import --> Index[Versioned Odisha search index]
-    Browser[Public browser and reviewed names] --> Site[LandReview Site Worker]
+    Browser[Public browser and reviewed names] --> Site[India Land Search Site Worker]
     Site --> Index
     Site --> Detail[Official plot and RoR sources]
     Detail --> Output[Plot details and map or combined PDF]

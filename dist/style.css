@@ -62,7 +62,14 @@
 @media(max-width:480px){.search-fields{grid-template-columns:1fr}}
 
 .bhu-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0}
-.bhu-controls output{font-size:.875rem;color:var(--muted);min-width:3rem}
+.bhu-interactive{position:relative}
+.bhu-map-zoom{position:absolute;z-index:1;top:10px;left:10px;padding:5px;gap:4px;max-width:calc(100% - 20px);border:1px solid var(--line);border-radius:9px;background:#f8faf5f2}
+.bhu-map-zoom .button{padding:6px 10px;min-height:36px}
+.bhu-map-zoom output{font-size:.875rem;color:var(--muted);padding:0 5px}
+.official-odisha-map,.bhu-native-layer-frame{display:block;width:100%;max-width:760px;margin-block:12px}
+.bhu-native-layer-frame{position:relative}
+.bhu-native-layer-frame img{display:block;width:100%;height:auto}
+.bhu-native-layer-frame .bhu-native-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .bhu-controls #bhu-number{width:min(12rem,100%)}
 .bhu-controls .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 #bhu-find-status:empty,#bhu-find-results:empty{display:none}

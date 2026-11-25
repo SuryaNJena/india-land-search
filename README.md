@@ -1,6 +1,6 @@
 # India Land Search
 
-Find an Odisha village, review English and Odia name variants, inspect matched plots, and assemble a map and Record of Rights (RoR) packet. LandReview also reviews records you already have and links to official portals across India.
+Find an Odisha village, review English and Odia name variants, inspect matched plots, and assemble a map and Record of Rights (RoR) packet. India Land Search also reviews records you already have and links to official portals across India.
 
 ## Try the challenge demo
 
@@ -10,6 +10,12 @@ Find an Odisha village, review English and Odia name variants, inspect matched p
 4. Open the matched map and export its overview. In **Records of Rights**, choose **Download selected RoRs (PDF)** to download both sides of two fictional khatas in one file.
 
 The demo uses fictional records and runs without an account, uploads, or government portal requests. The regular app includes a public Odisha village directory and official links for map-point and plot-ID lookups. Verified RI and land-record portal codes cover selected villages. Live Odisha village searches on the hosted site work without a ChatGPT account. Statewide name search needs verified production data. [Data-source research](docs/DATA-SOURCES.md)
+
+## Use the app without an imported workspace
+
+Open **Village maps**, **Plot records**, or **Records of Rights** and choose an Odisha locality. **Name matching** can also review spellings and search plot text already saved in this browser. Successful standalone lookups appear in **Workspace**, where you can reopen them and remove selected items. Your browser can install the app and reopen its interface offline.
+
+GitHub Pages loads BhuNaksha sheet images from the official WMS and opens the official Plot Info response when the source blocks browser reads. Add its saved JSON to use the content in the app. Bhulekh’s report pages can be read directly with a known khata. In Home, **Pick a location on the map** includes labelled Odisha village boundaries that can be viewed over OpenStreetMap. [Browser support and source checks](docs/STANDALONE-ODISHA-LOOKUPS.md)
 
 ## Odisha cadastral maps
 
@@ -33,7 +39,7 @@ The static build works under a repository subpath. See the [deployment guide](do
 
 ## Records and attribution
 
-Imported LandReview ZIP, compatible JSON, and Excel workspaces stay in the browser. Workspaces back up to a checksum-validated ZIP. Retain original signed documents and verify records using the official source.
+Imported India Land Search ZIP, compatible JSON, and Excel workspaces stay in the browser. Workspaces back up to a checksum-validated ZIP. Retain original signed documents and verify records using the official source.
 
 Odia spelling review uses an offline dictionary of 83,664 English-to-Odia pairs drawn from AI4Bharat Aksharantar’s public-domain sources. The app looks up entries locally and marks spelling evidence separately from occurrences in loaded plot text. [Spelling data and attribution](docs/DATA-SOURCES.md#odia-spellings)
 

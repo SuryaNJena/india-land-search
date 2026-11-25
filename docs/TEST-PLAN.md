@@ -1,4 +1,4 @@
-# LandReview test plan
+# India Land Search test plan
 
 ## Run the suites
 
@@ -50,6 +50,10 @@ Keep `CT-01` as the characterization of the signed-in village connector. When an
 | AT-08 | Repeat public searches under expected peak load. Measure response time, concurrency, debounce/rate-limit behavior, and upstream request volume against agreed targets. | BR-01, BR-06 |
 | AT-09 | Simulate a throttled or temporarily unavailable portal with `Retry-After` in seconds and HTTP-date formats. Confirm all acquisition jobs for that portal honor the wait, keep their checkpoints, and resume without duplicating finished villages. Verify an access denial stops acquisition for review. | BR-02, BR-06, TR-08 |
 | AT-10 | In a fresh browser, search a village with no person's name or location filters. Verify local-script and known Latin spellings, disambiguate same-name villages, and confirm that selection fills only verified filters. Confirm no land-record portal requests occur during discovery. | BR-08, TR-09 |
+
+## Standalone Odisha lookup acceptance
+
+Start in an empty browser. Use Name matching, pick Bharatpada from labelled village outlines, and open the saved cadastral sheet from Pages. Check the zoom controls inside the map, the official layer menu and exact Plot Info link, two direct report reads, local matching on the saved plot, and reopen and remove all saved items after reload. Test the portable app shell after disconnecting Chromium. The hosted fixtures cover the native layer catalogue, exact identity checks, public session renewal, and denial and throttle handling.
 
 ## GitHub Pages smoke check
 

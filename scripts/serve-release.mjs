@@ -14,7 +14,8 @@ const types = {
   '.png': 'image/png',
   '.pdf': 'application/pdf',
   '.webp': 'image/webp',
-  '.woff2': 'font/woff2'
+  '.woff2': 'font/woff2',
+  '.webmanifest': 'application/manifest+json'
 };
 
 export async function serveRelease(directory, port = 0) {

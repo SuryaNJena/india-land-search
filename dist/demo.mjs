@@ -46,7 +46,7 @@ export async function loadDemoWorkspace() {
       page.drawText('India Land Search demonstration. All names, plots, and holdings on this page are fictional.',{x:48,y:48,size:10,font});
       files.push(new Blob([await document.save()],{type:'application/pdf'}));
     }
-    workspace.pdfs[parcelKey(rows[0])]={name:`LandReview_Demo_Khata_${khata}.pdf`,bytes:await mergeROR(...files)};
+    workspace.pdfs[parcelKey(rows[0])]={name:`India_Land_Search_Demo_Khata_${khata}.pdf`,bytes:await mergeROR(...files)};
   }
   return workspace;
 }

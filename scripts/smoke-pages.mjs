@@ -16,6 +16,12 @@ try {
   assert.match(home, /<title>India Land Search<\/title>/);
   assert.match(home, /src="app\.mjs"/);
   await asset('app.mjs', /^text\/javascript/);
+  await asset('app.webmanifest', /^application\/manifest\+json/);
+  await asset('offline-worker.js', /^text\/javascript/);
+  const boundaries=await (await asset('odisha-boundary-districts.json', /^application\/json/)).json();
+  assert.equal(boundaries.length,30);
+  const snapshots=await (await asset('odisha-map-snapshots.json', /^application\/json/)).json();
+  assert.ok(snapshots.villages['3-11-102-8']['01'].features.length);
   await asset('style.css', /^text\/css/);
   await asset('vendor/pdf-lib.js', /^text\/javascript/);
   const runtime = await (await asset('runtime.mjs', /^text\/javascript/)).text();

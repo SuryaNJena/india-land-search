@@ -3,25 +3,23 @@ import {matchRows} from './core.mjs';
 import {download} from './files.mjs';
 import {mountParcelBasemap} from './parcel-basemap.mjs';
 import {localMapLayer,plotNumber,sheetHighlights} from './sheet-overlays.mjs';
+import {mapImageURL,mapLocation,officialPlotURL,postOdisha,readExactPlot,safeMapRaster} from './odisha-lookup-source.mjs';
 
 const limit=12, autoLimit=3;
 const asciiName=name=>/[\u0b00-\u0b7f]/u.test(name) && globalThis.Sanscript ? globalThis.Sanscript.t(name,'oriya','iso').normalize('NFD').replace(/[^\x20-\x7e]/g,'') : name;
 
-export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Map(),matchedHoldings=new Map(),searchNames=[]) {
+export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Map(),matchedHoldings=new Map(),searchNames=[],options={}) {
+  const {initialMap,initialSheet,localSheets,onSave,showVillage=true}=options;
+  const isLocal=Boolean(initialMap || localSheets);
   root.innerHTML=`<summary>BhuNaksha village map</summary>
-    <div class="toolbar"><label class="label">Village<select id="bhu-village">${locations.map((place,i)=>`<option value="${i}">${escape(place.village)} · ${escape(place.tehsil)}</option>`).join('')}</select></label>
+    <div class="toolbar"><label class="label" ${showVillage?'':'hidden'}>Village<select id="bhu-village">${locations.map((place,i)=>`<option value="${i}">${escape(place.village)} · ${escape(place.tehsil)}</option>`).join('')}</select></label>
     <label class="label">Sheet<select id="bhu-sheet" disabled></select></label></div>
     <div data-roR-plots></div><p id="bhu-match-status" role="status"></p>
+    <p data-bhu-save-status role="status" hidden></p>
     <p id="bhu-status" role="status"></p>
     <button class="plain-link" type="button" id="bhu-retry" hidden>Retry map</button>
     <div id="bhu-canvas-frame" hidden>
       <div class="bhu-controls">
-        <div class="actions" role="group" aria-label="Map zoom">
-          <button class="button secondary" id="bhu-zoom-in" type="button" aria-label="Zoom in">+</button>
-          <button class="button secondary" id="bhu-zoom-out" type="button" aria-label="Zoom out">−</button>
-          <button class="button secondary" id="bhu-fit" type="button">Fit sheet</button>
-          <output id="bhu-zoom">100%</output>
-        </div>
         <form id="bhu-find" class="actions">
           <label class="sr-only" for="bhu-number">Plot number on this sheet</label>
           <input id="bhu-number" type="search" maxlength="80" placeholder="Plot number, e.g. 12/3" required>
@@ -31,7 +29,14 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
       <p id="bhu-find-status" role="status"></p>
       <div id="bhu-find-results" class="actions"></div>
       <div class="bhu-map-review">
-        <div class="map-frame bhu-interactive"><canvas id="bhu-canvas" width="1100" height="720" tabindex="0"
+        <div class="map-frame bhu-interactive">
+          <div class="actions bhu-map-zoom" role="group" aria-label="Map zoom">
+            <button class="button secondary" id="bhu-zoom-in" type="button" aria-label="Zoom in">+</button>
+            <button class="button secondary" id="bhu-zoom-out" type="button" aria-label="Zoom out">−</button>
+            <button class="button secondary" id="bhu-fit" type="button">Fit sheet</button>
+            <output id="bhu-zoom">100%</output>
+          </div>
+          <canvas id="bhu-canvas" width="1100" height="720" tabindex="0"
           aria-label="BhuNaksha parcel map. Drag or use the arrow keys to pan. Use plus and minus to zoom. Click a parcel or use Find plot for Plot Info."></canvas></div>
         <section id="bhu-plot-info" class="bhu-plot-info" aria-label="Plot Info" aria-live="polite" hidden></section>
       </div>
@@ -41,6 +46,11 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
       <button class="button secondary" type="button" id="bhu-export">Download this sheet PDF</button>
       <button class="button secondary" type="button" id="bhu-export-village">Download matched village sheets PDF</button>
     </div>
+    <details class="live-location" id="bhu-layers" hidden><summary>Official BhuNaksha layers</summary>
+      <p data-layer-status role="status"></p>
+      <label class="label" hidden>Native map layer<select data-layer-picker></select></label>
+      <div data-layer-images></div>
+    </details>
     <details class="live-location" id="bhu-geographic"><summary>Geographic map and location pins</summary>
       <p id="bhu-geographic-status"></p>
       <label class="label">Add geographic parcels for this sheet
@@ -58,6 +68,28 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
   const currentPlace=()=>locations[Number(village.value)];
   const fromRoR=new Map(), documents=new Map(), responses=new Map(), userLayers=new Map();
   const pinState={};
+  const layerDetails=get('bhu-layers');
+  const layerStatus=layerDetails.querySelector('[data-layer-status]');
+  const layerPicker=layerDetails.querySelector('[data-layer-picker]');
+  const layerImages=layerDetails.querySelector('[data-layer-images]');
+  const saveStatus=root.querySelector('[data-bhu-save-status]');
+  if (isLocal && initialSheet) {
+    const codes=Object.keys(localSheets??{[initialSheet]:initialMap}).sort((a,b)=>Number(a)-Number(b));
+    sheet.replaceChildren(...codes.map(code=>new Option(code,code)));
+    sheet.value=initialSheet;
+    for (const code of codes) responses.set(locations[0].id+'/'+code,localSheets?.[code]??initialMap);
+  }
+  let mapLayers, layerRequest;
+  async function remember(entry) {
+    if (!onSave) return;
+    try {await onSave(entry);}
+    catch(error) {
+      if (root.isConnected) {
+        saveStatus.hidden=false;
+        saveStatus.textContent='The lookup is available, but it could not be saved to Workspace.';
+      }
+    }
+  }
   const zoomIn=get('bhu-zoom-in'), zoomOut=get('bhu-zoom-out'), fitButton=get('bhu-fit');
   const plotInfo=get('bhu-plot-info');
   const details=new Map(), verifiedPlots=new Set(), verifiedVillages=new Set(), autoAttempted=new Set();
@@ -69,6 +101,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
   async function request(place,sheetCode,signal) {
     const key=place.id+'/'+sheetCode;
     if (responses.has(key)) return responses.get(key);
+    if (isLocal) throw Error('No local map is available for this sheet.');
     const location=[place.districtCode,place.tehsilCode,place.villageCode,place.riCode].join('-');
     const response=await fetch('/api/odisha/maps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location,sheet:sheetCode}),signal});
     const data=await response.json();
@@ -82,14 +115,67 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
   function refreshBasemap() {
     const geographic=geometry && (geometry.geographic ?? userLayers.get(geometry.gis));
     geoFile.disabled=!geometry;
-    geoStatus.textContent=geographic ? geographic.source : 'Geographic placement is unavailable for this sheet. You can still add a separate location pin or supply geographic parcel data.';
+    const raster=mapLayers?.geographicRaster;
+    geoStatus.textContent=geographic?.source || raster?.source || 'Geographic placement is unavailable for this sheet. You can still add a separate location pin or supply geographic parcel data.';
     if (!geoDetails.open) return;
     unmountGeo?.();
     const numbers=getNumbers(currentPlace());
     const highlights=new Set((geographic?.features??[]).filter(feature=>numbers.has(plotNumber(feature.properties.kide)) || verifiedPlots.has(geometry.gis+'/'+feature.properties.id))
       .map(feature=>String(feature.properties.id)));
-    unmountGeo=mountParcelBasemap(get('bhu-basemap'),{geographic,highlights,pinState});
+    const rasterURL=safeMapRaster(raster?.url,geometry?.gis);
+    unmountGeo=mountParcelBasemap(get('bhu-basemap'),{geographic,highlights,pinState,
+      geographicRaster:raster?.projection==='EPSG:3857' && rasterURL?{...raster,url:rasterURL}:undefined});
+    if (raster && raster.projection!=='EPSG:3857') {
+      const link=safeMapRaster(raster.url,geometry?.gis);
+      if (link) {
+        const paragraph=document.createElement('p');
+        paragraph.innerHTML=tag(link,'Open official WGS84 sheet image');
+        get('bhu-basemap').prepend(paragraph);
+      }
+    }
   }
+
+  function paintLayer() {
+    layerImages.replaceChildren();
+    if (!mapLayers || !layerPicker.value) return;
+    const layer=mapLayers.layers[Number(layerPicker.value)];
+    const layerURL=safeMapRaster(layer?.url,geometry.gis);
+    if (!layerURL) return;
+    const base=new Image(), overlay=new Image(), frame=document.createElement('div');
+    base.alt='Official native cadastral sheet';
+    overlay.alt=layer.label;
+    overlay.className='bhu-native-overlay';
+    frame.className='bhu-native-layer-frame';
+    frame.append(base,overlay);
+    layerImages.append(frame);
+    base.src=safeMapRaster(mapLayers.nativeRaster,geometry.gis) || mapImageURL(currentPlace(),geometry.sheet,mapLayers.bounds);
+    overlay.src=layerURL;
+    overlay.onerror=()=>{if (overlay.isConnected) layerStatus.textContent='The selected official layer image is unavailable.';};
+  }
+
+  async function loadLayers() {
+    if (!geometry || mapLayers || layerRequest || (isLocal && !geometry.layerCatalog)) return;
+    const current=geometry, place=currentPlace(), abort=new AbortController();
+    layerRequest=abort;
+    layerStatus.textContent='Loading official layers…';
+    try {
+      const next=isLocal ? current.layerCatalog : await postOdisha('maps',{location:mapLocation(place),sheet:current.sheet,layers:true},abort.signal);
+      if (abort.signal.aborted || !root.isConnected || geometry!==current) return;
+      mapLayers={...next,layers:(Array.isArray(next.layers)?next.layers:[])
+        .filter(layer=>safeMapRaster(layer?.url,current.gis))};
+      layerPicker.replaceChildren(new Option('Choose a layer',''),...mapLayers.layers.map((layer,index)=>
+        new Option((layer.kind==='theme'?'Theme':layer.kind==='derived'?'Derived':'Overlay')+' · '+layer.label,String(index))));
+      layerPicker.parentElement.hidden=!mapLayers.layers.length;
+      layerStatus.textContent=mapLayers.layers.length?'Layers are drawn over the official native sheet.':'BhuNaksha did not list optional layers for this sheet.';
+      if (mapLayers.geographicRaster) refreshBasemap();
+    } catch(error) {
+      if (!abort.signal.aborted && geometry===current) layerStatus.textContent=error.message;
+    } finally {
+      if (layerRequest===abort) layerRequest=undefined;
+    }
+  }
+  layerPicker.onchange=paintLayer;
+  layerDetails.ontoggle=()=>{if (layerDetails.open) void loadLayers();};
 
   function render() {
     if (!geometry) return;
@@ -114,8 +200,9 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     plotInfo.hidden=!selected;
     if (!selected) return;
     const number=selected.properties.kide;
-    const entry=details.get(selectedKey());
-    const matched=sheetHighlights(geometry,getNumbers(currentPlace()),verifiedPlots).has(selectedKey());
+    const key=selectedKey();
+    const entry=details.get(key);
+    const matched=sheetHighlights(geometry,getNumbers(currentPlace()),verifiedPlots).has(key);
     const heading='<h3>Plot Info · '+escape(number||'Unnumbered parcel')+'</h3>';
     const match=matched?'<p class="bhu-plot-match">Search match'+(entry?.matches.length?' · '+escape(entry.matches.join(', ')):'')+'</p>':'';
     if (!number) {
@@ -128,6 +215,31 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
         '<div class="actions"><button type="button" class="plain-link" data-retry-plot>Retry Plot Info</button>'+
         tag(plotError.portal,'Open official BhuNaksha viewer')+'</div>';
       plotInfo.querySelector('[data-retry-plot]').onclick=()=>{plotError='';showPlotInfo();void loadSelectedPlot();};
+    } else if (!entry && isLocal) {
+      plotInfo.innerHTML=heading+match+'<p class="actions">'+
+        tag(officialPlotURL(currentPlace(),geometry.sheet,number),'Open official Plot Info')+'</p>'+
+        '<label class="label">Add the official Plot Info JSON<input type="file" accept=".json,application/json"></label>'+
+        '<p data-plot-import-status role="status"></p>';
+      plotInfo.querySelector('input').onchange=async event=>{
+        const file=event.target.files[0];
+        if (!file) return;
+        const sheet=geometry.sheet, place=currentPlace(), expected=selected.properties.id;
+        try {
+          if (file.size>256*1024) throw Error('Choose a Plot Info response under 256 KB.');
+          const data=readExactPlot(JSON.parse(await file.text()),place,sheet,number);
+          if (key!==selectedKey() || !root.isConnected) return;
+          if (data.id!==expected) throw Error('This Plot Info belongs to a different parcel or map version.');
+          const matches=matchRows([{status:'Retrieved',info:data.info}],{names:searchNames})[0].full;
+          details.set(key,{data,matches});
+          if (matches.length) {
+            verifiedPlots.add(key);verifiedVillages.add(place.id);render();refreshBasemap();
+          }
+          showPlotInfo();
+          void remember({kind:'plot',place,sheet,number,data});
+        } catch(error) {
+          if (key===selectedKey()) plotInfo.querySelector('[data-plot-import-status]').textContent=error.message;
+        }
+      };
     } else if (!entry) {
       plotInfo.innerHTML=heading+match+'<p>Loading the official Plot Info…</p>';
     } else {
@@ -141,7 +253,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
   }
 
   async function loadSelectedPlot() {
-    if (loadingPlot || !selected?.properties.kide || details.has(selectedKey())) return;
+    if (isLocal || loadingPlot || !selected?.properties.kide || details.has(selectedKey())) return;
     const key=selectedKey(), place=currentPlace(), plot=selected.properties, current=geometry;
     loadingPlot=true;
     try {
@@ -153,6 +265,8 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
       const matches=matchRows([{status:'Retrieved',info:data.info}],{names:searchNames})[0].full;
       if (details.size>=100) details.delete(details.keys().next().value);
       details.set(key,{data,matches});
+      if (root.isConnected) void remember({kind:'plot',place,sheet:current.sheet,number:plot.kide,
+        data:{...data,id:plot.id,number:plot.kide}});
       if (matches.length) {
         verifiedPlots.add(key);
         verifiedVillages.add(place.id);
@@ -247,6 +361,13 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     const abort = new AbortController();
     pending=abort;
     const place=currentPlace();
+    layerRequest?.abort();
+    layerRequest=undefined;
+    mapLayers=undefined;
+    layerPicker.parentElement.hidden=true;
+    layerDetails.hidden=true;
+    layerImages.replaceChildren();
+    layerStatus.textContent='';
     geometry=null;
     selected=null;
     paths=[];
@@ -275,8 +396,11 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
       projection=sheetProjection(next.features,canvas);
       frame.hidden=false;
       actions.hidden=false;
+      layerDetails.hidden=isLocal&&!next.layerCatalog;
       render();
       refreshBasemap();
+      if (layerDetails.open || geoDetails.open) void loadLayers();
+      if (root.isConnected && (!initialMap || next!==initialMap)) void remember({kind:'map',place,sheet:next.sheet,data:next});
     } catch(error) {
       if (!abort.signal.aborted) {
         status.textContent=error instanceof SyntaxError?'India Land Search could not load the BhuNaksha map. Open the official portal below.':error.message;
@@ -335,8 +459,9 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
       refreshBasemap();
     } catch (error) { if (geometry===current) geoStatus.textContent=error.message; }
   };
-  geoDetails.ontoggle=()=>{if (geoDetails.open) refreshBasemap();};
-  root.ontoggle=()=>{if (root.open&&!loaded){loaded=true;showHoldings();void load();}};
+  geoDetails.ontoggle=()=>{if (geoDetails.open) {refreshBasemap();void loadLayers();}};
+  root.ontoggle=()=>{if (root.open&&!loaded){loaded=true;showHoldings();void load(initialSheet);}};
+  if (root.open) queueMicrotask(()=>root.ontoggle());
   village.onchange=()=>{plotRequest?.abort();exportRequest?.abort();busyExport=false;sheet.replaceChildren();showHoldings();void load();};
   sheet.onchange=()=>{exportRequest?.abort();busyExport=false;void load(sheet.value);};
   retry.onclick=()=>void load(sheet.value);

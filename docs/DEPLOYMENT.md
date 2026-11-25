@@ -1,4 +1,4 @@
-# LandReview deployment
+# India Land Search deployment
 
 ## Portable challenge release
 
@@ -11,7 +11,7 @@ Run `node scripts/smoke-pages.mjs` against `pages-out/` or an extracted release'
 1. Merge the release in GitHub. In the repository's Pages settings, select GitHub Actions as the source.
 2. Run **Publish optional GitHub Pages build** from Actions.
 3. The static build supports the Odisha village directory, name review, local workspaces, and official portal links. Preview locally with `node build-pages.mjs` and `python -m http.server 8000 --directory pages-out`.
-4. For optional indexed search, set the repository variable `LANDREVIEW_INDEX_ORIGIN` to the HTTPS origin of a deployed search Worker. Set `LANDREVIEW_PAGES_ORIGIN` to the matching Pages origin on that Worker. Leave these unset for a completely independent static deployment.
+4. The repository workflow publishes the static build after relevant changes merge to main. It also supports manual publication. It builds without an index origin. An optional local build can still specify `LANDREVIEW_INDEX_ORIGIN` and a matching Worker Pages origin when testing a separately authorized index.
 
 ## ChatGPT Sites or a standalone Worker
 

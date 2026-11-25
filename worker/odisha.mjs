@@ -42,6 +42,20 @@ class PortalError extends Error {
   constructor(message, status = 502) { super(message); this.status = status; }
 }
 
+function responseCookies(headers) {
+  return (headers.getSetCookie?.() ?? (headers.get('set-cookie')??'').split(/,(?=\s*[\w.-]+=)/))
+    .flatMap(line=>{
+      const pair=/^([\w.-]+)=([^;\r\n]*)/.exec(line.trim());
+      return pair ? [[pair[1],pair[2]]] : [];
+    });
+}
+
+function explicitSessionExpiry(status,body) {
+  return status===419 || status===440 || /^\s*(?:session (?:has )?expired|session timeout)\s*[.!]?\s*$/i.test(body) ||
+    /<title>\s*(?:session (?:has )?expired|session timeout)\s*<\/title>/i.test(body) ||
+    /you have been timed out of the website/i.test(body);
+}
+
 function retrySeconds(value) {
   const seconds=/^\d+$/u.test(value??'') ? Number(value) : Math.ceil((Date.parse(value??'')-Date.now())/1000);
   return Number.isFinite(seconds) ? Math.max(1,seconds) : 60;
@@ -61,13 +75,9 @@ export function makeBhulekhReader(fetcher = fetch, delay = ms => new Promise(res
         if (cookies.size) headers.set('cookie',[...cookies].map(([name,value])=>`${name}=${value}`).join('; '));
         if (body) { headers.set('content-type','application/x-www-form-urlencoded'); headers.set('origin',portalOrigin); }
         const response = await fetcher(url,{method:body?'POST':'GET',body:body?.toString(),headers,redirect:'manual',signal:AbortSignal.timeout(12000)});
-        const setCookie = response.headers.getSetCookie?.() ?? (response.headers.get('set-cookie') ?? '').split(/,(?=\s*[\w.-]+=)/);
-        for (const line of setCookie) {
-          const pair = /^([\w.-]+)=([^;\r\n]*)/.exec(line.trim());
-          if (pair) cookies.set(pair[1],pair[2]);
-        }
-        if (response.status===429 || response.status===403 || response.status===503 && response.headers.has('Retry-After')) {
-          const denied=response.status===403;
+        for (const [key,value] of responseCookies(response.headers)) cookies.set(key,value);
+        if ([401,403,429].includes(response.status) || response.status===503 && response.headers.has('Retry-After')) {
+          const denied=[401,403].includes(response.status);
           const error=new PortalError(denied?'Bhulekh denied the live request.':'Bhulekh asked us to wait before another live request.',denied?403:429);
           error.retryAfter=Math.max(60,retrySeconds(response.headers.get('Retry-After')));
           await response.body?.cancel();
@@ -81,6 +91,10 @@ export function makeBhulekhReader(fetcher = fetch, delay = ms => new Promise(res
           path = new URL(target,url);
           if (response.status !== 307 && response.status !== 308) body = undefined;
           continue;
+        }
+        if (explicitSessionExpiry(response.status,'')) {
+          await response.body?.cancel();
+          throw new PortalError('Bhulekh reported an expired session.',440);
         }
         if (!response.ok) { await response.body?.cancel(); throw new PortalError(`Bhulekh returned HTTP ${response.status}.`); }
         return {url,form:readBhulekhForm(await response.text())};
@@ -97,31 +111,50 @@ export function makeBhulekhReader(fetcher = fetch, delay = ms => new Promise(res
       return page(url,body,url.href);
     };
 
-    let current = await page('/');
-    if (current.url.pathname.toLowerCase()==='/bhulekherror.aspx' && current.form.html.includes('ContentPlaceHolder1_LinkButton1')) {
-      current = await post(current,prefix+'LinkButton1');
+    function requireActive({url,form}) {
+      if (url.pathname.toLowerCase()==='/bhulekherror.aspx' && explicitSessionExpiry(200,form.html)) {
+        throw new PortalError('Bhulekh reported an expired session.',440);
+      }
     }
-    if (current.url.pathname.toLowerCase()==='/index.aspx') current=await page('/RoRView.aspx',undefined,current.url.href);
-    const labels = {}, selectors = [['ddlDistrict','district'],['ddlTahsil','tehsil'],['ddlVillage','village']];
-    const choices = selector => current.form.selects.get(prefix+selector)?.filter(option=>/^0*[1-9]\d{0,5}$/.test(option.value) && option.label);
-    for (const [selector,field] of selectors) {
-      const name = prefix+selector;
-      const options = choices(selector);
-      if (!options) throw new PortalError(`Bhulekh did not return its ${field} selector.`);
-      const code = location[`${field}Code`];
-      if (directory && !code) return {level:field,options:options.map(({value,label})=>({code:String(Number(value)),label}))};
-      const option = options.find(option=>Number(option.value)===Number(code));
-      if (!option) throw new PortalError(`Bhulekh did not list that ${field} in the selected location.`,404);
-      labels[field]=option.label;
-      current = await post(current,name,name,option.value);
+
+    async function readOnce() {
+      let current = await page('/');
+      if (current.url.pathname.toLowerCase()==='/bhulekherror.aspx' &&
+          explicitSessionExpiry(200,current.form.html) && current.form.html.includes('ContentPlaceHolder1_LinkButton1')) {
+        current = await post(current,prefix+'LinkButton1');
+      }
+      if (current.url.pathname.toLowerCase()==='/index.aspx') current=await page('/RoRView.aspx',undefined,current.url.href);
+      const labels = {}, selectors = [['ddlDistrict','district'],['ddlTahsil','tehsil'],['ddlVillage','village']];
+      for (const [selector,field] of selectors) {
+        requireActive(current);
+        const name = prefix+selector;
+        const options=current.form.selects.get(name)?.filter(option=>/^0*[1-9]\d{0,5}$/.test(option.value) && option.label);
+        if (!options) throw new PortalError(`Bhulekh did not return its ${field} selector.`);
+        const code = location[`${field}Code`];
+        if (directory && !code) return {level:field,options:options.map(({value,label})=>({code:String(Number(value)),label}))};
+        const option = options.find(option=>Number(option.value)===Number(code));
+        if (!option) throw new PortalError(`Bhulekh did not list that ${field} in the selected location.`,404);
+        labels[field]=option.label;
+        current = await post(current,name,name,option.value);
+      }
+      requireActive(current);
+      current = await post(current,prefix+'rbtnRORSearchtype$2',prefix+'rbtnRORSearchtype','Tenant');
+      requireActive(current);
+      const options = current.form.selects.get(prefix+'ddlBindData');
+      if (current.form.fields.get(prefix+'rbtnRORSearchtype')!=='Tenant' || !options?.length) throw new PortalError('Bhulekh did not return the tenant list.');
+      const riCode = current.form.selects.get(prefix+'ddlRI')?.find(option=>option.selected)?.value.trim();
+      return {labels,riCode:/^\d{1,3}$/.test(riCode??'') && Number(riCode)>0 ? String(Number(riCode)) : null,
+        tenants:options.filter(option=>option.value.trim() && !['0','-1'].includes(option.value.trim()) && option.label)
+          .map(option=>({name:option.label,khata:option.value.trim()}))};
     }
-    current = await post(current,prefix+'rbtnRORSearchtype$2',prefix+'rbtnRORSearchtype','Tenant');
-    const options = current.form.selects.get(prefix+'ddlBindData');
-    if (current.form.fields.get(prefix+'rbtnRORSearchtype')!=='Tenant' || !options?.length) throw new PortalError('Bhulekh did not return the tenant list.');
-    const riCode = current.form.selects.get(prefix+'ddlRI')?.find(option=>option.selected)?.value.trim();
-    return {labels,riCode:/^\d{1,3}$/.test(riCode??'') && Number(riCode)>0 ? String(Number(riCode)) : null,
-      tenants:options.filter(option=>option.value.trim() && !['0','-1'].includes(option.value.trim()) && option.label)
-        .map(option=>({name:option.label,khata:option.value.trim()}))};
+
+    try {
+      return await readOnce();
+    } catch (error) {
+      if (error.status!==440) throw error;
+      cookies.clear();
+      return readOnce();
+    }
   };
 }
 
@@ -162,11 +195,48 @@ async function mapResponseText(response,maxBytes) {
 const mapGis = ({districtCode,tehsilCode,riCode,villageCode},sheet) =>
   [districtCode.padStart(2,'0'),tehsilCode.padStart(2,'0'),riCode.padStart(2,'0'),villageCode.padStart(3,'0'),sheet.padStart(2,'0')].join('');
 
-function bhunakshaCooldown(response) {
-  if (![403,429].includes(response.status) && !(response.status===503 && response.headers.has('Retry-After'))) return;
+function bhunakshaLimit(response) {
+  if ([401,403].includes(response.status)) return new PortalError('BhuNaksha denied this map request.',403);
+  if (response.status!==429 && !(response.status===503 && response.headers.has('Retry-After'))) return;
   const error=new PortalError('BhuNaksha asked India Land Search to wait before fetching maps.',429);
   error.retryAfter=retrySeconds(response.headers.get('Retry-After'));
   return error;
+}
+
+const terminalMapError=error=>error instanceof PortalError && [403,429,440].includes(error.status);
+
+function makeBhunakshaSession(fetcher) {
+  const cookies=new Map();
+  let renewed=false;
+  async function read(url,init,maxBytes) {
+    const cookie=cookies.get(url.origin);
+    const response=await fetcher(url,{...init,...(cookie?{headers:{cookie}}:{})});
+    const limited=bhunakshaLimit(response);
+    if (limited || !response.ok) {
+      await response.body?.cancel();
+      if (limited) throw limited;
+      return {status:response.status,ok:false,text:''};
+    }
+    return {status:response.status,ok:true,text:await mapResponseText(response,maxBytes)};
+  }
+  return async function readWithRenewal(url,init,maxBytes) {
+    let result=await read(url,init,maxBytes);
+    if (!explicitSessionExpiry(result.status,result.text)) return result;
+    const expired=()=>new PortalError('The public BhuNaksha session expired. Open the official viewer and try again.',440);
+    if (renewed) throw expired();
+    renewed=true;
+    const viewer=new URL('/bhunaksha/',url);
+    const welcome=await fetcher(viewer,{redirect:'error',signal:AbortSignal.timeout(7000)});
+    const limited=bhunakshaLimit(welcome);
+    const fresh=responseCookies(welcome.headers).filter(([,value])=>value);
+    await welcome.body?.cancel();
+    if (limited) throw limited;
+    if (!welcome.ok || !fresh.length) throw expired();
+    cookies.set(url.origin,fresh.map(([name,value])=>name+'='+value).join('; '));
+    result=await read(url,init,maxBytes);
+    if (explicitSessionExpiry(result.status,result.text)) throw expired();
+    return result;
+  };
 }
 
 function plotText(value) {
@@ -189,8 +259,150 @@ function plotKhata(html,location) {
   return '';
 }
 
+function mapSelector(html,name) {
+  const selector=[...html.matchAll(/<select\b([^>]+)>([\s\S]*?)<\/select>/gi)]
+    .find(([,attrs])=>['name','id'].some(key=>attributes(attrs).get(key)===name));
+  if (!selector) return null;
+  return [...new Map([...selector[2].matchAll(/<option\b([^>]*)>([\s\S]*?)(?=<\/?option\b|$)/gi)].flatMap(([,attrs,body])=>{
+    const value=attributes(attrs).get('value');
+    if (!/^\d{1,6}$/.test(value??'') || Number(value)<1) return [];
+    const code=String(Number(value));
+    const label=decode(body.replace(/<[^>]*>/g,'')).replace(/^\s*\d+\s+/u,'').replace(/\s+/gu,' ').trim();
+    return [[code,{code,label:label||code}]];
+  })).values()];
+}
+
+async function readPublicMapResponse(request,url,fields,maxBytes=128*1024) {
+  const params=fields?{method:'POST',body:new URLSearchParams(fields)}:{};
+  const response=await request(url,{...params,redirect:'error',signal:AbortSignal.timeout(7000)},maxBytes);
+  if (!response.ok) throw new PortalError('BhuNaksha could not return this map resource.');
+  return response.text;
+}
+
+export function makeBhunakshaLocationReader(fetcher=fetch) {
+  return async function readLocations(codes) {
+    const request=makeBhunakshaSession(fetcher);
+    if (!codes.length) {
+      const url=new URL('https://bhunakshaodisha.nic.in/');
+      const html=await readPublicMapResponse(request,url);
+      const options=mapSelector(html,'drpdistict');
+      if (!options?.length) throw new PortalError('BhuNaksha could not load the district list.');
+      return {options};
+    }
+    const primary=new URL(officialMapBase(codes[0]));
+    const standard=new URL(primary);
+    standard.port='';
+    const level=String(codes.length+1);
+    for (const host of new Set([primary.href,standard.href])) {
+      try {
+        const html=await readPublicMapResponse(request,new URL('ScalarDatahandler',host),
+          {OP:'2',state:'21',level,selections:codes.join(',')});
+        const options=mapSelector(html,'level_'+level);
+        if (options) return {options};
+      } catch (error) {
+        if (terminalMapError(error)) throw error;
+      }
+    }
+    throw new PortalError('BhuNaksha could not load locations for this selection.');
+  };
+}
+
+const layerKinds={
+  TABLE_THEMES:{kind:'theme',name:'THEME',field:'theme_codes'},
+  TABLE_LAYER_MASTER:{kind:'overlay',name:'OVERLAY_LAYER',field:'overlay_codes'},
+  TABLE_DERIVED_LAYERS:{kind:'derived',name:'DERIVED_LAYER',field:'layercodes'}
+};
+
+const isOdishaCoordinate=([x,y])=>Number.isFinite(x) && Number.isFinite(y) && x>=81 && x<=89 && y>=17 && y<=24;
+
+function verifiedMapBounds(data,gis,geographic=false) {
+  if (!data || String(data.gisCode)!==gis) return null;
+  const bounds=[data.xmin,data.ymin,data.xmax,data.ymax];
+  if (!bounds.every(Number.isFinite) || bounds[0]>=bounds[2] || bounds[1]>=bounds[3]) return null;
+  if (geographic && (!isOdishaCoordinate(bounds.slice(0,2)) || !isOdishaCoordinate(bounds.slice(2)))) return null;
+  return bounds;
+}
+
+function officialWMS(base,gis,bounds,extra={}) {
+  const [xMin,yMin,xMax,yMax]=bounds;
+  const width=Math.max(1,Math.round(960*Math.min(1,(xMax-xMin)/(yMax-yMin))));
+  const height=Math.max(1,Math.round(960*Math.min(1,(yMax-yMin)/(xMax-xMin))));
+  const url=new URL('WMS',base);
+  url.search=new URLSearchParams({SERVICE:'WMS',REQUEST:'GetMap',VERSION:'1.3.0',FORMAT:'image/png',
+    TRANSPARENT:'true',LAYERS:'VILLAGE_MAP',STYLES:'VILLAGE_MAP',state:'21',gis_code:gis,
+    CRS:'',BBOX:bounds.join(','),WIDTH:String(width),HEIGHT:String(height),...extra});
+  if (extra.SRS) url.searchParams.delete('CRS');
+  return url.href;
+}
+
+function verifiedProjectedBounds(data,gis,geographic) {
+  const bounds=verifiedMapBounds(data,gis);
+  if (!bounds) return null;
+  const radius=6378137, toRadians=Math.PI/180;
+  const x=longitude=>radius*longitude*toRadians;
+  const y=latitude=>radius*Math.asinh(Math.tan(latitude*toRadians));
+  const expected=[x(geographic[0]),y(geographic[1]),x(geographic[2]),y(geographic[3])];
+  const tolerance=Math.min(50,Math.max(2,Math.min(expected[2]-expected[0],expected[3]-expected[1])*.04));
+  return bounds.every((value,i)=>Math.abs(value-expected[i])<=tolerance) ? bounds : null;
+}
+
+export function makeBhunakshaLayerReader(fetcher=fetch) {
+  return async function readLayers(location,sheet) {
+    const request=makeBhunakshaSession(fetcher);
+    const base=officialMapBase(location.districtCode);
+    const gis=mapGis(location,sheet);
+    const levels=[location.districtCode,location.tehsilCode,location.riCode,location.villageCode,sheet.padStart(2,'0'),''].join(',');
+    const extent=new URL('rest/MapInfo/getVVVVExtentGeoref',base);
+    const native=JSON.parse(await readPublicMapResponse(request,extent,{state:'21',gisLevels:levels,srs:'0'}));
+    const bounds=verifiedMapBounds(native,gis);
+    if (!bounds) throw new PortalError('BhuNaksha did not provide the native map extent.');
+    const layers=[];
+    let geographicRaster;
+    try {
+      const data=JSON.parse(await readPublicMapResponse(request,extent,{state:'21',giscode:gis,srs:'4326'}));
+      const geographicBounds=verifiedMapBounds(data,gis,true);
+      if (geographicBounds) {
+        let projected;
+        try {
+          const data=JSON.parse(await readPublicMapResponse(request,extent,{state:'21',giscode:gis,srs:'3857'}));
+          projected=verifiedProjectedBounds(data,gis,geographicBounds);
+        } catch (error) {
+          if (terminalMapError(error)) throw error;
+        }
+        const projection=projected?'EPSG:3857':'EPSG:4326';
+        geographicRaster={source:'BhuNaksha official WGS84 map extent',bounds:geographicBounds,projection,
+          url:officialWMS(base,gis,projected??geographicBounds,{VERSION:'1.1.1',SRS:projection})};
+      }
+    } catch (error) {
+      if (terminalMapError(error)) throw error;
+    }
+    for (const [layerType,{kind,name,field}] of Object.entries(layerKinds)) {
+      let items;
+      try {
+        const raw=await readPublicMapResponse(request,new URL('rest/Layers/getLayers',base),
+          {state:'21',giscode:gis,layerType},512*1024);
+        if (!raw) continue;
+        items=JSON.parse(raw);
+      } catch (error) {
+        if (terminalMapError(error)) throw error;
+        continue;
+      }
+      if (!Array.isArray(items)) continue;
+      for (const item of items.slice(0,40)) {
+        if (typeof item?.id!=='string' || !/^[A-Za-z0-9_-]{1,128}$/.test(item.id) || item.layerType!==layerType) continue;
+        const label=plotText(item.layerDescription).slice(0,160);
+        if (!label) continue;
+        const url=officialWMS(base,gis,bounds,{LAYERS:name,STYLES:'',[field]:item.id+',',...(kind==='derived'?{plotId:''}:{})});
+        layers.push({id:item.id,label,kind,url});
+      }
+    }
+    return {bounds,layers,nativeRaster:officialWMS(base,gis,bounds),...(geographicRaster?{geographicRaster}:{})};
+  };
+}
+
 export function makeBhunakshaPlotReader(fetcher=fetch) {
   return async function readPlot(location,sheet,parcel) {
+    const request=makeBhunakshaSession(fetcher);
     const gis=mapGis(location,sheet);
     const primary=new URL(officialMapBase(location.districtCode));
     const standard=new URL(primary);
@@ -199,25 +411,20 @@ export function makeBhunakshaPlotReader(fetcher=fetch) {
     const viewer=new URL('ScalarDatahandler',primary);
     const levels=[location.districtCode,location.tehsilCode,location.riCode,location.villageCode,sheet.padStart(2,'0'),''].join(',');
     viewer.search=new URLSearchParams({OP:'5',state:'21',levels,plotno:parcel.number});
-    const attempts=[
-      {endpoint:new URL('rest/MapInfo/getPlotInfo',primary),method:'POST',body},
-      {endpoint:viewer,method:'GET'}
-    ];
-    if (standard.href!==primary.href) attempts.push({endpoint:new URL('rest/MapInfo/getPlotInfo',standard),method:'POST',body});
+    const attempts=[{endpoint:viewer,method:'GET'}];
+    if (parcel.id) {
+      attempts.unshift({endpoint:new URL('rest/MapInfo/getPlotInfo',primary),method:'POST',body});
+      if (standard.href!==primary.href) attempts.push({endpoint:new URL('rest/MapInfo/getPlotInfo',standard),method:'POST',body});
+    }
     let reportedMissing=false;
     for (const {endpoint,method,body} of attempts) {
       let data;
       try {
-        const response=await fetcher(endpoint,{method,body,redirect:'error',signal:AbortSignal.timeout(5000)});
-        const limited=bhunakshaCooldown(response);
-        if (!response.ok) {
-          await response.body?.cancel();
-          if (limited) throw limited;
-          continue;
-        }
-        data=JSON.parse(await mapResponseText(response,256*1024));
+        const response=await request(endpoint,{method,body,redirect:'error',signal:AbortSignal.timeout(7000)},256*1024);
+        if (!response.ok) continue;
+        data=JSON.parse(response.text);
       } catch (error) {
-        if (error instanceof PortalError && error.status===429) throw error;
+        if (terminalMapError(error)) throw error;
         continue;
       }
       if (!data || typeof data!=='object') continue;
@@ -226,13 +433,14 @@ export function makeBhunakshaPlotReader(fetcher=fetch) {
       const [id,code,number,links]=method==='GET'
         ? [data.ID,data.gisCode,data.plotNo,data.plotInfoLinks]
         : [data.plotid,data.giscode,data.plotno,data.infoLinks];
-      if (!id) continue;
-      if (String(code)!==gis || id!==parcel.id || normalizeMapNumber(number)!==normalizeMapNumber(parcel.number)) {
+      if (typeof id!=='string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) continue;
+      if (String(code)!==gis || parcel.id && id!==parcel.id || normalizeMapNumber(number)!==normalizeMapNumber(parcel.number)) {
         throw new PortalError('BhuNaksha could not verify the selected parcel.',502);
       }
       const info=plotText(data.info), area=plotText(data.formatedArea), khata=plotKhata(links,location);
       if (!info && !area && !khata) continue;
-      return {info,area,khata,front:khata?officialRoR(location,khata,'front'):'',back:khata?officialRoR(location,khata,'back'):''};
+      return {info,area,khata,front:khata?officialRoR(location,khata,'front'):'',back:khata?officialRoR(location,khata,'back'):'',
+        ...(!parcel.id?{id,number:normalizeMapNumber(number)}:{})};
     }
     if (reportedMissing) throw new PortalError('The official viewer reported no Plot Info for this plot number.',404);
     throw new PortalError('India Land Search couldn’t retrieve Plot Info from BhuNaksha.',502);
@@ -245,8 +453,20 @@ function normalizeMapNumber(value) {
     .replace(/[\s\u200c\u200d]/gu,'');
 }
 
+function officialGeographicParcels(data,parcels) {
+  if (!['EPSG:4326','urn:ogc:def:crs:EPSG::4326','urn:ogc:def:crs:OGC:1.3:CRS84'].includes(data.crs?.properties?.name)) return;
+  const validRing=ring=>Array.isArray(ring) && ring.length>=4 &&
+    ring.every(position=>Array.isArray(position) && isOdishaCoordinate(position)) &&
+    ring[0][0]===ring.at(-1)[0] && ring[0][1]===ring.at(-1)[1];
+  const validPolygon=polygon=>Array.isArray(polygon) && polygon.length>0 && polygon.every(validRing);
+  if (!parcels.every(({geometry})=>geometry.type==='Polygon' ? validPolygon(geometry.coordinates)
+    : Array.isArray(geometry.coordinates) && geometry.coordinates.length>0 && geometry.coordinates.every(validPolygon))) return;
+  return {source:'BhuNaksha official WGS84 parcels',features:parcels};
+}
+
 export function makeBhunakshaReader(fetcher=fetch) {
   return async function readMap(location,sheet) {
+    const request=makeBhunakshaSession(fetcher);
     const {districtCode,tehsilCode,riCode,villageCode}=location;
     const primary=officialMapBase(districtCode);
     const standard=new URL(primary);
@@ -261,14 +481,9 @@ export function makeBhunakshaReader(fetcher=fetch) {
         const path=new URL(sheet?'rest/MapInfo/getVillageGeoJSon':'ScalarDatahandler',base);
         const body=new URLSearchParams(sheet ? {state:'21',giscode:gis,noCompress:'true'}
           : {OP:'2',state:'21',level:'5',selections});
-        const response=await fetcher(path,{method:'POST',body,redirect:'error',signal:AbortSignal.timeout(sheet?8500:7000)});
-        const limited=bhunakshaCooldown(response);
-        if (limited) {
-          await response.body?.cancel();
-          throw limited;
-        }
-        if (!response.ok) { await response.body?.cancel(); continue; }
-        const result=await mapResponseText(response,sheet?maxMapBytes:128*1024);
+        const response=await request(path,{method:'POST',body,redirect:'error',signal:AbortSignal.timeout(sheet?8500:7000)},sheet?maxMapBytes:128*1024);
+        if (!response.ok) continue;
+        const result=response.text;
         if (!sheet) {
           const selector=[...result.matchAll(/<select\b([^>]+)>([\s\S]*?)<\/select>/gi)]
             .find(([,attrs])=>['name','id'].some(key=>attributes(attrs).get(key)==='level_5'));
@@ -279,16 +494,20 @@ export function makeBhunakshaReader(fetcher=fetch) {
           emptySelector=true;
           continue;
         }
-        const {features}=JSON.parse(result);
+        const data=JSON.parse(result);
+        const {features}=data;
         if (!Array.isArray(features) || !features.length || features.length>10000) continue;
         if (features.some(feature=>feature?.properties?.giscode && String(feature.properties.giscode).padStart(gis.length,'0')!==gis)) continue;
         const parcels=features.filter(item=>item?.properties?.id && item.geometry?.coordinates?.length && ['Polygon','MultiPolygon'].includes(item.geometry.type)).map(({properties,geometry})=>({
           properties:{id:String(properties.id),kide:String(properties.kide??'')},
           geometry:{type:geometry.type,coordinates:geometry.coordinates}
         }));
-        if (parcels.length) return {gis,sheet,features:parcels};
+        if (parcels.length) {
+          const geographic=officialGeographicParcels(data,parcels);
+          return {gis,sheet,features:parcels,...(geographic?{geographic}:{})};
+        }
       } catch(error) {
-        if (error instanceof PortalError && error.status===429) throw error;
+        if (terminalMapError(error)) throw error;
       }
     }
     const message=sheet?'BhuNaksha could not load this map sheet.'
@@ -325,14 +544,39 @@ export function officialRoR(location,khata,type) {
   return url.href;
 }
 
-export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),readPlot=makeBhunakshaPlotReader(),mapSnapshots={villages:{}},nameLimit=1000,readIndex,fetchReport=fetch}) {
-  const cache = new Map(), mapCache = new Map();
+export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),
+  readPlot=makeBhunakshaPlotReader(),readMapLocations=makeBhunakshaLocationReader(),readMapLayers=makeBhunakshaLayerReader(),
+  mapSnapshots={villages:{}},nameLimit=1000,readIndex,fetchReport=fetch}) {
+  const cache = new Map(), mapCache = new Map(), mapMetadataCache = new Map();
   let busyUntil = 0, pausedUntil = 0, mapPausedUntil = 0, mapBusy = false;
   const json = (status, value, headers = {}) => Response.json(value,{status,headers:{'Cache-Control':'no-store',...headers}});
+  async function mapMetadata(key,load) {
+    const cached=mapMetadataCache.get(key);
+    if (cached && Date.now()-cached.at<3600000) return json(200,cached.data);
+    const wait=Math.ceil((mapPausedUntil-Date.now())/1000);
+    if (wait>0 || mapBusy) return json(429,{error:'BhuNaksha is busy. Try the map lookup again shortly.'},{'Retry-After':String(Math.max(1,wait))});
+    mapBusy=true;
+    try {
+      const data=await load();
+      if (mapMetadataCache.size>=64) mapMetadataCache.delete(mapMetadataCache.keys().next().value);
+      mapMetadataCache.set(key,{data,at:Date.now()});
+      return json(200,data);
+    } catch (error) {
+      const seconds=error.status===429 ? error.retryAfter??60 : 0;
+      if (seconds) mapPausedUntil=Date.now()+seconds*1000;
+      return json(error instanceof PortalError?error.status:502,
+        {error:error instanceof PortalError?error.message:'The BhuNaksha map resource is temporarily unavailable.'},
+        seconds?{'Retry-After':String(seconds)}:{});
+    } finally {
+      mapBusy=false;
+    }
+  }
+
   return {async fetch(request, env = {}) {
     const url = new URL(request.url);
     const directory = url.pathname === '/api/odisha/locations';
     const map = url.pathname === '/api/odisha/maps';
+    const mapDirectory = url.pathname === '/api/odisha/map-locations';
     const indexed = url.pathname === '/api/odisha/index-search';
     const report = url.pathname === '/api/odisha/ror';
     const origin = request.headers.get('origin');
@@ -340,7 +584,7 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
     const cors = pages ? {'Access-Control-Allow-Origin':origin,Vary:'Origin'} : {};
     if (pages && request.method==='OPTIONS') return new Response(null,{status:204,headers:{...cors,
       'Access-Control-Allow-Methods':'POST','Access-Control-Allow-Headers':'Content-Type','Access-Control-Max-Age':'600'}});
-    if (!directory && !map && !indexed && !report && url.pathname !== '/api/odisha/tenant-search') {
+    if (!directory && !map && !mapDirectory && !indexed && !report && url.pathname !== '/api/odisha/tenant-search') {
       const asset = Object.hasOwn(assets,url.pathname) ? assets[url.pathname] : null;
       if (!asset || !['GET','HEAD'].includes(request.method)) return new Response('Not found',{status:404});
       return new Response(request.method==='HEAD'?null:asset.text,{headers:{'Content-Type':asset.type,'X-Content-Type-Options':'nosniff'}});
@@ -380,6 +624,13 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       } catch {
         return json(503,{error:'The Odisha land-record index is temporarily unavailable.'},cors);
       }
+    }
+    if (mapDirectory) {
+      const {location=''}=input??{};
+      if (typeof location!=='string' || location && !/^[1-9]\d?(?:-[1-9]\d?){0,2}$/.test(location)) {
+        return json(400,{error:'Choose a valid BhuNaksha district, tehsil or RI.'});
+      }
+      return mapMetadata('location/'+location,()=>readMapLocations(location?location.split('-'):[]));
     }
     const parts = typeof input?.location==='string' && input.location ? input.location.split('-') : [];
     if ((map ? parts.length!==4 : directory ? parts.length>2 : parts.length!==3) || parts.some(part=>!/^[1-9]\d{0,5}$/.test(part))) {
@@ -454,9 +705,13 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
     if (map) {
       const sheet=input.sheet??'';
       if (typeof sheet!=='string' || (sheet && !/^\d{1,3}$/.test(sheet))) return json(400,{error:'Choose a BhuNaksha sheet.'});
+      if (input.layers===true) {
+        if (!sheet || Number(sheet)<1 || Object.hasOwn(input,'parcel')) return json(400,{error:'Choose a BhuNaksha sheet for map layers.'});
+        return mapMetadata('layers/'+location.id+'/'+sheet,()=>readMapLayers(location,sheet));
+      }
       if (Object.hasOwn(input,'parcel')) {
         const {id,number}=input.parcel??{};
-        if (!sheet || Number(sheet)<1 || typeof id!=='string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id) ||
+        if (!sheet || Number(sheet)<1 || id!==undefined && (typeof id!=='string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) ||
             typeof number!=='string' || number.length>120 || !/^[\p{L}\p{M}\p{N}./-]{1,80}$/u.test(normalizeMapNumber(number))) {
           return json(400,{error:'Choose a valid parcel on the map.'});
         }
