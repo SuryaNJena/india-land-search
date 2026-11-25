@@ -99,9 +99,17 @@ try {
   await page.getByText('ଫିକ୍ସଚର ଜେନା',{exact:true}).waitFor();
   assert.equal(await page.getByRole('link',{name:'Official RoR front',exact:true}).getAttribute('href'),'https://bhulekh.ori.nic.in/ViewRoR.aspx?type=front');
   if (evidence) await page.screenshot({path:resolve(evidence,'04-pages-imported-map.png'),fullPage:true});
+  await page.getByText('Geographic parcels and reference pin',{exact:true}).click();
+  await page.getByLabel('Latitude',{exact:true}).fill('20.5');
+  await page.getByLabel('Longitude',{exact:true}).fill('86.4');
+  await click('Set coordinate pin');
+  await page.getByText('Coordinate pin · 20.500000, 86.400000',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Show OpenStreetMap'}).count(),0);
+  await page.reload();
+  await page.getByRole('heading',{name:'Saved record fixture',exact:true}).waitFor();
   assert.deepEqual(external, [], 'The browser smoke made an external request');
   assert.deepEqual(errors, [], 'The browser smoke raised a page error');
-  console.log('Signed-out browser smoke passed: village filters, name matching, map PDF, two-khata RoR PDF, and interactive Odisha map with no external requests.');
+  console.log('Standalone browser smoke passed: village filters, workspace import and storage, interactive parcel map, coordinate pin, and PDF exports with no external requests.');
 } finally {
   if (browser) await browser.close();
   await new Promise((accept,reject)=>server.close(error=>error?reject(error):accept()));
