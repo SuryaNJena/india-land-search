@@ -81,8 +81,8 @@
 .bhu-plot-info>*+*{margin-top:7px}
 .bhu-plot-info .bhu-plot-source{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
 .bhu-plot-info .bhu-plot-match{font-weight:650;color:var(--purple)}
-.official-odisha-map{display:block;max-width:100%;width:auto;height:auto;margin:10px 0;border:1px solid var(--line)}
+.official-odisha-map{display:block;max-width:100%;width:auto;height:auto}
 #odisha-official-sources [data-report] table{width:100%;border-collapse:collapse}
 #odisha-official-sources [data-report] details{overflow:auto}
-.official-odisha-preview{position:relative;display:table;max-width:100%}
+.official-odisha-preview{position:relative;display:table;max-width:100%;margin:10px 0}
 .official-odisha-preview [data-selected-overlay]{position:absolute;inset:0;width:100%;height:100%}

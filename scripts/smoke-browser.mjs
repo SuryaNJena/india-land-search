@@ -179,7 +179,9 @@ try {
   });
   await page.getByText('Fixture source text',{exact:true}).waitFor();
   await click('Highlight imported plot on map');
-  await page.getByAltText('Selected parcel overlay',{exact:true}).waitFor();
+  const overlay=page.getByAltText('Selected parcel overlay',{exact:true});
+  await overlay.waitFor();
+  assert.deepEqual(await overlay.boundingBox(),await page.getByAltText('Live cadastral sheet from BhuNaksha',{exact:true}).boundingBox());
   await page.getByText('Bhulekh Records of Rights',{exact:true}).click();
   assert.equal(await page.getByLabel('Khata number',{exact:true}).inputValue(),'12/3');
   await click('Load front and back');
