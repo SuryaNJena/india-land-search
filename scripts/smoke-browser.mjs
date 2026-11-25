@@ -68,79 +68,37 @@ try {
     await map.saveAs(resolve(evidence,map.suggestedFilename()));
     await page.screenshot({path:resolve(evidence,'03-roR-export.png'),fullPage:true});
   }
-  const mapPage=new URL('interactive-map-smoke',url);
-  await page.route(mapPage.href,route=>route.fulfill({contentType:'text/html',body:
-    '<!doctype html><title>Interactive Odisha map fixture</title><link rel="stylesheet" href="./style.css">'+
-    '<main style="grid-column:1/-1;max-width:1100px"><details class="live-location"></details></main>'+
-    '<script type="module">'+
-    "import {mountLiveOdishaMap} from './live-odisha-map.mjs';"+
-    "const plotTexts=window.plotTexts=[];const draw=CanvasRenderingContext2D.prototype.fillText;"+
-    "CanvasRenderingContext2D.prototype.fillText=function(label,...args){if(this.canvas.id==='bhu-canvas')plotTexts.push(label);return draw.call(this,label,...args);};"+
-    "const place={id:'19-3-79',districtCode:'19',tehsilCode:'3',villageCode:'79',riCode:'8',village:'Fixture village',tehsil:'Fixture tehsil'};"+
-    "const tag=(href,label)=>href?'<a href=\"'+href+'\">'+label+'</a>':'';"+
-    "mountLiveOdishaMap(document.querySelector('details'),[place],String,tag,new Map(),new Map([[place.id,['7']]]),['Fixture Name']);"+
-    '</script>'}));
-  const requests=[];
-  const fallbackPortal='https://bhunakshaodisha.nic.in:8443/bhunaksha/#home-pane';
-  const rectangularParcel=(id,kide,x)=>({properties:{id,kide},geometry:{type:'Polygon',
-    coordinates:[[[x,0],[x+90,0],[x+90,100],[x,100],[x,0]]]}});
-  const features=[rectangularParcel('a','12',0),rectangularParcel('b','12/3',105),rectangularParcel('c','58',210)];
-  await page.route('**/api/odisha/maps',route=>{
-    const {parcel,sheet}=route.request().postDataJSON();
-    if (parcel) {
-      requests.push(parcel);
-      if (parcel.id==='b' && requests.filter(item=>item.id==='b').length===1) {
-        return route.fulfill({status:502,json:{error:'India Land Search couldn’t retrieve Plot Info from BhuNaksha.',portal:fallbackPortal}});
-      }
-      const details=parcel.id==='c'
-        ? {info:'Fixture Name\nDetails from BhuNaksha',area:'0.52 acres',khata:'9',
-          front:'https://bhulekh.ori.nic.in/ViewRoR.aspx?type=front',back:'https://bhulekh.ori.nic.in/ViewRoR.aspx?type=back'}
-        : {info:'Different name'};
-      return route.fulfill({json:details});
-    }
-    return route.fulfill({json:sheet?{sheet,gis:'19030807901',features}:{sheets:['01']}});
+  await page.goto(url.href);
+  await page.getByLabel('State or union territory').selectOption('Odisha');
+  await page.getByLabel('Names or surnames').fill('ଫିକ୍ସଚର');
+  await click('Search loaded records');
+  await page.getByRole('button',{name:'Import records for Odisha'}).waitFor();
+  await page.locator('#file').setInputFiles({
+    name:'saved-workspace.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({
+      title:'Saved record fixture',state:'Odisha',
+      rows:[{id:'parcel',gis:'fixture',village:'Fixture Village',sheet:'01',plot:'12/3',khata:'9',
+        info:'ଫିକ୍ସଚର ଜେନା',status:'Retrieved',front:'https://bhulekh.ori.nic.in/ViewRoR.aspx?type=front'}],
+      summary:[{gis:'fixture',name:'Fixture Village',sheet:'01'}],
+      geometry:{fixture:{features:[{properties:{id:'parcel',kide:'12/3'},geometry:{type:'Polygon',
+        coordinates:[[[0,0],[10,0],[10,8],[0,8],[0,0]]]}}]}},
+      rules:{names:[],surnames:[]}
+    }))
   });
-  await page.route('**/api/odisha/ror',route=>{
-    assert.deepEqual(route.request().postDataJSON(),{location:'19-3-79',khata:'7',side:'back',plots:true});
-    return route.fulfill({json:{plots:['12/3']}});
-  });
-  await page.goto(mapPage.href);
-  await page.getByText('BhuNaksha village map',{exact:true}).click();
-  await page.getByText(/1 search-matched parcel on sheet 01/).waitFor();
-  assert.deepEqual(requests,[]);
-  assert.deepEqual(await page.evaluate(()=>window.plotTexts),[]);
+  await page.getByRole('heading',{name:'1 matching plot entry',exact:true}).waitFor();
+  await click('Show matches on map');
+  await page.getByRole('heading',{name:'Village overviews',exact:true}).waitFor();
   await click('Zoom in');
   await page.getByText('141%',{exact:true}).waitFor();
   await click('Zoom in');
   await page.getByText('200%',{exact:true}).waitFor();
-  assert.ok((await page.evaluate(()=>window.plotTexts)).includes('12/3'));
-  const canvas=page.locator('#bhu-canvas');
-  await canvas.focus();
-  await page.keyboard.press('ArrowRight');
   await click('Fit sheet');
   await page.getByText('100%',{exact:true}).waitFor();
-  const bounds=await canvas.boundingBox();
-  await page.mouse.click(bounds.x+bounds.width*.16,bounds.y+bounds.height*.5);
-  await page.getByRole('heading',{name:'Plot Info · 12',exact:true}).waitFor();
-  await page.getByText('Different name',{exact:true}).waitFor();
-  await page.getByRole('searchbox',{name:'Plot number on this sheet'}).fill('୫୮');
-  await click('Find plot');
-  await page.getByRole('heading',{name:'Plot Info · 58',exact:true}).waitFor();
-  await page.getByText('Search match · Fixture Name',{exact:true}).waitFor();
-  await page.getByText(/2 search-matched parcels on sheet 01/).waitFor();
-  assert.equal(await page.getByRole('link',{name:'RoR front',exact:true}).getAttribute('href'),'https://bhulekh.ori.nic.in/ViewRoR.aspx?type=front');
-  assert.deepEqual(requests,[{id:'a',number:'12'},{id:'c',number:'58'}]);
-  if (evidence) await page.locator('main').screenshot({path:resolve(evidence,'04-interactive-odisha-map.png')});
-  await page.getByRole('searchbox',{name:'Plot number on this sheet'}).fill('12/3');
+  await page.getByRole('searchbox',{name:'Find plot number'}).fill('୧୨/୩');
   await click('Find plot');
   await page.getByRole('heading',{name:'Plot Info · 12/3',exact:true}).waitFor();
-  await page.getByText('In BhuNaksha, select Fixture village, sheet 01, then search for plot 12/3.',{exact:true}).waitFor();
-  assert.equal(await page.getByRole('link',{name:'Open official BhuNaksha viewer',exact:true}).getAttribute('href'),fallbackPortal);
-  if (evidence) await page.locator('#bhu-plot-info').screenshot({path:resolve(evidence,'05-plot-info-fallback.png')});
-  await click('Retry Plot Info');
-  await page.getByText('Different name',{exact:true}).waitFor();
-  assert.equal(await page.getByRole('link',{name:'Open official BhuNaksha viewer',exact:true}).count(),0);
-  assert.deepEqual(requests.slice(-2),[{id:'b',number:'12/3'},{id:'b',number:'12/3'}]);
+  await page.getByText('ଫିକ୍ସଚର ଜେନା',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('link',{name:'Official RoR front',exact:true}).getAttribute('href'),'https://bhulekh.ori.nic.in/ViewRoR.aspx?type=front');
+  if (evidence) await page.screenshot({path:resolve(evidence,'04-pages-imported-map.png'),fullPage:true});
   assert.deepEqual(external, [], 'The browser smoke made an external request');
   assert.deepEqual(errors, [], 'The browser smoke raised a page error');
   console.log('Signed-out browser smoke passed: village filters, name matching, map PDF, two-khata RoR PDF, and interactive Odisha map with no external requests.');

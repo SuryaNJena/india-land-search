@@ -15,11 +15,15 @@ try {
   const home = await (await asset('?demo=1', /^text\/html/)).text();
   assert.match(home, /<title>India Land Search<\/title>/);
   assert.match(home, /src="app\.mjs"/);
+  assert.match(home, /connect-src 'self'/);
   await asset('app.mjs', /^text\/javascript/);
   await asset('style.css', /^text\/css/);
   await asset('vendor/pdf-lib.js', /^text\/javascript/);
-  const runtime = await (await asset('runtime.mjs', /^text\/javascript/)).text();
-  assert.match(runtime, /"indexBase":"","pages":true/);
+  for (const legacy of ['runtime.mjs','indexed-results.mjs','odisha-scope.mjs','live-ror.mjs','live-odisha-map.mjs','server/index.js']) {
+    assert.equal((await fetch(new URL(legacy,url))).status,404,legacy);
+  }
+  const maps=await (await asset('odisha-map-snapshots.json', /^application\/json/)).json();
+  assert.ok(maps.villages['19-3-79-8']['01'].features.length>1000);
   const directory = await (await asset('villages.json', /^application\/json/)).json();
   assert.equal(directory.state, 'Odisha');
   assert.ok(directory.rows.length > 50_000, 'Odisha directory is populated');
