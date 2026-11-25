@@ -18,3 +18,11 @@ flowchart LR
   F --> G[Review spelling and source evidence]
   G --> H[Search approved spelling choices]
 ```
+
+## Rebuild
+
+Download the [pinned Odia archive](https://huggingface.co/datasets/ai4bharat/Aksharantar/blob/b311c19b4a66bfac52ca4d95456b4b5646aca49e/ori.zip) and run `python scripts/build-odia-dictionary.py <path-to-ori.zip>` from the repository root. The script checks the archive SHA-256 before reading it. Source selection and attribution are documented in [data sources](DATA-SOURCES.md).
+
+## CP5 Pull request evidence
+
+The browser review uses 81,198 lookup keys and 83,664 spelling pairs. The table loads only when a name in Roman script is entered for Odia review. It is about 670 kB when compressed with gzip. The generated file reproduced byte-for-byte. The tests check real lookup pairs, preserved spelling combinations, and the distinction between dictionary evidence and saved record evidence. The signed-out Chromium smoke confirms the dictionary uses a static same-origin GET with an empty query and body.
