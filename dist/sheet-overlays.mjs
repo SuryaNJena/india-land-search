@@ -4,10 +4,10 @@ export function plotNumber(value) {
     .replace(/[\s\u200c\u200d]/gu,'');
 }
 
-export function sheetHighlights(sheet, numbers) {
+export function sheetHighlights(sheet, numbers, verified = new Set()) {
   const targets=new Set([...numbers].map(plotNumber).filter(Boolean));
   return new Map(sheet.features
-    .filter(feature=>targets.has(plotNumber(feature.properties?.kide)))
+    .filter(feature=>targets.has(plotNumber(feature.properties?.kide)) || verified.has(`${sheet.gis}/${feature.properties?.id}`))
     .map(feature=>[`${sheet.gis}/${feature.properties.id}`,{level:'full'}]));
 }
 

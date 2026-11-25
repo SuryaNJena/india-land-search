@@ -138,7 +138,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
       if (maps.length) {
         const holdings=new Map(completed.filter(item=>item.location.riCode)
           .map(item=>[item.location.id,item.hits.map(hit=>hit.khata).filter(Boolean)]));
-        mountLiveOdishaMap(results.querySelector('.live-map'),maps,escape,tag,new Map(),holdings);
+        mountLiveOdishaMap(results.querySelector('.live-map'),maps,escape,tag,new Map(),holdings,names);
       }
       results.querySelector('#cancel-live')?.addEventListener('click',()=>{abort.abort();paint('Search stopped. Completed villages are listed below.',false);});
       results.querySelectorAll('[data-more]').forEach(button=>{button.onclick=()=>{

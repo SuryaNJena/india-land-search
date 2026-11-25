@@ -60,3 +60,24 @@
 @media(max-width:1180px){.search-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:705px){.picker-maps{grid-template-columns:1fr}}
 @media(max-width:480px){.search-fields{grid-template-columns:1fr}}
+
+.bhu-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0}
+.bhu-controls output{font-size:.875rem;color:var(--muted);min-width:3rem}
+.bhu-controls #bhu-number{width:min(12rem,100%)}
+.bhu-controls .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#bhu-find-status:empty,#bhu-find-results:empty{display:none}
+#bhu-find-results{margin-bottom:8px}
+.bhu-interactive canvas{cursor:crosshair;touch-action:none}
+.bhu-interactive canvas.dragging{cursor:grabbing}
+.bhu-interactive canvas:focus-visible{outline:3px solid var(--green);outline-offset:-3px}
+.legend .bhu-selected-swatch{background:#443a72}
+.legend .bhu-matched-swatch{background:#b9a4e8}
+.bhu-plot-info{border:1px solid var(--line);border-radius:9px;background:#f7f8f5;padding:14px;margin:12px 0}
+.bhu-map-review{display:grid;gap:12px}
+@media(min-width:1050px){
+  .bhu-map-review:has(.bhu-plot-info:not([hidden])){grid-template-columns:minmax(0,1fr) minmax(16rem,27%);align-items:start}
+}
+.bhu-map-review .bhu-plot-info{margin:0}
+.bhu-plot-info>*+*{margin-top:7px}
+.bhu-plot-info .bhu-plot-source{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.bhu-plot-info .bhu-plot-match{font-weight:650;color:var(--purple)}

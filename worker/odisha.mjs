@@ -151,6 +151,80 @@ async function mapResponseText(response,maxBytes) {
   }
 }
 
+const mapGis = ({districtCode,tehsilCode,riCode,villageCode},sheet) =>
+  [districtCode.padStart(2,'0'),tehsilCode.padStart(2,'0'),riCode.padStart(2,'0'),villageCode.padStart(3,'0'),sheet.padStart(2,'0')].join('');
+
+function bhunakshaCooldown(response) {
+  if (![403,429].includes(response.status) && !(response.status===503 && response.headers.has('Retry-After'))) return;
+  const retry=response.headers.get('Retry-After');
+  const seconds=/^\d+$/.test(retry??'') ? Number(retry) : Math.ceil((Date.parse(retry??'')-Date.now())/1000);
+  const error=new PortalError('BhuNaksha asked India Land Search to wait before fetching maps.',429);
+  error.retryAfter=Number.isFinite(seconds)?Math.max(1,seconds):60;
+  return error;
+}
+
+function plotText(value) {
+  return typeof value==='string'
+    ? decode(value.replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]*>/g,'')).trim().slice(0,16000)
+    : '';
+}
+
+function plotKhata(html,location) {
+  if (typeof html!=='string') return '';
+  for (const [,attrs] of html.matchAll(/<a\b([^>]*)>/gi)) {
+    try {
+      const link=new URL(attributes(attrs).get('href'));
+      if (link.hostname!=='bhulekh.ori.nic.in' || link.pathname.toLowerCase()!=='/viewror.aspx') continue;
+      if (['DistCode','TehCode','VillCode'].some((key,i)=>link.searchParams.get(key)!==location.id.split('-')[i])) continue;
+      const khata=link.searchParams.get('KhataNo')??'';
+      if (officialRoR(location,khata,'front')) return khata;
+    } catch { /* Ignore links without an official record URL. */ }
+  }
+  return '';
+}
+
+export function makeBhunakshaPlotReader(fetcher=fetch) {
+  return async function readPlot(location,sheet,parcel) {
+    const gis=mapGis(location,sheet);
+    const primary=new URL(officialMapBase(location.districtCode));
+    const standard=new URL(primary);
+    standard.port='';
+    const body=new URLSearchParams({state:'21',giscode:gis,plotid:parcel.id,plotno:parcel.number,attrs:''});
+    for (const base of new Set([primary.href,standard.href])) {
+      let data;
+      try {
+        const endpoint=new URL('rest/MapInfo/getPlotInfo',base);
+        const response=await fetcher(endpoint,{method:'POST',body,redirect:'error',signal:AbortSignal.timeout(8000)});
+        const limited=bhunakshaCooldown(response);
+        if (!response.ok) {
+          await response.body?.cancel();
+          if (limited) throw limited;
+          continue;
+        }
+        data=JSON.parse(await mapResponseText(response,256*1024));
+      } catch (error) {
+        if (error instanceof PortalError && error.status===429) throw error;
+        continue;
+      }
+      if (!data || typeof data!=='object' || !data.plotid) continue;
+      if (String(data.giscode)!==gis || data.plotid!==parcel.id ||
+          normalizeMapNumber(data.plotno)!==normalizeMapNumber(parcel.number)) {
+        throw new PortalError('BhuNaksha could not verify the selected parcel.',502);
+      }
+      const khata=plotKhata(data.infoLinks,location);
+      return {info:plotText(data.info),area:plotText(data.formatedArea),khata,
+        front:khata?officialRoR(location,khata,'front'):'',back:khata?officialRoR(location,khata,'back'):''};
+    }
+    throw new PortalError('BhuNaksha did not return Plot Info for this parcel.',502);
+  };
+}
+
+function normalizeMapNumber(value) {
+  return String(value??'').normalize('NFKC')
+    .replace(/[\u0b66-\u0b6f]/gu,digit=>String(digit.charCodeAt(0)-0x0b66))
+    .replace(/[\s\u200c\u200d]/gu,'');
+}
+
 export function makeBhunakshaReader(fetcher=fetch) {
   return async function readMap(location,sheet) {
     const {districtCode,tehsilCode,riCode,villageCode}=location;
@@ -160,7 +234,7 @@ export function makeBhunakshaReader(fetcher=fetch) {
     const legacy=['6','13','21'].includes(districtCode)?'http://bhunakshaodisha.nic.in/bhunaksha/':null;
     const sources=new Set([...(sheet?[primary,standard.href]:[standard.href,primary]),...(legacy?[legacy]:[])]);
     const selections=[districtCode,tehsilCode,riCode,villageCode].join(',');
-    const gis=sheet ? [districtCode.padStart(2,'0'),tehsilCode.padStart(2,'0'),riCode.padStart(2,'0'),villageCode.padStart(3,'0'),sheet.padStart(2,'0')].join('') : '';
+    const gis=sheet ? mapGis(location,sheet) : '';
     let emptySelector=false;
     for (const base of sources) {
       try {
@@ -168,13 +242,10 @@ export function makeBhunakshaReader(fetcher=fetch) {
         const body=new URLSearchParams(sheet ? {state:'21',giscode:gis,noCompress:'true'}
           : {OP:'2',state:'21',level:'5',selections});
         const response=await fetcher(path,{method:'POST',body,redirect:'error',signal:AbortSignal.timeout(sheet?8500:7000)});
-        if ([403,429].includes(response.status) || response.status===503 && response.headers.has('Retry-After')) {
-          const retry=response.headers.get('Retry-After');
-          const seconds=/^\d+$/.test(retry??'') ? Number(retry) : Math.ceil((Date.parse(retry??'')-Date.now())/1000);
+        const limited=bhunakshaCooldown(response);
+        if (limited) {
           await response.body?.cancel();
-          const error=new PortalError('BhuNaksha asked India Land Search to wait before fetching maps.',429);
-          error.retryAfter=Number.isFinite(seconds)?Math.max(1,seconds):60;
-          throw error;
+          throw limited;
         }
         if (!response.ok) { await response.body?.cancel(); continue; }
         const result=await mapResponseText(response,sheet?maxMapBytes:128*1024);
@@ -234,9 +305,9 @@ export function officialRoR(location,khata,type) {
   return url.href;
 }
 
-export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),mapSnapshots={villages:{}},nameLimit=1000,requireIdentity=true,readIndex,fetchReport=fetch}) {
+export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),readPlot=makeBhunakshaPlotReader(),mapSnapshots={villages:{}},nameLimit=1000,requireIdentity=true,readIndex,fetchReport=fetch}) {
   const cache = new Map(), mapCache = new Map();
-  let busyUntil = 0, pausedUntil = 0, mapPausedUntil = 0;
+  let busyUntil = 0, pausedUntil = 0, mapPausedUntil = 0, plotBusy = false;
   const json = (status, value, headers = {}) => Response.json(value,{status,headers:{'Cache-Control':'no-store',...headers}});
   return {async fetch(request, env = {}) {
     const url = new URL(request.url);
@@ -375,6 +446,28 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       }
       const sheet=input.sheet??'';
       if (typeof sheet!=='string' || (sheet && !/^\d{1,3}$/.test(sheet))) return json(400,{error:'Choose a BhuNaksha sheet.'});
+      if (Object.hasOwn(input,'parcel')) {
+        const {id,number}=input.parcel??{};
+        if (!sheet || Number(sheet)<1 || typeof id!=='string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id) ||
+            typeof number!=='string' || number.length>120 || !/^[\p{L}\p{M}\p{N}./-]{1,80}$/u.test(normalizeMapNumber(number))) {
+          return json(400,{error:'Choose a valid parcel on the map.'});
+        }
+        const wait=Math.ceil((mapPausedUntil-Date.now())/1000);
+        if (wait>0 || plotBusy) return json(429,{error:'BhuNaksha is busy. Try Plot Info again shortly.'},{'Retry-After':String(Math.max(1,wait))});
+        plotBusy=true;
+        try {
+          return json(200,await readPlot(location,sheet,{id,number}));
+        } catch(error) {
+          if (error.status===429) {
+            const seconds=error.retryAfter??60;
+            mapPausedUntil=Date.now()+seconds*1000;
+            return json(429,{error:'BhuNaksha asked us to wait before loading Plot Info.'},{'Retry-After':String(seconds)});
+          }
+          return json(502,{error:error instanceof PortalError?error.message:'BhuNaksha Plot Info is temporarily unavailable.'});
+        } finally {
+          plotBusy=false;
+        }
+      }
       const key=`${location.id}/${sheet}`, cached=mapCache.get(key);
       if (cached && Date.now()-cached.at<(cached.data.captured?300000:3600000)) return json(200,cached.data);
       let data;

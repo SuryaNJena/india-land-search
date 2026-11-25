@@ -14,15 +14,45 @@ function fit(features,width,height,pad) {
   return ([x,y]) => [(width-dx*scale)/2+(x-x0)*scale,(height-dy*scale)/2+(y1-y)*scale];
 }
 
+export const mapViewLimit=16;
+export const newSheetView=()=>({zoom:1,x:0,y:0});
+export const sheetProjection=(features,canvas)=>fit(features,canvas.width,canvas.height,24);
+const clamp=(value,low,high)=>Math.max(low,Math.min(high,value));
+
+export function panSheetView(view,dx,dy,width,height) {
+  return {zoom:view.zoom,x:clamp(view.x+dx,width*(1-view.zoom),0),y:clamp(view.y+dy,height*(1-view.zoom),0)};
+}
+
+export function zoomSheetView(view,factor,[x,y],width,height) {
+  const requested=view.zoom*factor;
+  const zoom=requested<1.000001 ? 1 : clamp(requested,1,mapViewLimit);
+  const ratio=zoom/view.zoom;
+  return panSheetView({zoom,x:x-(x-view.x)*ratio,y:y-(y-view.y)*ratio},0,0,width,height);
+}
+
+export function parcelFocus(feature,project) {
+  const bounds=[Infinity,Infinity,-Infinity,-Infinity];
+  for (const ring of rings(feature)) for (const coords of ring) {
+    const [x,y]=project(coords);
+    bounds[0]=Math.min(bounds[0],x); bounds[1]=Math.min(bounds[1],y);
+    bounds[2]=Math.max(bounds[2],x); bounds[3]=Math.max(bounds[3],y);
+  }
+  return {x:(bounds[0]+bounds[2])/2,y:(bounds[1]+bounds[3])/2,width:bounds[2]-bounds[0],height:bounds[3]-bounds[1]};
+}
+
 const keyOf = (feature,gis) => parcelKey({gis,id:feature.properties?.id});
 export function drawMap(canvas, features, gis, result, options={}) {
   const ctx = canvas.getContext('2d'), {width,height} = canvas;
   ctx.clearRect(0,0,width,height);
-  const project = fit(features,width,height,24);
-  if (!project) return [];
-  const hits=[];
+  const base=options.project??sheetProjection(features,canvas);
+  if (!base) return [];
+  const view=options.view??newSheetView();
+  const project=coords=>{ const [x,y]=base(coords); return [x*view.zoom+view.x,y*view.zoom+view.y]; };
+  const hits=[], labels=[], occupied=new Set();
+  const labelSize=options.labelScale ? 12/options.labelScale : 11;
   ctx.lineWidth=1.3;
-  ctx.font='11px system-ui'; ctx.textAlign='center';
+  ctx.font=labelSize+'px system-ui';
+  ctx.textAlign='center';
   for (const feature of features) {
     const path=new Path2D(); let firstRing;
     for (const ring of rings(feature)) {
@@ -34,14 +64,38 @@ export function drawMap(canvas, features, gis, result, options={}) {
     const key=keyOf(feature,gis);
     ctx.fillStyle=options.plain ? '#fff' : colours[result.get(key)?.level ?? 'missing']; ctx.fill(path,'evenodd');
     ctx.strokeStyle='#64796c'; ctx.stroke(path);
-    if (options.labels) {
-      const [x,y]=firstRing.reduce(([x,y],p)=>[x+p[0]/firstRing.length,y+p[1]/firstRing.length],[0,0]);
-      if (ctx.isPointInPath(path,x,y,'evenodd')) {ctx.fillStyle='#233d34';ctx.fillText(feature.properties?.kide ?? '',x,y);}
+    const label=feature.properties?.kide;
+    if (label && (options.labels || options.selectionFill && key===options.selected)) {
+      const [x,y]=firstRing.reduce(([x,y],point)=>[x+point[0]/firstRing.length,y+point[1]/firstRing.length],[0,0]);
+      if (ctx.isPointInPath(path,x,y,'evenodd')) labels.push({key,label,x,y,path});
     }
-    hits.push({path,key});
+    hits.push({path,key,feature});
   }
   const selected=options.selected && hits.find(hit=>hit.key===options.selected);
-  if (selected) { ctx.lineWidth=3; ctx.strokeStyle='#0f5344'; ctx.stroke(selected.path); }
+  if (selected) {
+    if (options.selectionFill) {
+      ctx.fillStyle='#443a72'; ctx.fill(selected.path,'evenodd');
+    }
+    ctx.lineWidth=3;
+    ctx.strokeStyle=options.selectionFill && result.has(selected.key)?'#e4b35a':'#0f5344';
+    ctx.stroke(selected.path);
+  }
+  for (const {key,label,x,y,path} of labels) {
+    if (options.labelScale) {
+      const halfText=ctx.measureText(label).width/2+2;
+      if (x-halfText<0 || x+halfText>width || y-labelSize/2<0 || y+labelSize/2>height ||
+          ![-halfText,halfText].every(dx=>ctx.isPointInPath(path,x+dx,y,'evenodd'))) continue;
+      const cell=labelSize;
+      const cells=[];
+      for (let gx=Math.floor((x-halfText)/cell);gx<=Math.floor((x+halfText)/cell);gx++)
+        for (let gy=Math.floor((y-labelSize/2)/cell);gy<=Math.floor((y+labelSize/2)/cell);gy++)
+          cells.push(gx+','+gy);
+      if (cells.some(cell=>occupied.has(cell))) continue;
+      for (const cell of cells) occupied.add(cell);
+    }
+    ctx.fillStyle=options.selectionFill && key===options.selected?'#fff':'#233d34';
+    ctx.fillText(label,x,y+(options.labelScale?labelSize*.32:0));
+  }
   return hits;
 }
 
