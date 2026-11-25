@@ -29,6 +29,14 @@ test('standalone cadastral directory follows the official master and district RI
   assert.equal((await site.fetch(post('map-locations',{location:'4-1-1-1'}))).status,400);
 });
 
+test('cadastral directory returns plain labels after decoding official option text',async()=>{
+  const reader=makeBhunakshaLocationReader(async ()=>new Response('<select id="drpdistict">'+
+    '<option value="4">Dhenkanal &amp; nearby</option><option value="5">&lt;note&gt;Do not show&lt;/note&gt;</option>'+
+    '<option value="6"><em>District</em> <strong>six</strong></option></select>'));
+  assert.deepEqual(await reader([]),{options:[{code:'4',label:'Dhenkanal & nearby'},
+    {code:'5',label:'5'},{code:'6',label:'District six'}]});
+});
+
 test('an exact plot number uses one assigned OP=5 response and verifies sheet and plot identity',async()=>{
   const calls=[];
   const readPlot=makeBhunakshaPlotReader(async (url,options)=>{

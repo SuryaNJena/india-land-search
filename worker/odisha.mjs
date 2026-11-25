@@ -255,7 +255,8 @@ function mapSelector(html,name) {
     const value=attributes(attrs).get('value');
     if (!/^\d{1,6}$/.test(value??'') || Number(value)<1) return [];
     const code=String(Number(value));
-    const label=decode(body.replace(/<[^>]*>/g,'')).replace(/^\s*\d+\s+/u,'').replace(/\s+/gu,' ').trim();
+    const text=decode(body.split(/<\/?(?:b|em|i|span|strong)\s*>/giu).join(''));
+    const label=/[<>]/u.test(text) ? '' : text.replace(/^\s*\d+\s+/u,'').replace(/\s+/gu,' ').trim();
     return [[code,{code,label:label||code}]];
   })).values()];
 }
