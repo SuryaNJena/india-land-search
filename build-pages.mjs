@@ -1,28 +1,43 @@
-import {cp,mkdir,readFile,readdir,writeFile} from 'node:fs/promises';
-import {extname} from 'node:path';
+import {cp,lstat,mkdir,readFile,readdir,realpath,rm,writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
 import {configureOfflineWorker} from './scripts/offline-assets.mjs';
+import {districtMapBase,reportPortal} from './dist/odisha-lookup-source.mjs';
 
-const source=new URL('./dist/',import.meta.url);
-const target=new URL('./pages-out/',import.meta.url);
-const option=process.env.LANDREVIEW_INDEX_ORIGIN;
-let indexBase='';
-if (option) {
-  const url=new URL(option);
-  if (url.protocol!=='https:' || url.href!==url.origin+'/') throw Error('LANDREVIEW_INDEX_ORIGIN must be an HTTPS origin.');
-  indexBase=url.origin;
+const root=await realpath(new URL('./',import.meta.url));
+const source=join(root,'dist');
+const target=join(root,'pages-out');
+const prior=await lstat(target).catch(error=>{
+  if (error.code!=='ENOENT') throw error;
+  return null;
+});
+if (prior) {
+  if (!prior.isDirectory() || prior.isSymbolicLink()) throw Error('pages-out must be a local build directory.');
+  await rm(target,{recursive:true,force:true});
 }
 await mkdir(target,{recursive:true});
-for (const entry of await readdir(source,{withFileTypes:true})) {
-  if (entry.isFile() && ['.html','.css','.js','.mjs','.json','.txt','.svg','.webmanifest'].includes(extname(entry.name))) {
-    await cp(new URL(entry.name,source),new URL(entry.name,target));
-  }
-}
-await cp(new URL('./worker/odisha-map-snapshots.json',import.meta.url),new URL('odisha-map-snapshots.json',target));
-await cp(new URL('vendor/',source),new URL('vendor/',target),{recursive:true});
-await writeFile(new URL('runtime.mjs',target),`export const runtime = ${JSON.stringify({hosted:false,indexBase,pages:true})};\n`);
-const files=[...(await readdir(target,{withFileTypes:true})).filter(file=>file.isFile()).map(file=>file.name),
-  ...(await readdir(new URL('vendor/',target),{withFileTypes:true})).filter(file=>file.isFile()).map(file=>'vendor/'+file.name)];
-const assets=Object.fromEntries(await Promise.all(files.sort().map(async file=>[file,await readFile(new URL(file,target),'utf8')])));
-const serviceWorker=configureOfflineWorker(await readFile(new URL('offline-worker.js',source),'utf8'),assets);
-await writeFile(new URL('offline-worker.js',target),serviceWorker);
-await writeFile(new URL('.nojekyll',target),'');
+const files=[
+  'app-icon.svg','app.mjs','app.webmanifest','core.mjs','demo.mjs','files.mjs','home-search.mjs','indexed-results.mjs','live-odisha-map.mjs','live-ror.mjs','odisha-scope.mjs',
+  'india-states.mjs','maps.mjs','matcher.mjs','name-review.mjs','name-variants.mjs',
+  'parcel-basemap.mjs','portals.mjs','search.mjs','sheet-overlays.mjs','style.css',
+  'lookup-workspace.mjs','name-dictionary.mjs','name-dictionary-or.json','name-dictionary-or-NOTICE.txt',
+  'odisha-boundary-districts.json','odisha-boundaries.mjs','odisha-live-search.mjs','odisha-lookup-source.mjs',
+  'odisha-lookup.mjs','offline-worker.js','village-finder.mjs','villages.json','workspace-maps.mjs'
+];
+files.push(...(await readdir(source)).filter(file=>/^odisha-boundaries-[a-z]+\.json$/.test(file)));
+const bhuOrigins=[...new Set(Array.from({length:30},(_,i)=>districtMapBase(String(i+1)).origin))].sort().join(' ');
+const csp=["default-src 'self'", "script-src 'self'", "worker-src 'self'", "manifest-src 'self'", "connect-src 'self' "+new URL(reportPortal).origin, "img-src 'self' data: blob: https://tile.openstreetmap.org "+bhuOrigins,
+  "form-action 'self' "+bhuOrigins, "style-src 'self' 'unsafe-inline'", "object-src 'none'", "base-uri 'none'"].join('; ');
+const homepage=(await readFile(join(source,'index.html'),'utf8')).replace('  <meta name="description"',  `  <meta http-equiv="Content-Security-Policy" content="${csp}">\n  <meta name="description"`);
+await Promise.all([
+  ...files.map(file=>cp(join(source,file),join(target,file))),
+  cp(join(source,'vendor'),join(target,'vendor'),{recursive:true}),
+  cp(join(root,'worker','odisha-map-snapshots.json'),join(target,'odisha-map-snapshots.json')),
+  writeFile(join(target,'runtime.mjs'), 'export const runtime = '+JSON.stringify({hosted:false,indexBase:'',pages:true})+';\n'),
+  writeFile(join(target,'index.html'),homepage),
+  writeFile(join(target,'.nojekyll'),'')
+]);
+
+const assets=[...files,'index.html','runtime.mjs','odisha-map-snapshots.json',
+  ...(await readdir(join(target,'vendor'),{withFileTypes:true})).filter(item=>item.isFile()).map(item=>'vendor/'+item.name)];
+const contents=Object.fromEntries(await Promise.all(assets.sort().map(async file=>[file,await readFile(join(target,file),'utf8')])));
+await writeFile(join(target,'offline-worker.js'),configureOfflineWorker(contents['offline-worker.js'],contents));

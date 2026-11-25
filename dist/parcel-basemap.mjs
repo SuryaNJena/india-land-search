@@ -107,7 +107,7 @@ const styles=''
   +'.lr-parcel-map .lr-map-legend i{display:inline-block;width:.8rem;height:.8rem;margin-right:.22rem;border:1px solid #465747;border-radius:2px}'
   +'.lr-parcel-map a{margin-right:.7rem}';
 
-export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBoundary=false,highlights=new Set(),tileTemplate=standardTiles,pinState={}}={}) {
+export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBoundary=false,highlights=new Set(),tileTemplate=standardTiles,pinState={},localOnly=false}={}) {
   if (root.tagName==='DETAILS') {
     root.innerHTML='<summary>Geographic map and location pin</summary><div class="lr-parcel-map"></div>';
   }
@@ -158,6 +158,10 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
   const downloadButton=panel.querySelector('[data-download]');
   const links=panel.querySelector('[data-links]');
   const coverage=panel.querySelector('[data-coverage]');
+  if (localOnly) {
+    tileButton.hidden=true;
+    panel.querySelector('p.muted').textContent='Pins and geographic parcels stay in this browser.';
+  }
   const nodes=new Map();
   let center=initialCenter, zoom=7, pin, pinMode=false, tiles=false, start, dirty=true;
   let tileFailures=0;
@@ -316,7 +320,7 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
     form.elements.lon.value=position[0].toFixed(6);
     form.elements.lat.value=position[1].toFixed(6);
     clearButton.hidden=false;
-    links.hidden=false;
+    links.hidden=localOnly;
     links.querySelector('[data-google]').href=urls.google;
     links.querySelector('[data-osm]').href=urls.osm;
     setPinMode(false);
@@ -331,7 +335,7 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
   const observer=new ResizeObserver(resize);
   observer.observe(viewport);
 
-  tileButton.onclick=()=>{
+  if (!localOnly) tileButton.onclick=()=>{
     tiles=!tiles;
     tileFailures=0;
     tileButton.setAttribute('aria-pressed',String(tiles));

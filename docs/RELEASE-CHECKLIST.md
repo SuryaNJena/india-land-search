@@ -12,7 +12,9 @@
 - [x] Document the source history, contributor guide, and reproducible release evidence.
 - [ ] Confirm the attendee date and the workshop's exact eight stage labels.
 
-## Live ownership launch
+## Historical hosted ownership proposal
+
+The current release searches imported records on GitHub Pages. See the [Pages migration](GITHUB-PAGES-MIGRATION.md) for the supported scope.
 
 - [ ] Obtain a verified production source with sanctioned statewide name-only access and confirm coverage across all 30 Odisha districts.
 - [ ] Verify more Odisha portal village and RI mappings and the plot-to-map identifiers.

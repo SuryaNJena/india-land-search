@@ -21,7 +21,6 @@ jobs:
           node-version: 24
       - run: node --test
       - run: node verify.mjs
-      - run: node build.mjs
       - run: node build-pages.mjs
       - name: Package and smoke-test the extracted offline release
         run: |

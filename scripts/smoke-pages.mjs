@@ -15,6 +15,9 @@ try {
   const home = await (await asset('?demo=1', /^text\/html/)).text();
   assert.match(home, /<title>India Land Search<\/title>/);
   assert.match(home, /src="app\.mjs"/);
+  assert.match(home, /connect-src 'self' https:\/\/bhulekh\.ori\.nic\.in;/);
+  assert.match(home, /img-src [^;]+https:\/\/tile\.openstreetmap\.org[^;]*;/);
+  assert.match(home, /form-action 'self' https:\/\/app1bhunakshaodisha\.nic\.in[^;]*;/);
   await asset('app.mjs', /^text\/javascript/);
   await asset('app.webmanifest', /^application\/manifest\+json/);
   await asset('offline-worker.js', /^text\/javascript/);
@@ -24,8 +27,11 @@ try {
   assert.ok(snapshots.villages['3-11-102-8']['01'].features.length);
   await asset('style.css', /^text\/css/);
   await asset('vendor/pdf-lib.js', /^text\/javascript/);
-  const runtime = await (await asset('runtime.mjs', /^text\/javascript/)).text();
-  assert.match(runtime, /"indexBase":"","pages":true/);
+  const runtime=await (await asset('runtime.mjs', /^text\/javascript/)).text();
+  assert.match(runtime, /"hosted":false,"indexBase":"","pages":true/);
+  assert.equal((await fetch(new URL('server/index.js',url))).status,404);
+  const maps=await (await asset('odisha-map-snapshots.json', /^application\/json/)).json();
+  assert.ok(maps.villages['19-3-79-8']['01'].features.length>1000);
   const directory = await (await asset('villages.json', /^application\/json/)).json();
   assert.equal(directory.state, 'Odisha');
   assert.ok(directory.rows.length > 50_000, 'Odisha directory is populated');

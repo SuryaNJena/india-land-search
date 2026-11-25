@@ -1,6 +1,8 @@
 # India Land Search
 
-Find an Odisha village, review English and Odia name variants, inspect matched plots, and assemble a map and Record of Rights (RoR) packet. India Land Search also reviews records you already have and links to official portals across India.
+Search names in land records, review English and local-script variants, inspect
+cadastral parcels, and assemble Excel, map, and Record of Rights (RoR) exports.
+[Open India Land Search on GitHub Pages](https://suryanjena.github.io/india-land-search/).
 
 ## Try the challenge demo
 
@@ -10,6 +12,27 @@ Find an Odisha village, review English and Odia name variants, inspect matched p
 4. Open the matched map and export its overview. In **Records of Rights**, choose **Download selected RoRs (PDF)** to download both sides of two fictional khatas in one file.
 
 The demo uses fictional records and runs without an account, uploads, or government portal requests. The regular app includes a public Odisha village directory and official links for map-point and plot-ID lookups. Verified RI and land-record portal codes cover selected villages. Live Odisha village searches on the hosted site work without a ChatGPT account. Statewide name search needs verified production data. [Data-source research](docs/DATA-SOURCES.md)
+
+## Search and review your records
+
+1. Import an India Land Search workspace ZIP, compatible JSON, or an Excel workbook with
+   a **Plots** tab. Existing v1 backups are supported.
+2. On **Home**, choose a state, enter names and review spelling suggestions.
+   Leave location blank to search all loaded records for that state.
+3. Choose **Show matches on map** where parcel shapes are available. Click a
+   parcel or enter its exact number to inspect the saved Plot Info and RoR links.
+4. Use **Village maps** for matched sheet PDFs, **Plot records** for Excel, and
+   **Records of Rights** to combine saved PDFs from selected khatas.
+
+The Odisha village directory and dated geometry for selected sheets are bundled.
+A geometry snapshot joins by exact sheet, parcel ID, and plot number. A
+compatible workspace may supply its own parcel geometry or WGS84 GeoJSON for
+the geographic view. Plot details and ownership searches use your imported
+records. Use the official portal directory to obtain current records.
+
+The app runs in the browser on GitHub Pages. Searches, imported records and PDFs
+stay local. A [fictional demo](https://suryanjena.github.io/india-land-search/?demo=1)
+has sample plots, a map, and two RoRs ready to export.
 
 ## Use the app without an imported workspace
 
@@ -23,6 +46,17 @@ After a live Bhulekh search, open **BhuNaksha village map**, select the matched 
 
 The **Geographic map and location pins** panel accepts a manual or device location. OpenStreetMap tiles load only when enabled. For a parcel overlay, add WGS84 GeoJSON with the current sheet's `giscode` and matching parcel `id` or plot `kide`. Coordinates remain in the browser unless you enable map tiles or open a provider link. BhuNaksha returned no usable WGS84 extent for Kapaleswar sheets 01–03. Keep its cadastral PDF in local sheet coordinates or consult [ORSAC’s georeferenced viewer](https://www.odishakyl.in/mapview.php).
 
+## Hosted edition
+
+The separate hosted edition retains signed-out Bhulekh village lookup and BhuNaksha maps. The GitHub Pages build supports local workspaces and the direct government lookups listed above. [Data sources](docs/DATA-SOURCES.md)
+
+## Move an existing workspace
+
+On your previous installation, choose **Back up workspace** to download a ZIP.
+Open GitHub Pages and choose **Import records** to restore it. Browser storage
+is tied to the site address, so repeat this on each device that has a workspace
+you want to keep.
+
 ## Develop and verify
 
 Use Node.js 24 from the repository root.
@@ -30,12 +64,12 @@ Use Node.js 24 from the repository root.
 ```sh
 node --test
 node verify.mjs
-node build.mjs
 node build-pages.mjs
 node scripts/smoke-pages.mjs
 ```
 
-The static build works under a repository subpath. See the [deployment guide](docs/DEPLOYMENT.md), [contributor guide](AGENTS.md), [release checklist](docs/RELEASE-CHECKLIST.md), and [Codex evidence pack](docs/CODEX-EVIDENCE.md).
+See the [deployment guide](docs/DEPLOYMENT.md), [contributor guide](AGENTS.md),
+and [Codex evidence pack](docs/CODEX-EVIDENCE.md).
 
 ## Records and attribution
 

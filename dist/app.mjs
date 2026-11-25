@@ -7,6 +7,8 @@ import {assignImportState} from './search.mjs';
 import {mountOdishaLookup} from './odisha-lookup.mjs';
 import {mountLookupWorkspace,saveLookup} from './lookup-workspace.mjs';
 import {demoNames, demoPlace, loadDemoWorkspace} from './demo.mjs';
+import {mountWorkspaceSheet,withPublicGeometry} from './workspace-maps.mjs';
+import {plotNumber} from './sheet-overlays.mjs';
 
 if (navigator.serviceWorker) void navigator.serviceWorker.register('./offline-worker.js').catch(()=>{});
 
@@ -42,6 +44,7 @@ function matched(data) {
 
 async function activate(next) {
   validateWorkspace(next);
+  next=await withPublicGeometry(next);
   const result=await matched(next);
   workspace=next;matches=result;
   byKey=new Map(next.rows.map((row,i)=>[parcelKey(row),result[i]]));
@@ -63,7 +66,8 @@ async function task(message, handler) {
   finally{busy=false;$('import').disabled=false;$('backup').disabled=!workspace;}
 }
 
-function navigate(view) { selected=view; status(); render(); }
+let mapSearchHits;
+function navigate(view,hits) { selected=view; mapSearchHits=hits; status(); render(); }
 function matchingCount(kind) { return matches.filter(m=>kind==='full'?m.fullSelected:m.surnameSelected).length; }
 function metric(count, label, accent='') { return `<div class="stat ${accent}"><small>${escape(label)}</small><strong>${number.format(count)}</strong></div>`; }
 const maps = () => (workspace?.summary ?? []).filter(m => workspace.geometry?.[m.gis]?.features?.length);
@@ -75,7 +79,7 @@ function chooseImport(state = '') {
 
 function overview() {
   const search = '<section id="home-search" class="card home-search"></section>';
-  const mountSearch = () => renderHomeSearch($('home-search'), {workspace,escape,tag,openPlot:showPlot,importRecords:chooseImport,onSave:saveLookup});
+  const mountSearch = () => renderHomeSearch($('home-search'), {workspace,escape,tag,openPlot:showPlot,openMap:hits=>navigate('maps',hits),importRecords:chooseImport,onSave:saveLookup});
   if (!workspace) {
     $('view').innerHTML = `${search}<section class="card"><div class="card-head"><div><h2>Records and maps</h2><p>Open an official portal, import records you already have, or explore with fictional plots.</p></div></div><div class="actions">${demoLink}<button class="button secondary" id="go-portals">Browse state portals</button></div></section>`;
     mountSearch();
@@ -229,22 +233,58 @@ function names() {
   });
 }
 
-function mapView() {
-  const sheets=maps();
+function mapView(searchHits) {
+  const rowByKey=new Map((workspace?.rows??[]).map((row,index)=>[parcelKey(row),{row,index}]));
+  const results=searchHits?new Map(searchHits.map(({index,terms})=>[parcelKey(workspace.rows[index]),{level:'full',full:terms}])):byKey;
+  const parcels=new Map(maps().map(sheet=>[sheet.gis,workspace.geometry[sheet.gis].features]));
+  function belongs(sheet,feature) {
+    const key=parcelKey({gis:sheet.gis,id:feature.properties?.id}), row=rowByKey.get(key)?.row;
+    return Boolean(row && (!feature.properties.kide || !row.plot || plotNumber(row.plot)===plotNumber(feature.properties.kide)));
+  }
+  const matchesMap=new Map();
+  for (const sheet of maps()) {
+    for (const feature of parcels.get(sheet.gis)) {
+      if (!belongs(sheet,feature)) continue;
+      const key=parcelKey({gis:sheet.gis,id:feature.properties?.id});
+      if (results.has(key)) matchesMap.set(key,results.get(key));
+    }
+  }
+  const matched=sheet=>parcels.get(sheet.gis).some(feature=>['full','surname'].includes(matchesMap.get(parcelKey({gis:sheet.gis,id:feature.properties?.id}))?.level));
+  const sheets=searchHits?maps().filter(matched):maps();
   if (!sheets.length) {
-    $('view').innerHTML=officialLookup();
+    $('view').innerHTML=officialLookup()+(searchHits?empty('No matched parcels have corresponding map geometry.'):'');
     mountOfficialLookup('maps');
     return;
   }
-  if(!sheets.some(m=>m.gis===mapSheet))mapSheet=sheets[0].gis;
-  $('view').innerHTML=`${officialLookup()}<section class="card"><div class="card-head"><div><h2>Village overviews</h2><p>Select a parcel to read the source record.</p></div><div class="actions"><button id="map-export" class="button primary">Export map PDF</button></div></div><div class="toolbar"><select id="map-sheet" aria-label="Village sheet">${sheets.map(s=>`<option value="${escape(s.gis)}" ${s.gis===mapSheet?'selected':''}>${escape(s.name)} · Sheet ${escape(s.sheet)}</option>`).join('')}</select><label class="check"><input id="plain-map" type="checkbox"> Uncoloured</label><label class="check"><input id="matched-sheets-only" type="checkbox" checked> Export only sheets with name matches</label></div><div class="map-frame"><canvas id="map" width="1000" height="660" aria-label="Parcel map. Plot records are also available in the plot list."></canvas></div>${legend()}</section>`;
-  let hits=[];
-  const redraw=()=>{hits=drawMap($('map'),workspace.geometry[mapSheet].features,mapSheet,byKey,{labels:true,plain:$('plain-map').checked});};
-  $('map-sheet').onchange=e=>{mapSheet=e.target.value;redraw();};$('plain-map').onchange=redraw;
-  $('map').onclick=e=>{const c=$('map'),bounds=c.getBoundingClientRect(),x=(e.clientX-bounds.left)*c.width/bounds.width,y=(e.clientY-bounds.top)*c.height/bounds.height,ctx=c.getContext('2d');const selected=hits.findLast(h=>ctx.isPointInPath(h.path,x,y,'evenodd'));if(selected){const i=workspace.rows.findIndex(r=>parcelKey(r)===selected.key);if(i>=0)showPlot(i);}};
-  $('map-export').onclick=()=>task('Rendering village map PDF…',async()=>{const selected=$('matched-sheets-only').checked?sheets.filter(s=>workspace.geometry[s.gis].features.some(feature=>['full','surname'].includes(byKey.get(parcelKey({gis:s.gis,id:feature.properties?.id}))?.level))):sheets;if(!selected.length)throw Error('No sheets have name matches. Clear the sheet filter to export every overview.');const bytes=await makeMapPDF(selected,workspace.geometry,byKey,$('plain-map').checked);download('India_Land_Search_Village_Maps.pdf',bytes,'application/pdf');status(`Map PDF exported with ${selected.length} overview pages.`);});
+  if (!sheets.some(sheet=>sheet.gis===mapSheet)) mapSheet=sheets[0].gis;
+  $('view').innerHTML=`${officialLookup()}<section class="card"><div class="card-head"><div><h2>Village overviews</h2><p>${searchHits?'Showing the current name search matches.':'Select a parcel to read the saved source record.'}</p></div><button id="map-export" class="button primary">Export map PDF</button></div>
+    <div class="toolbar"><select id="map-sheet" aria-label="Village sheet">${sheets.map(sheet=>`<option value="${escape(sheet.gis)}" ${sheet.gis===mapSheet?'selected':''}>${escape(sheet.name)} · Sheet ${escape(sheet.sheet)}</option>`).join('')}</select>
+    <label class="check"><input id="plain-map" type="checkbox"> Uncoloured</label><label class="check"><input id="matched-sheets-only" type="checkbox" checked> Export only sheets with name matches</label></div><p id="sheet-source" class="muted"></p><div id="workspace-sheet"></div>${legend()}</section>`;
+  const pinState={};
+  let viewer;
+  function openSheet() {
+    viewer?.close();
+    const sheet=sheets.find(value=>value.gis===mapSheet), geometry=workspace.geometry[mapSheet];
+    const rows=new Map(geometry.features.filter(feature=>belongs(sheet,feature)).map(feature=>{
+      const key=parcelKey({gis:sheet.gis,id:feature.properties.id});
+      return [key,rowByKey.get(key)];
+    }));
+    const source=sheet.captured||geometry.captured;
+    $('sheet-source').textContent=source?'BhuNaksha geometry captured '+source+'. Plot Info comes from loaded records.':'';
+    viewer=mountWorkspaceSheet($('workspace-sheet'),{sheet,geometry,highlights:()=>matchesMap,
+      plain:()=>$('plain-map').checked,rows,escape,tag,inspect:showPlot,pinState});
+  }
+  $('map-sheet').onchange=event=>{mapSheet=event.target.value;openSheet();};
+  $('plain-map').onchange=()=>viewer.redraw();
+  $('map-export').onclick=()=>task('Rendering village map PDF…',async()=>{
+    const selection=$('matched-sheets-only').checked?sheets.filter(matched):sheets;
+    if (!selection.length) throw Error('No sheets have name matches. Clear the sheet filter to export every overview.');
+    const bytes=await makeMapPDF(selection,workspace.geometry,matchesMap,$('plain-map').checked);
+    download('India_Land_Search_Village_Maps.pdf',bytes,'application/pdf');
+    status(`Map PDF exported with ${selection.length} overview pages.`);
+  });
   mountOfficialLookup('maps');
-  redraw();
+  openSheet();
 }
 
 function ror() {
@@ -283,7 +323,7 @@ function render() {
   $('crumb').textContent=workspace?.title||'Land records';
   $('backup').disabled=!workspace||busy;
   document.querySelectorAll('.nav').forEach(b=>{const active=b.dataset.view===selected;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
-  ({overview,plots,names,maps:mapView,ror,workspace:lookupWorkspace,portals:portalView})[selected]();
+  ({overview,plots,names,maps:()=>mapView(mapSearchHits),ror,workspace:lookupWorkspace,portals:portalView})[selected]();
 }
 
 document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>navigate(b.dataset.view));
