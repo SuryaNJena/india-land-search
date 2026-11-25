@@ -23,3 +23,24 @@ flowchart LR
   B --> G["For full RoR export, verify the indexed khata"]
   G --> C
 ```
+
+## CP3 Test
+
+The worker regression reproduces the failure without an identity header for
+both directory and map requests. It also checks the complete village, parcel,
+and plot-schedule workflow, the explicit location requirement, and the origin
+check.
+
+## CP4 Fix
+
+The Worker no longer requires ChatGPT visitor identity for public Odisha
+lookups. Cached sheet responses can be served during other requests and the
+same Worker instance runs one live BhuNaksha map or Plot Info lookup at a time.
+Full hosted RoR export still verifies a khata against the loaded index.
+
+## CP5 Pull request
+
+All 44 tests, the offline verifier, both builds, Pages smoke, and the Chromium
+fixture passed. The browser test selects a village and searches for a fictional
+name without a ChatGPT identity, then checks there is no sign-in link. The
+evidence image is `06-anonymous-live-odisha.png`.
