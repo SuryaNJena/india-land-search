@@ -27,7 +27,7 @@ flowchart LR
 
 Existing v1 workspace ZIPs retain geometry, name rules, and RoR documents when
 moved between origins. Geography supplied through an uploaded WGS84 file is
-drawn locally. The Pages build disables hosted lookups and refuses cross-origin network resources through a browser content security policy. The separate hosted build keeps its signed-out government lookup.
+drawn locally. The Pages build disables hosted lookups and limits cross-origin requests to direct Bhulekh reports and official BhuNaksha images. These routes run on demand. The separate hosted build keeps its signed-out government lookup.
 
 ## CP3 Test
 

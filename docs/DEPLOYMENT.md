@@ -8,8 +8,7 @@ relevant changes from `main`. Use **Run workflow** to republish manually.
 
 The build publishes `pages-out/` with the app, vendored JavaScript, the village
 catalogue, and dated public cadastral geometry. The browser connects only to
-its own origin for app resources. Official record links open on demand. A
-backend service, account, API origin, map tiles, and a database are unnecessary.
+its own origin for app resources. Under **State portals → Odisha maps and RoR lookup**, the browser loads official BhuNaksha images or Bhulekh reports on demand. Use the exact Plot Info link to open the official viewer response in another tab. The Pages release requires no backend or account. [Odisha source interfaces](ODISHA-OFFICIAL-INTERFACES.md)
 
 ## Browser data
 
@@ -35,8 +34,7 @@ Run `node build-pages.mjs` and serve `pages-out/` over HTTP. Run
 Run `node scripts/package-release.mjs <output.zip>` to package the build.
 Extract the ZIP and run `node serve.mjs` with Node.js 24 for a local demo.
 
-## Historical hosting
+## Hosted edition
 
-The previous Sites Worker, database schema, and verification fixtures are kept
-in the repository for project history. The Pages release does not package them.
+The separate Sites Worker retains signed-out lookup and is outside the Pages bundle.
 See [the migration decision](GITHUB-PAGES-MIGRATION.md).

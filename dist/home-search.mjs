@@ -35,7 +35,7 @@ function parcelAt(canvas, event, hits) {
   return hits.findLast(({path}) => context.isPointInPath(path, x, y, 'evenodd'))?.key;
 }
 
-export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMap, importRecords}) {
+export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMap, openOfficial, importRecords}) {
   const index = searchIndex(workspace);
   if (!criteria.state && workspace) {
     const known = new Set(index.map(x => x.state).filter(Boolean));
@@ -97,8 +97,12 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
 
   function refreshScope() {
     const portal = portals.find(p => p.name === criteria.state);
-    const officialTools=criteria.state==='Odisha' ? tag('https://www.odishakyl.in/mapview.php','Find a plot on Odisha’s official map')+tag('https://bhulekh.ori.nic.in/SearchYourPlot.aspx','Look up a known plot ID') : '';
+    const officialTools=criteria.state==='Odisha'
+      ? '<button class="button secondary" type="button" data-odisha-sources>Open Odisha source tools</button>'+
+        tag('https://www.odishakyl.in/mapview.php','Find a plot on Odisha’s official map')+
+        tag('https://bhulekh.ori.nic.in/SearchYourPlot.aspx','Look up a known plot ID') : '';
     root.querySelector('#home-portal-links').innerHTML = portal && !workspace?.demo ? tag(portal.record, `Open ${portal.label}`)+officialTools : '';
+    root.querySelector('[data-odisha-sources]')?.addEventListener('click',()=>openOfficial(selectedVillage));
     const inState = index.filter(x => x.state === criteria.state);
     const live = !workspace?.demo && criteria.state==='Odisha' && (runtime.hosted || runtime.indexBase);
     refreshVillageFinder(criteria.state);

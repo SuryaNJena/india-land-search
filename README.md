@@ -1,8 +1,21 @@
 # India Land Search
 
-Search names in land records, review English and local-script variants, inspect
-cadastral parcels, and assemble Excel, map, and Record of Rights (RoR) exports.
+India Land Search is a free browser workspace for finding and reviewing land records.
+Start with a village, plot, or khata. Compare names across scripts, highlight parcels,
+and assemble a map and Record of Rights (RoR) packet you can keep or share.
+
 [Open India Land Search on GitHub Pages](https://suryanjena.github.io/india-land-search/).
+
+## Work with official Odisha records
+
+Choose **State portals → Odisha maps and RoR lookup**. View a BhuNaksha sheet
+and open the official Plot Info for an exact plot. Load both Bhulekh report
+pages for a known khata and save them as one PDF. Use ORSAC Know Your Land to
+inspect village boundaries and geographic context.
+
+The Pages app needs no sign-in or search server. Fresh lookups use the official
+sources where the browser can read them. Saved workspaces and name searches stay
+in your browser. [Odisha source interfaces and coverage](docs/ODISHA-OFFICIAL-INTERFACES.md)
 
 ## Search and review your records
 
@@ -18,8 +31,7 @@ cadastral parcels, and assemble Excel, map, and Record of Rights (RoR) exports.
 The Odisha village directory and dated geometry for selected sheets are bundled.
 A geometry snapshot joins by exact sheet, parcel ID, and plot number. A
 compatible workspace may supply its own parcel geometry or WGS84 GeoJSON for
-the geographic view. Plot details and ownership searches use your imported
-records. Use the official portal directory to obtain current records.
+the geographic view. Workspace searches use your imported records. The Odisha source tools can also show fresh records by exact location and identifier.
 
 The app runs in the browser on GitHub Pages. Searches, imported records and PDFs
 stay local. A [fictional demo](https://suryanjena.github.io/india-land-search/?demo=1)

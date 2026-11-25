@@ -15,7 +15,9 @@ try {
   const home = await (await asset('?demo=1', /^text\/html/)).text();
   assert.match(home, /<title>India Land Search<\/title>/);
   assert.match(home, /src="app\.mjs"/);
-  assert.match(home, /connect-src 'self'/);
+  assert.match(home, /connect-src 'self' https:\/\/bhulekh\.ori\.nic\.in;/);
+  assert.match(home, /img-src [^;]+https:\/\/bhunakshaodisha\.nic\.in:8443/);
+  assert.doesNotMatch(home, /(?:connect-src|img-src) [^;]*\*/);
   await asset('app.mjs', /^text\/javascript/);
   await asset('odisha-live-search.mjs', /^text\/javascript/);
   await asset('style.css', /^text\/css/);
