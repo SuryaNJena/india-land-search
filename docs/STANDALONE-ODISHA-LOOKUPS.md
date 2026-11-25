@@ -40,3 +40,15 @@ Bharatapada (Cuttack 3, Mahanga 11, Kurujanga RI 8, village 102), sheet 01, plot
 A fresh browser session cannot grant a Pages script permission to read an origin-restricted response. The Pages workflow keeps official navigation and validates an imported response. Boundary and native parcel coordinates are kept in their respective coordinate systems. [Browser cross-origin rules](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS) · [Chrome Translator supported languages](https://developer.chrome.com/docs/ai/translator-api#supported-languages)
 
 The Odisha boundary asset rebuild uses the public `vb_soi_or_geojson.zip` resource from the [National Water Data Portal catalogue](https://nwdp.nwic.gov.in/dataset/village-boundary). Run `python scripts/build-odisha-boundaries.py <path-to-zip>` with Shapely and pyproj. The script pins the archive SHA-256 and filters the output to labelled reference geometry and verified location codes.
+
+## CP5 Pull request evidence
+
+- [x] Start from an empty browser and open Village maps, Plot records, Records of Rights, and Name matching.
+- [x] Select a labelled village boundary, open a saved sheet, and zoom with controls inside the viewer.
+- [x] Display the confirmed official layer catalogue for Bharatapada, sheet 01.
+- [x] Read both RoR sides directly on the Pages origin and search the local Workspace.
+- [x] Reload, reopen, and remove saved items. Start the app shell offline.
+- [x] Run 62 Node tests, both builds, the portable release smoke, and signed-out Chromium.
+- [ ] Achieve identical automatic live lookups on the two hosts. Chromium at the Pages origin rejected the BhuNaksha Plot Info response and read both Bhulekh RoR pages with HTTP 200. Automatic Plot Info and statewide tenant search on static Pages require a browser-readable source with the relevant coverage.
+
+The production GitHub Pages workflow builds without a backend origin and runs its smoke test. This branch stays in review while the prerequisites are open.
