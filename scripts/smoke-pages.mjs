@@ -17,6 +17,7 @@ try {
   assert.match(home, /src="app\.mjs"/);
   assert.match(home, /connect-src 'self'/);
   await asset('app.mjs', /^text\/javascript/);
+  await asset('odisha-live-search.mjs', /^text\/javascript/);
   await asset('style.css', /^text\/css/);
   await asset('vendor/pdf-lib.js', /^text\/javascript/);
   const runtime=await (await asset('runtime.mjs', /^text\/javascript/)).text();

@@ -42,6 +42,11 @@ class PortalError extends Error {
   constructor(message, status = 502) { super(message); this.status = status; }
 }
 
+function retrySeconds(value) {
+  const seconds=/^\d+$/u.test(value??'') ? Number(value) : Math.ceil((Date.parse(value??'')-Date.now())/1000);
+  return Number.isFinite(seconds) ? Math.max(1,seconds) : 60;
+}
+
 export function makeBhulekhReader(fetcher = fetch, delay = ms => new Promise(resolve=>setTimeout(resolve,ms))) {
   return async function readBhulekh(location, {directory=false} = {}) {
     const cookies = new Map();
@@ -61,9 +66,12 @@ export function makeBhulekhReader(fetcher = fetch, delay = ms => new Promise(res
           const pair = /^([\w.-]+)=([^;\r\n]*)/.exec(line.trim());
           if (pair) cookies.set(pair[1],pair[2]);
         }
-        if (response.status === 429 || response.status === 403) {
+        if (response.status===429 || response.status===403 || response.status===503 && response.headers.has('Retry-After')) {
+          const denied=response.status===403;
+          const error=new PortalError(denied?'Bhulekh denied the live request.':'Bhulekh asked us to wait before another live request.',denied?403:429);
+          error.retryAfter=Math.max(60,retrySeconds(response.headers.get('Retry-After')));
           await response.body?.cancel();
-          throw new PortalError('Bhulekh is limiting requests. Try again later.',429);
+          throw error;
         }
         if ([301,302,303,307,308].includes(response.status)) {
           const target = response.headers.get('location');
@@ -156,10 +164,8 @@ const mapGis = ({districtCode,tehsilCode,riCode,villageCode},sheet) =>
 
 function bhunakshaCooldown(response) {
   if (![403,429].includes(response.status) && !(response.status===503 && response.headers.has('Retry-After'))) return;
-  const retry=response.headers.get('Retry-After');
-  const seconds=/^\d+$/.test(retry??'') ? Number(retry) : Math.ceil((Date.parse(retry??'')-Date.now())/1000);
   const error=new PortalError('BhuNaksha asked India Land Search to wait before fetching maps.',429);
-  error.retryAfter=Number.isFinite(seconds)?Math.max(1,seconds):60;
+  error.retryAfter=retrySeconds(response.headers.get('Retry-After'));
   return error;
 }
 
@@ -508,7 +514,8 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       const key=`${directory?'directory':'tenants'}/${location.id}`;
       let data=cache.get(key);
       if (!data || Date.now()-data.at>(directory?3600000:300000)) {
-        if (Date.now()<pausedUntil) return json(429,{error:'Bhulekh is limiting live requests. Try again later.'},{'Retry-After':'60'});
+        const wait=Math.ceil((pausedUntil-Date.now())/1000);
+        if (wait>0) return json(429,{error:'Bhulekh is limiting live requests. Try again later.'},{'Retry-After':String(wait)});
         if (Date.now()<busyUntil) return json(429,{error:'Another live lookup is running. Try again shortly.'},{'Retry-After':'10'});
         const lease=Date.now()+30000;
         busyUntil=lease;
@@ -531,8 +538,10 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       });
       return json(200,{location:{...location,...data.labels,riCode:data.riCode},checked:data.tenants.length,hits,checkedAt:new Date(data.at).toISOString()});
     } catch(error) {
-      if (error.status===429) pausedUntil=Date.now()+60000;
-      return json(error.status??502,{error:error instanceof PortalError?error.message:'Bhulekh did not complete the live lookup. Try again shortly.'});
+      const wait=[403,429].includes(error.status) ? error.retryAfter??60 : 0;
+      if (wait) pausedUntil=Math.max(pausedUntil,Date.now()+wait*1000);
+      return json(error.status??502,{error:error instanceof PortalError?error.message:'Bhulekh did not complete the live lookup. Try again shortly.'},
+        wait ? {'Retry-After':String(wait)} : {});
     }
   }};
 }

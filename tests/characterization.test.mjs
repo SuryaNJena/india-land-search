@@ -122,13 +122,14 @@ test('CT-08 a throttled Bhulekh session stops and another lookup waits', async (
   let upstreamRequests = 0;
   const readTenants = makeBhulekhReader(async () => {
     upstreamRequests++;
-    return new Response('Fixture rate limit', {status:429, headers:{'Retry-After':'60'}});
+    return new Response('Fixture rate limit', {status:429, headers:{'Retry-After':'120'}});
   }, async () => {});
   const worker = makeLandReviewWorker({assets:{}, matchRows, readTenants});
   const throttled = await worker.fetch(post('tenant-search', {location, names:['ଜେନା']}));
   assert.equal(throttled.status, 429);
+  assert.equal(throttled.headers.get('Retry-After'), '120');
   const paused = await worker.fetch(post('tenant-search', {location:'3-11-109', names:['ଯେନା']}));
   assert.equal(paused.status, 429);
-  assert.ok(Number(paused.headers.get('Retry-After')) > 0);
+  assert.ok(Number(paused.headers.get('Retry-After')) > 60);
   assert.equal(upstreamRequests, 1);
 });

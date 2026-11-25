@@ -1,10 +1,11 @@
-import {liveNameLimit,parcelKey} from './core.mjs';
+import {countObservedNames,liveNameLimit,parcelKey} from './core.mjs';
 import {drawMap} from './maps.mjs';
 import {portals} from './portals.mjs';
 import {statePaths} from './india-states.mjs';
 import {criteriaFrom, findRecords, locationFields, searchIndex} from './search.mjs';
 import {mountNameReview} from './name-review.mjs';
 import {mountOdishaScope} from './odisha-scope.mjs';
+import {loadBhulekhLocations,requestBhulekh,walkBhulekhVillages} from './odisha-live-search.mjs';
 import {mountLiveOdishaMap} from './live-odisha-map.mjs';
 import {mountVillageFinder} from './village-finder.mjs';
 import {runtime} from './runtime.mjs';
@@ -68,7 +69,8 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
   const control = key => form.elements.namedItem(key);
   const loadFields = () => Object.entries(criteria).forEach(([key, value]) => { control(key).value = value; });
   let liveSearch, indexedSearch, selectedVillage;
-  const review = mountNameReview(root.querySelector('#home-name-review'),escape,clearResults,!workspace?.demo);
+  const review = mountNameReview(root.querySelector('#home-name-review'),escape,clearResults,!workspace?.demo,
+    workspace ? (state,names)=>countObservedNames(index.filter(entry=>entry.state===state).map(entry=>workspace.rows[entry.index]),names) : undefined);
   const odisha = runtime.hosted && !workspace?.demo ? mountOdishaScope(scopeElement,escape,clearResults) : null;
   const refreshVillageFinder = mountVillageFinder(root.querySelector('#village-finder'),escape,place=>{
     selectState(place.state);
@@ -86,7 +88,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
   function clearResults() {
     liveSearch?.abort(); liveSearch=undefined;
     indexedSearch?.abort(); indexedSearch=undefined;
-    submitButton.disabled=liveButton.disabled=false;
+    submitButton.disabled=liveButton.disabled=indexButton.disabled=false;
     feedback.textContent='';
     if (submitted) { submitted=false; showResults(); }
   }
@@ -108,7 +110,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     scopeElement.hidden=!live || !runtime.hosted;
     form.querySelectorAll('.location-input').forEach(label=>{label.hidden=live && !hasLocal && !selectedVillage;});
     form.querySelector('#home-search-scope').textContent = workspace?.demo ? 'Search checks the fictional plots loaded in this tab.' : live
-      ? 'Search the Odisha index by name, or choose a verified village for a scoped lookup.'
+      ? 'Search the Odisha index by name, or choose a village to search Bhulekh directly.'
       : criteria.state ? 'Search covers loaded records for this state. The official portal is available for fresh lookups.' : '';
     for (const field of locationFields) {
       const options = [...new Set(inState.flatMap(x => x.location[field].slice(0, 1)))].sort((a, b) => a.localeCompare(b));
@@ -116,31 +118,84 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     }
   }
 
-  async function runLive(targets,names) {
-    const abort = new AbortController();
-    liveSearch = abort;
-    const completed = [], failures = [], shown = new Map();
-    const active = () => liveSearch===abort && root.isConnected;
+  const villageBatch=10;
+  function portalTargets() {
+    return selectedVillage?.portalCode ?
+      [{...selectedVillage,id:selectedVillage.portalCode}] : odisha?.targets() ?? [];
+  }
+
+  function extendedActions(names, completed=[]) {
+    if (!odisha) return [];
+    const [first,...other]=portalTargets();
+    const tehsilId=first?.id.split('-').slice(0,2).join('-');
+    const tehsil=odisha.tehsil() ?? (tehsilId && other.every(place=>place.id.startsWith(tehsilId+'-'))
+      ? {id:tehsilId,district:first.district,tehsil:first.tehsil} : undefined);
+    const start=scope=>{
+      indexedSearch?.abort(); indexedSearch=undefined;
+      submitted=true;
+      runLive(null,names,{scope,prior:completed});
+      results.focus();
+    };
+    return [
+      ...(tehsil ? [{label:`Search all villages in ${tehsil.tehsil}`,run:()=>start(tehsil)}] : []),
+      {label:'Search across Odisha in batches',run:()=>start()}
+    ];
+  }
+
+  function runLive(targets,names,{scope,prior=[]}={}) {
+    const wide=!targets;
+    const iterator=targets?.values();
+    const next=wide ? walkBhulekhVillages(loadBhulekhLocations,scope) : ()=>iterator.next().value;
+    const completed=prior.filter(item=>!scope || item.location.id.startsWith(scope.id+'-'));
+    const checked=new Set(completed.map(item=>item.location.id));
+    const failures=[], shown=new Map();
+    let pending, attempted=0, retryAt=0, finished=false;
     const listItems = hits => hits.map(hit=>`<li>${escape(hit.tenant)} <span class="muted">· ${escape(hit.matched.join(', '))}</span>${hit.khata?`<div class="actions live-ror-links"><span class="muted">Khata ${escape(hit.khata)}</span>${tag(hit.front,'RoR front')}${tag(hit.back,'RoR back')}</div>`:''}</li>`).join('');
-    function paint(message, busy) {
-      if (!active()) return;
+    function paint(message, busy, retryLabel) {
+      if (!root.isConnected) return;
       feedback.textContent=busy ? message : '';
-      submitButton.disabled=liveButton.disabled=busy;
+      submitButton.disabled=liveButton.disabled=indexButton.disabled=busy;
       if (!busy) liveSearch=undefined;
       const hitCount=completed.reduce((sum,x)=>sum+x.hits.length,0);
       const groups=completed.map((item,i) => {
+        if (wide && !item.hits.length) return '';
         const visible = shown.get(i) ?? 100, total = item.hits.length;
         return `<details class="live-village" ${total?'open':''}><summary>${escape(item.location.village)} (${escape(item.location.villageCode)}) · ${count.format(total)} ${total===1?'match':'matches'}</summary><p class="muted">${escape(item.location.tehsil)}, ${escape(item.location.district)} · ${count.format(item.checked)} tenant options checked</p>${total?`<ul>${listItems(item.hits.slice(0,visible))}</ul>`:'<p>No matching tenant names in this village.</p>'}${total>visible?`<button class="button secondary" data-more="${i}">Show more matches</button>`:''}</details>`;
       }).join('');
-      const missing=failures.length?`<ul>${failures.map(([location,error])=>`<li>${escape(location.village)} · ${escape(error)}</li>`).join('')}</ul>`:'';
-      const maps=busy?[]:completed.map(item=>item.location).filter(location=>location.riCode);
-      results.innerHTML = `<h3>Live Odisha tenant search</h3>${busy?'':`<p role="status">${escape(message)}</p>`}<p>${count.format(completed.length)} of ${count.format(targets.length)} selected ${targets.length===1?'village':'villages'} checked${completed.length?` · ${count.format(hitCount)} matching tenant ${hitCount===1?'entry':'entries'}`:''}.</p>${busy?'<button class="button secondary" id="cancel-live">Cancel search</button>':''}${maps.length?'<details class="live-location live-map"></details>':''}${groups}${missing}${tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal')}`;
+      const missing=failures.length?`<h4>Villages unavailable</h4><ul>${failures.map(([location,error])=>`<li>${escape([location.village,location.tehsil,location.district].filter(Boolean).join(', '))} · ${escape(error)}</li>`).join('')}</ul>`:'';
+      const maps=busy?[]:completed.filter(item=>!wide || item.hits.length).map(item=>item.location).filter(location=>location.riCode);
+      const coverage=wide
+        ? `${count.format(completed.length)} villages checked in ${escape(scope?.tehsil || 'Odisha')}`
+        : `${count.format(completed.length)} of ${count.format(targets.length)} selected ${targets.length===1?'village':'villages'} checked`;
+      const actions=!wide && !busy && finished ? extendedActions(names,completed) : [];
+      results.innerHTML = `<h3>Live Odisha tenant search</h3>${busy?'':`<p role="status">${escape(message)}</p>`}
+        ${wide?`<p class="muted">Extended search checks one village at a time, up to ${villageBatch} per batch.</p>`:''}
+        <p>${coverage}${failures.length?` · ${count.format(failures.length)} unavailable`:''}${completed.length?` · ${count.format(hitCount)} matching tenant ${hitCount===1?'entry':'entries'}`:''}.</p>
+        <div class="actions">
+        ${busy?'<button type="button" class="button secondary" id="cancel-live">Pause search</button>':''}
+        ${retryLabel?`<button type="button" class="button secondary" id="resume-live">${escape(retryLabel)}</button>`:''}
+        ${actions.map(({label},i)=>`<button type="button" class="button secondary" data-extend="${i}">${escape(label)}</button>`).join('')}
+        ${tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal')}</div>
+        ${maps.length?'<details class="live-location live-map"></details>':''}${groups}${missing}`;
+      results.querySelectorAll('[data-extend]').forEach(button=>button.onclick=actions[Number(button.dataset.extend)].run);
+      const resume=results.querySelector('#resume-live');
+      if (resume) {
+        resume.onclick=()=>void runBatch();
+        const wait=retryAt-Date.now();
+        if (wait>0) {
+          resume.disabled=true;
+          setTimeout(()=>{resume.disabled=false;},Math.min(wait,2147483647));
+        }
+      }
       if (maps.length) {
         const holdings=new Map(completed.filter(item=>item.location.riCode)
           .map(item=>[item.location.id,item.hits.map(hit=>hit.khata).filter(Boolean)]));
         mountLiveOdishaMap(results.querySelector('.live-map'),maps,escape,tag,new Map(),holdings,names);
       }
-      results.querySelector('#cancel-live')?.addEventListener('click',()=>{abort.abort();paint('Search stopped. Completed villages are listed below.',false);});
+      results.querySelector('#cancel-live')?.addEventListener('click',()=>{
+        liveSearch?.abort();
+        paint('Search paused. Results from completed villages are below.',false,'Resume search');
+      });
       results.querySelectorAll('[data-more]').forEach(button=>{button.onclick=()=>{
         const i=Number(button.dataset.more), start=shown.get(i)??100, hits=completed[i].hits;
         button.previousElementSibling.insertAdjacentHTML('beforeend',listItems(hits.slice(start,start+100)));
@@ -148,23 +203,57 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
         if (start+100>=hits.length) button.remove();
       };});
     }
-    for (const location of targets) {
-      if (!active() || abort.signal.aborted) return;
-      paint(`Checking ${location.village}…`,true);
-      try {
-        const response=await fetch('/api/odisha/tenant-search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:location.id,names}),signal:abort.signal});
-        const item=await response.json();
-        if (!response.ok) {
-          failures.push([location,item.error||'The village could not be checked.']);
-          if (response.status===429) { paint('The search paused because Bhulekh or India Land Search is busy.',false); return; }
-        } else completed.push(item);
-      } catch {
-        if (abort.signal.aborted || !active()) return;
-        failures.push([location,'Unable to reach the live search service.']);
-        paint('The live search service could not be reached.',false); return;
+    async function runBatch() {
+      if (liveSearch || Date.now()<retryAt) return;
+      const abort=new AbortController();
+      liveSearch=abort;
+      const active=()=>liveSearch===abort && root.isConnected;
+      while (active() && (!wide || attempted<villageBatch)) {
+        try {
+          if (!pending) {
+            paint('Loading Bhulekh villages…',true);
+            const location=await next(abort.signal);
+            if (!active()) return;
+            pending=location;
+          }
+          if (!pending) {
+            finished=true;
+            paint(failures.length?'Search finished with some villages unavailable.':'Search finished.',false);
+            return;
+          }
+          if (checked.has(pending.id)) {
+            pending=undefined;
+            continue;
+          }
+          paint(`Checking ${pending.village}…`,true);
+          const item=await requestBhulekh('tenant-search',{location:pending.id,names},abort.signal);
+          if (!active()) return;
+          completed.push(item);
+          checked.add(pending.id);
+        } catch (error) {
+          if (!active()) return;
+          if (error.status===403) {
+            paint('Bhulekh denied the request. The live search stopped.',false);
+            return;
+          }
+          if (!pending || !error.status || [429,503,504].includes(error.status)) {
+            retryAt=Date.now()+(error.retryDelay ?? 0);
+            const message=error.status===429 ? 'Bhulekh or India Land Search is busy. Retry becomes available after the wait.'
+              : pending ? `Could not check ${pending.village}. ${error.message}` : `Could not load the Bhulekh village list. ${error.message}`;
+            paint(message,false,'Retry search');
+            return;
+          }
+          failures.push([pending,error.message]);
+        }
+        pending=undefined;
+        attempted++;
+      }
+      if (active()) {
+        attempted=0;
+        paint('Batch complete. Continue to check more villages.',false,`Check the next ${villageBatch} villages`);
       }
     }
-    paint(failures.length?'Search finished with some villages unavailable.':'Search finished.',false);
+    void runBatch();
   }
 
   function showResults() {
@@ -281,13 +370,13 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     saveSearch();
     const found = criteria.state==='Odisha' && !workspace?.demo ? findRecords(workspace,index,reviewedCriteria()) : null;
     if (scopedPortalSearch || forceIndex || (runtime.hosted || runtime.indexBase) && found && !found.scopedCount) {
+      const targets=portalTargets();
+      const verifiedVillage=targets.length>0 && (!selectedVillage || selectedVillage.portalCode);
       if (names.length>liveNameLimit || names.some(x=>x.length>140)) {
         feedback.textContent=`Search up to ${count.format(liveNameLimit)} spellings of 140 characters each.`;
         control('names').focus(); return;
       }
-      if (scopedPortalSearch) {
-        const targets=selectedVillage?.portalCode ?
-          [{id:selectedVillage.portalCode,village:selectedVillage.village}] : odisha.targets();
+      if (odisha && (scopedPortalSearch || !forceIndex && verifiedVillage)) {
         if (!targets.length) {
           feedback.textContent='Choose a village in the Bhulekh picker.';
           odisha.focusLocation();
@@ -312,7 +401,16 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
       indexedSearch=new AbortController();
       void mountIndexedResults(results,{
         names,location:selectedVillage?.portalCode??'',escape,tag,signal:indexedSearch.signal,
-        onChooseVillage:odisha ? ()=>odisha.focusLocation() : undefined
+        fallback:odisha ? [
+          ...(targets.length ? [{label:'Search selected villages on Bhulekh',run:()=>startSearch(true)}] : []),
+          {label:'Choose a Bhulekh village',run:()=>odisha.focusLocation()},
+          {label:'Find a village by name',run:()=>{
+            const finder=root.querySelector('#village-finder');
+            finder.open=true;
+            finder.querySelector('input[type="search"]').focus();
+          }},
+          ...extendedActions(names)
+        ] : []
       });
     } else {
       indexedSearch?.abort(); indexedSearch=undefined;

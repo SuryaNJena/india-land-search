@@ -48,7 +48,7 @@ assert.ok(proposed('Patel','Gujarat').includes('પટેલ'));
 assert.ok(proposed('Rajan','Tamil Nadu').includes('ராஜன்'));
 assert.ok(proposed('Kaur','Punjab').includes('ਕੌਰ'));
 assert.ok(proposed('Khan','Jammu and Kashmir').includes('خان'));
-assert.deepEqual(proposed('ଜେନା','Odisha'),[]);
+assert.deepEqual(proposed('ଜେନା','Odisha'),['ଯେନା']);
 assert.deepEqual(proposed('Sangma','Meghalaya'),[]);
 const sourceName='Debendra Kumar Jena';
 const permutations=proposeNameOrders([sourceName],proposeNames([sourceName],['or'],sanscript)).map(item=>item.spelling);
