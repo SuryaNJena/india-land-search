@@ -93,3 +93,24 @@ flowchart LR
   D -->|Allowlisted text and tables| E["Preview and print"]
   A -->|Open official viewer| F["ORSAC georeferenced village boundaries"]
 ```
+
+## CP3 Test
+
+The regression suite checks the assigned host, WMS extent and overlay, exact
+plot identity, official report links, anonymous CORS requests, and early
+stop on throttle. Chromium exercises the source panel with fictional responses
+and checks that embedded report resources remain inert.
+
+## CP4 Fix
+
+The source panel opens from Home for Odisha and from State portals. Verified
+village selections prefill source codes. A loaded sheet can show the official
+selected-plot PNG after the corresponding saved Plot Info is checked.
+Bhulekh reports are read directly, previewed, and printable.
+
+## CP5 Pull request
+
+All 45 automated tests, both builds, the offline verifier, Pages smoke, and
+Chromium passed. Live probes confirmed base and selected BhuNaksha images,
+a blocked cross-origin Plot Info fetch, and a browser-readable Bhulekh report.
+Browser evidence includes `06-odisha-official-sources.png`.
