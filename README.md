@@ -64,7 +64,9 @@ and [Codex evidence pack](docs/CODEX-EVIDENCE.md).
 
 ## Attribution
 
-Name suggestions use curated rules and [Sanscript](https://github.com/indic-transliteration/sanscript.js)
+Odia spelling review uses 83,664 offline English-to-Odia pairs from the public-domain portion of AI4Bharat Aksharantar. [Spelling data and attribution](docs/DATA-SOURCES.md#odia-spellings)
+
+Name suggestions also use curated rules and [Sanscript](https://github.com/indic-transliteration/sanscript.js)
 v1.3.3 under MIT. India boundary paths are adapted from
 [geoBoundaries India ADM1](https://www.geoboundaries.org/api/current/gbOpen/IND/ADM1/)
 under [CC BY 2.5 India](https://creativecommons.org/licenses/by/2.5/in/).

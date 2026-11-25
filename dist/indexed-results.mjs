@@ -2,9 +2,16 @@ import {runtime} from './runtime.mjs';
 import {mountLiveOdishaMap} from './live-odisha-map.mjs';
 import {printHoldings} from './live-ror.mjs';
 
-export async function mountIndexedResults(root,{names,location,escape,tag,signal,onChooseVillage}) {
+export async function mountIndexedResults(root,{names,location,escape,tag,signal,fallback=[]}) {
   const selected = new Map();
   const key = hit => hit.location.id+'/'+hit.khata;
+  const portalLink=()=>tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal');
+  const showUnavailable=message=>{
+    root.innerHTML=`<h3>Odisha land records</h3><p role="status">${escape(message)}</p>
+      ${fallback.length?'<p>Use the names you already entered to search Bhulekh directly.</p>':''}
+      <div class="actions">${fallback.map(({label},i)=>`<button type="button" class="button secondary" data-fallback="${i}">${escape(label)}</button>`).join('')}${portalLink()}</div>`;
+    root.querySelectorAll('[data-fallback]').forEach(button=>button.onclick=fallback[Number(button.dataset.fallback)].run);
+  };
   let offset=0;
   async function showPage() {
     root.innerHTML='<h3>Odisha land records</h3><p role="status">Searching the Odisha index…</p>';
@@ -14,15 +21,7 @@ export async function mountIndexedResults(root,{names,location,escape,tag,signal
       const data=await response.json();
       if (signal.aborted) return;
       if (response.status===503 && data.code==='index_not_loaded') {
-        const scope=location?'selected-village index':'statewide';
-        const guidance=onChooseVillage
-          ? 'Choose a village to search Bhulekh with the names you already entered.'
-          : 'Use the official Bhulekh portal to search by village.';
-        root.innerHTML=`<h3>Odisha land records</h3><p role="status">Your ${scope} search did not run. The statewide Odisha index has no dataset loaded.</p>
-          <p>${guidance}</p><div class="actions">${onChooseVillage?'<button type="button" class="button secondary" data-choose-village>Choose a Bhulekh village</button>':''}
-          ${tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal')}</div>`;
-        const chooseVillage=root.querySelector('[data-choose-village]');
-        if (chooseVillage) chooseVillage.onclick=onChooseVillage;
+        showUnavailable('The Odisha index has no dataset loaded, so your index search did not run.');
         return;
       }
       if (!response.ok) throw Error(data.error||'The Odisha index is unavailable.');
@@ -63,7 +62,7 @@ export async function mountIndexedResults(root,{names,location,escape,tag,signal
         mountLiveOdishaMap(root.querySelector('.live-map'),maps,escape,tag,plots,new Map(),names);
       }
     } catch (error) {
-      if (!signal.aborted) root.innerHTML=`<h3>Odisha land records</h3><p role="status">${escape(error.message)}</p>${tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal')}`;
+      if (!signal.aborted) showUnavailable('The Odisha index search could not finish. '+error.message);
     }
   }
   await showPage();

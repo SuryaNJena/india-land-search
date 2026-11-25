@@ -121,4 +121,4 @@ The Pages build uses its browser-only runtime and permits only the required
 Bhulekh report origin and district BhuNaksha image origins. The hosted app
 retains signed-out village lookup. Chromium passed the imported workspace,
 native WMS, exact Plot Info import, direct RoR and signed-out hosted fixtures.
-All 49 Node tests, the verifier, both builds, and the Pages smoke check passed.
+After integrating the spelling and dictionary branches, all 56 Node tests, the verifier, both builds, and the Pages and Chromium smoke checks passed.

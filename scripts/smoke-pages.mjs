@@ -19,11 +19,15 @@ try {
   assert.match(home, /img-src [^;]+https:\/\/bhunakshaodisha\.nic\.in:8443/);
   assert.doesNotMatch(home, /(?:connect-src|img-src) [^;]*\*/);
   await asset('app.mjs', /^text\/javascript/);
+  await asset('odisha-live-search.mjs', /^text\/javascript/);
   await asset('style.css', /^text\/css/);
   await asset('vendor/pdf-lib.js', /^text\/javascript/);
   const runtime=await (await asset('runtime.mjs', /^text\/javascript/)).text();
   assert.match(runtime, /hosted:false, indexBase:"", pages:true/);
   assert.equal((await fetch(new URL('server/index.js',url))).status,404);
+  await asset('name-dictionary.mjs', /^text\/javascript/);
+  const dictionary=await (await asset('name-dictionary-or.json', /^application\/json/)).json();
+  assert.ok(Object.keys(dictionary).length>80000);
   const maps=await (await asset('odisha-map-snapshots.json', /^application\/json/)).json();
   assert.ok(maps.villages['19-3-79-8']['01'].features.length>1000);
   const directory = await (await asset('villages.json', /^application\/json/)).json();

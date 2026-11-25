@@ -39,6 +39,30 @@ try {
   const filters = await page.locator('#home-search-form').evaluate(form =>
     Object.fromEntries(['state','district','tehsil','ri'].map(name=>[name,form.elements.namedItem(name).value])));
   assert.deepEqual(filters,{state:'Odisha',district:'Cuttack',tehsil:'Mahanga',ri:'Kurujanga'});
+  const nameInput=page.getByLabel('Names or surnames');
+  const dictionaryRequest=page.waitForRequest(request=>new URL(request.url()).pathname.endsWith('/name-dictionary-or.json'));
+  await nameInput.fill('Samal');
+  const originalOrder=page.locator('#home-name-review > .variant-options');
+  await originalOrder.locator('label').filter({hasText:'ସାମଲ'}).getByText(/in the spelling dictionary/).waitFor();
+  const request=await dictionaryRequest;
+  assert.equal(request.method(),'GET');
+  assert.equal(request.postData(),null);
+  assert.equal(new URL(request.url()).search,'');
+  if (evidence) {
+    await mkdir(evidence,{recursive:true});
+    await page.locator('#home-name-review').screenshot({path:resolve(evidence,'08-odia-spelling-dictionary.png')});
+  }
+  await nameInput.fill('Jadumani Jena');
+  const spellings=['ଜଦୁମଣି ଜେନା','ଜଦୁମଣି ଯେନା','ଯଦୁମଣି ଜେନା','ଯଦୁମଣି ଯେନା'];
+  assert.deepEqual(new Set(await originalOrder.locator('strong').allTextContents()),new Set(spellings));
+  await page.getByText('Other name orders (5)',{exact:true}).click();
+  await page.getByText('ଯେନା ଯଦୁମଣି',{exact:true}).waitFor();
+  await click('Select all');
+  assert.equal(await originalOrder.locator(':checked').count(),4);
+  await click('Clear all');
+  assert.equal(await originalOrder.locator(':checked').count(),0);
+  await nameInput.fill('Jena');
+  await originalOrder.locator('label').filter({hasText:'ଯେନା'}).getByText(/Seen in \d+ loaded plots?/).waitFor();
   await click('Review name variants');
   await page.getByRole('button',{name:'Select all',exact:true}).click();
   await click('Search loaded records');
@@ -240,37 +264,75 @@ try {
   await page.route(new URL('runtime.mjs',url).href,route=>route.fulfill({
     contentType:'text/javascript',body:"export const runtime={hosted:true,indexBase:'',pages:false};"
   }));
-  const usedLocations=[];
+  const usedLocations=[], tenantCalls=[], indexedCalls=[];
+  const villages=Array.from({length:12},(_,i)=>({code:String(79+i),label:i===0?'Fixture village':`Fixture village ${i+1}`}));
+  await page.route('**/api/odisha/index-search',route=>{
+    indexedCalls.push(route.request().postDataJSON());
+    return route.fulfill({status:503,json:{code:'index_not_loaded'}});
+  });
   await page.route('**/api/odisha/locations',route=>{
     assert.equal(route.request().headers()['oai-authenticated-user-id'],undefined);
     const {location}=route.request().postDataJSON();
     usedLocations.push(location);
-    const option={'':['19','Fixture district'],'19':['3','Fixture tehsil'],'19-3':['79','Fixture village']}[location];
-    return route.fulfill({json:{options:[{code:option[0],label:option[1]}]}});
+    const options={'':[{code:'19',label:'Fixture district'}],'19':[{code:'3',label:'Fixture tehsil'}],'19-3':villages};
+    return route.fulfill({json:{options:options[location]}});
   });
   await page.route('**/api/odisha/tenant-search',route=>{
     assert.equal(route.request().headers()['oai-authenticated-user-id'],undefined);
-    assert.deepEqual(route.request().postDataJSON(),{location:'19-3-79',names:['ଫିକ୍ସଚର']});
-    return route.fulfill({json:{location:{id:'19-3-79',districtCode:'19',tehsilCode:'3',villageCode:'79',village:'Fixture village',district:'Fixture district',tehsil:'Fixture tehsil'},checked:1,
-      hits:[{tenant:'ଫିକ୍ସଚର ଜେନା',matched:['ଫିକ୍ସଚର'],khata:''}]}});
+    const {location,names}=route.request().postDataJSON();
+    assert.deepEqual(names,['ଫିକ୍ସଚର']);
+    tenantCalls.push(location);
+    if (location==='19-3-80' && tenantCalls.filter(id=>id===location).length===1) {
+      return route.fulfill({status:429,headers:{'Retry-After':'0'},json:{error:'Fixture cooldown'}});
+    }
+    if (location==='19-3-85') return route.fulfill({status:502,json:{error:'Fixture village unavailable'}});
+    const [, , code]=location.split('-');
+    const village=villages.find(item=>item.code===code).label;
+    return route.fulfill({json:{location:{id:location,districtCode:'19',tehsilCode:'3',villageCode:code,village,district:'Fixture district',tehsil:'Fixture tehsil'},checked:1,
+      hits:code==='79'?[{tenant:'ଫିକ୍ସଚର ଜେନା',matched:['ଫିକ୍ସଚର'],khata:''}]:[]}});
   });
   await page.goto(url.href);
   await page.getByLabel('State or union territory').selectOption('Odisha');
   await page.getByLabel('Names or surnames').fill('ଫିକ୍ସଚର');
+  await click('Search live Odisha records');
+  await page.getByText(/your index search did not run/).waitFor();
+  assert.deepEqual(tenantCalls,[]);
+  assert.equal(await page.getByRole('button',{name:'Choose a Bhulekh village',exact:true}).count(),1);
+  await click('Find a village by name');
+  await page.getByRole('searchbox',{name:'Village name',exact:true}).waitFor();
+  await click('Search across Odisha in batches');
+  await page.getByText(/Retry becomes available/).waitFor();
+  assert.deepEqual(tenantCalls,['19-3-79','19-3-80']);
+  await click('Retry search');
+  await page.getByRole('button',{name:'Check the next 10 villages',exact:true}).waitFor();
+  assert.deepEqual(tenantCalls,['19-3-79','19-3-80',...villages.slice(1,10).map(({code})=>'19-3-'+code)]);
+  await page.getByText(/9 villages checked in Odisha · 1 unavailable/).waitFor();
+  await click('Check the next 10 villages');
+  await page.getByText(/11 villages checked in Odisha · 1 unavailable/).waitFor();
+  await page.getByText(/Search finished with some villages unavailable/).waitFor();
+  assert.deepEqual(usedLocations,['','19','19-3']);
+  assert.deepEqual([...new Set(tenantCalls)],villages.map(({code})=>'19-3-'+code));
+  if (evidence) await page.locator('#home-search-results').screenshot({path:resolve(evidence,'07-odisha-village-batches.png')});
+  await page.reload();
   await page.getByText('Choose villages from Bhulekh',{exact:true}).click();
   await page.locator('#directory-district').selectOption('19');
   await page.locator('#directory-tehsil').selectOption('3');
   await page.locator('#directory-village').selectOption('79');
   await click('Add village');
-  await click('Search selected villages on Bhulekh');
+  const beforeDirect=tenantCalls.length;
+  await click('Search live Odisha records');
+  await page.getByText('Search finished.',{exact:true}).waitFor();
+  assert.deepEqual(tenantCalls.slice(beforeDirect),['19-3-79']);
+  assert.equal(indexedCalls.length,1);
+  await page.getByRole('button',{name:'Search all villages in Fixture tehsil',exact:true}).waitFor();
   await page.getByRole('heading',{name:'Live Odisha tenant search',exact:true}).waitFor();
   await page.getByText('ଫିକ୍ସଚର ଜେନା',{exact:false}).waitFor();
-  assert.deepEqual(usedLocations,['','19','19-3']);
+  assert.deepEqual(usedLocations,['','19','19-3','','19','19-3']);
   assert.equal(await page.locator('a[href^="/signin-with-chatgpt"]').count(),0);
   if (evidence) await page.screenshot({path:resolve(evidence,'06-anonymous-live-odisha.png'),fullPage:true});
   assert.deepEqual(external, [], 'The browser smoke made an external request');
   assert.deepEqual(errors, [], 'The browser smoke raised a page error');
-  console.log('Browser smoke passed: standalone and hosted workspaces, official map and RoR requests, and signed-out tenant search, all with mocked portal responses.');
+  console.log('Browser smoke passed: workspaces, name variants and dictionary, official maps and RoR, and signed-out Odisha search with batch fallback.');
 } finally {
   if (browser) await browser.close();
   await new Promise((accept,reject)=>server.close(error=>error?reject(error):accept()));

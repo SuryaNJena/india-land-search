@@ -26,20 +26,27 @@ test('The index API distinguishes a missing dataset from a temporary outage', as
 test('An unloaded statewide index gives hosted users a village-picker action and retains the official link',async t=>{
   const empty=makeLandReviewWorker({assets:{},readIndex:async()=>null});
   t.mock.method(globalThis,'fetch',()=>empty.fetch(indexRequest()));
-  const button={};
-  const panel={innerHTML:'',querySelector(selector){
-    return selector==='[data-choose-village]' && this.innerHTML.includes('data-choose-village') ? button : null;
+  const panel={innerHTML:'',querySelectorAll(selector){
+    assert.equal(selector,'[data-fallback]');
+    return [...this.innerHTML.matchAll(/data-fallback="(\d+)"/g)].map(([,fallback])=>({dataset:{fallback}}))
+      .map(button=>{buttons.push(button);return button;});
   }};
+  const buttons=[];
   const args={names:['Fixture surname'],location:'',escape:String,
     tag:(url,label)=>'<a href="'+url+'">'+label+'</a>',signal:new AbortController().signal};
   let opened=0;
-  await mountIndexedResults(panel,{...args,onChooseVillage:()=>opened++});
-  assert.match(panel.innerHTML,/Your statewide search did not run/);
+  await mountIndexedResults(panel,{...args,fallback:[
+    {label:'Choose a Bhulekh village',run:()=>opened++},
+    {label:'Search across Odisha in batches',run:()=>opened+=10}
+  ]});
+  assert.match(panel.innerHTML,/your index search did not run/);
+  assert.match(panel.innerHTML,/Choose a Bhulekh village/);
+  assert.match(panel.innerHTML,/Search across Odisha in batches/);
   assert.match(panel.innerHTML,/Open official Bhulekh portal/);
   assert.equal(opened,0);
-  button.onclick();
-  assert.equal(opened,1);
+  buttons.forEach(button=>button.onclick());
+  assert.equal(opened,11);
   await mountIndexedResults(panel,args);
-  assert.doesNotMatch(panel.innerHTML,/data-choose-village/);
+  assert.doesNotMatch(panel.innerHTML,/data-fallback/);
   assert.match(panel.innerHTML,/Open official Bhulekh portal/);
 });
