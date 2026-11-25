@@ -81,3 +81,15 @@ or validation failure. No automatic retries or background crawling. Never
 render raw portal HTML or commit captured record text. Browser `no-cors`
 responses are [opaque](https://fetch.spec.whatwg.org/). A public page may be
 viewable in a tab while its response remains unavailable to cross-origin script.
+
+## CP2 Diagram
+
+```mermaid
+flowchart LR
+  A["GitHub Pages"] -->|Known sheet and native extent| B["BhuNaksha WMS PNG"]
+  A -->|Open exact plot in a new tab| C["BhuNaksha Plot Info"]
+  C -->|User saves and imports JSON| A
+  A -->|Known khata, credentialless GET| D["Bhulekh front and back"]
+  D -->|Allowlisted text and tables| E["Preview and print"]
+  A -->|Open official viewer| F["ORSAC georeferenced village boundaries"]
+```
