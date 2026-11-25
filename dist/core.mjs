@@ -12,6 +12,16 @@ function matchTerms(values) {
   return source => source && (!prefilter || prefilter.test(source)) ? patterns.filter(([,pattern])=>pattern.test(source)).map(([name])=>name) : [];
 }
 
+export function countObservedNames(rows, names) {
+  const match = matchTerms(names);
+  const counts = new Map();
+  for (const row of rows) {
+    if (row.status !== 'Retrieved') continue;
+    for (const name of match(normalize(row.info))) counts.set(name,(counts.get(name) ?? 0)+1);
+  }
+  return new Map(names.filter(name=>counts.has(name)).map(name=>[name,counts.get(name)]));
+}
+
 export function extractCaste(info, groups) {
   const values = [...String(info ?? '').matchAll(/ଜା\s*[:ଃ]\s*/gu)].map(match => info.slice(match.index + match[0].length)
     .split(/[,;।\n]|\s+ବା\s*[:ଃ]|\s+ଜା\s*[:ଃ]|\s+କିସ୍ମତ/u)[0].trim()).filter(Boolean);
@@ -96,7 +106,7 @@ function phonetic(word, language) {
 
 export function suggestSurname(input, language, observed = []) {
   const name = normalize(input);
-  const dictionary = { or: {jena:['ଜେନା','ଯେନା'], sahu:['ସାହୁ'], mohanty:['ମହାନ୍ତି','ମହାନ୍ତୀ'], nayak:['ନାୟକ']}, hi:{singh:['सिंह'], sharma:['शर्मा'], yadav:['यादव']}, mr:{patil:['पाटील']}, bn:{das:['দাস'], ghosh:['ঘোষ']}, te:{reddy:['రెడ్డి'], naidu:['నాయుడు']} };
+  const dictionary = { or: {jena:['ଜେନା','ଯେନା'], yena:['ଯେନା','ଜେନା'], sahu:['ସାହୁ'], mohanty:['ମହାନ୍ତି','ମହାନ୍ତୀ'], nayak:['ନାୟକ']}, hi:{singh:['सिंह'], sharma:['शर्मा'], yadav:['यादव']}, mr:{patil:['पाटील']}, bn:{das:['দাস'], ghosh:['ঘোষ']}, te:{reddy:['రెడ్డి'], naidu:['నాయుడు']} };
   if (!name) return [];
   const known = dictionary[language]?.[name] ?? [];
   const proposed = /^[a-z]+$/u.test(name) ? phonetic(name, language) : name;

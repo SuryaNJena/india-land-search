@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import test from 'node:test';
 import * as variants from '../dist/name-variants.mjs';
+import {countObservedNames} from '../dist/core.mjs';
 
 const transliterate = createRequire(import.meta.url)('../dist/vendor/sanscript.js');
 const given = ['ଜଦୁମଣି','ଯଦୁମଣି'];
@@ -30,6 +31,6 @@ test('UT-11 observed spelling counts use whole names in retrieved records', () =
   const [seen,,unseen]=combinations([]);
   const retrieved = info => ({info,status:'Retrieved'});
   const rows=[retrieved(`(${seen}) · ${seen}`),retrieved(seen.replace(' ','\t')),retrieved(seen+'ମଣି'),{info:seen,status:'No plot information'}];
-  assert.deepEqual([...variants.countObservedNames(rows,[seen,unseen])],[[seen,2]]);
+  assert.deepEqual([...countObservedNames(rows,[seen,unseen])],[[seen,2]]);
 });
 

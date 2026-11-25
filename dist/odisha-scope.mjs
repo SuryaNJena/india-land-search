@@ -1,3 +1,5 @@
+import {loadBhulekhLocations} from './odisha-live-search.mjs';
+
 const storageKey = 'landreview.odisha-villages';
 const fields = ['district','tehsil','village'];
 const labels = {district:'District',tehsil:'Tehsil',village:'Village'};
@@ -7,7 +9,6 @@ const readable = label => {
   const latin = globalThis.Sanscript.t(label,'oriya','iso').normalize('NFD').replace(/\p{M}/gu,'').replace(/[:\u00b7]/g,'');
   return `${label} · ${latin}`;
 };
-const directory = new Map();
 let persisted=[];
 try {
   const value=JSON.parse(localStorage.getItem(storageKey));
@@ -34,10 +35,10 @@ export function mountOdishaScope(root,escape,onEdit) {
     retained.querySelectorAll('[data-remove]').forEach(button=>{button.onclick=()=>{picked.delete(button.dataset.remove);save();};});
   }
 
-  function save(notify = true) {
+  function save() {
     persisted=[...picked.values()];
     try { localStorage.setItem(storageKey,JSON.stringify(persisted)); } catch { /* Selection remains in this tab. */ }
-    renderPicked(); if (notify) onEdit();
+    renderPicked(); onEdit();
   }
 
   async function load(field) {
@@ -49,14 +50,8 @@ export function mountOdishaScope(root,escape,onEdit) {
     retry.hidden=true;
     status.textContent=`Loading ${labels[field].toLowerCase()} choices…`;
     try {
-      let choices=directory.get(key);
-      if (!choices) {
-        const response=await fetch('/api/odisha/locations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:key}),signal:abort.signal});
-        const item=await response.json();
-        if (!response.ok) throw Error(item.error || 'Bhulekh is unavailable.');
-        choices=item.options;
-        directory.set(key,choices);
-      }
+      const choices=await loadBhulekhLocations(key,abort.signal);
+      if (abort.signal.aborted) return;
       select(field).innerHTML=`<option value="">Choose ${labels[field].toLowerCase()}</option>${choices.map(({code,label})=>`<option value="${escape(code)}" data-label="${escape(label)}">${escape(readable(label))} (${escape(code)})</option>`).join('')}`;
       select(field).disabled=false;
       status.textContent=choices.length?'': 'Bhulekh returned no locations for this selection.';
@@ -64,6 +59,8 @@ export function mountOdishaScope(root,escape,onEdit) {
       if (abort.signal.aborted) return;
       status.textContent=error.message;
       retry.hidden=false; retry.onclick=()=>load(field);
+    } finally {
+      if (pending===abort) pending=undefined;
     }
   }
 
@@ -80,17 +77,21 @@ export function mountOdishaScope(root,escape,onEdit) {
       if (branch[field] && fields[i+1]) void load(fields[i+1]);
     };
   });
-  function addVillage(notify) {
+  function selectedVillage() {
     const parts=fields.map(field=>branch[field]);
     if (parts.some(value=>!value)) return;
-    const id=parts.map(x=>x.code).join('-');
-    if (picked.has(id)) {if (notify) status.textContent='That village is already selected.';return;}
-    if (picked.size>=20) {status.textContent='Choose up to 20 villages per live search.';return;}
-    picked.set(id,{id,district:parts[0].label,tehsil:parts[1].label,village:parts[2].label});
-    status.textContent=`${picked.size} ${picked.size===1?'village':'villages'} selected.`;
-    save(notify);
+    const [district,tehsil,village]=parts.map(item=>item.label);
+    return {id:parts.map(item=>item.code).join('-'),district,tehsil,village};
   }
-  add.onclick=()=>addVillage(true);
+  add.onclick=()=>{
+    const place=selectedVillage();
+    if (!place) return;
+    if (picked.has(place.id)) {status.textContent='That village is already selected.';return;}
+    if (picked.size>=20) {status.textContent='Choose up to 20 villages per live search.';return;}
+    picked.set(place.id,place);
+    status.textContent=`${picked.size} ${picked.size===1?'village':'villages'} selected.`;
+    save();
+  };
   root.ontoggle=()=>{if (root.open && select('district').options.length<=1 && !pending) void load('district');};
   renderPicked();
   return {
@@ -100,8 +101,12 @@ export function mountOdishaScope(root,escape,onEdit) {
       (next.disabled ? root.querySelector('summary') : next).focus();
     },
     targets() {
-      addVillage(false);
-      return [...picked.values()];
+      const current=selectedVillage();
+      return [...new Map([...(current ? [[current.id,current]] : []),...picked]).values()].slice(0,20);
+    },
+    tehsil() {
+      const {district,tehsil}=branch;
+      if (district && tehsil) return {id:district.code+'-'+tehsil.code,district:district.label,tehsil:tehsil.label};
     }
   };
 }
