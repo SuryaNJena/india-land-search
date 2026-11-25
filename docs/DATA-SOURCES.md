@@ -11,6 +11,10 @@ LandReview uses the Local Government Directory (LGD) for village discovery and O
 | [Survey of India boundary downloads](https://surveyofindia.gov.in/pages/village-boundary-data-base-of-entire-india) and [2025 catalogue](https://surveyofindia.gov.in/UserFiles/files/Vector%20Data%20Catalog%202025%281%29.pdf) | Lists 52,524 Odisha village polygons across 30 districts and 317 subdistricts. A candidate for point-to-village discovery after checking the reuse terms and crosswalk. |
 | [NIC DigiLocker RoR integration](https://informatics.nic.in/news/1085) | Owners can retrieve their own Odisha RoR. Holder-supplied PDF copies can be reviewed locally in LandReview. |
 
+## Odia spellings
+
+The bundled spelling dictionary contains 81,198 normalized English lookup keys and 83,664 Odia spelling pairs. It comes from the Wikidata, Samanantar, and IndicCorp rows in the pinned Aksharantar Odia training and validation files. The authors release mined pairs under CC0. The generator keeps individual words, filters lower-scoring IndicCorp pairs, and caps each lookup at three spellings. The sources contain common words and named entities. Official parcel records remain the source for recorded owner spellings. [Dataset and terms](https://indicnlp.ai4bharat.org/aksharantar/) · [Research paper](https://aclanthology.org/2023.findings-emnlp.4/) · [Bundled source notice](../dist/name-dictionary-or-NOTICE.txt)
+
 ## Production acquisition
 
 No verified public statewide ownership feed was found. The [March 2026 parliamentary reply](https://sansad.in/getFile/annex/270/AS364_nW9rgq.pdf?source=pqars) confirms Bhulekh integration with government agriculture schemes and AgriStack. The [2025 Odisha procurement](https://pc.odisha.gov.in/sites/default/files/2025-03/RFP-25026_07.03.2025_Vol-II.pdf) describes a farmer parcel verification API. The [Government Open Data License](https://data.gov.in/Godl) excludes personal information.

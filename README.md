@@ -35,4 +35,6 @@ The static build works under a repository subpath. See the [deployment guide](do
 
 Imported LandReview ZIP, compatible JSON, and Excel workspaces stay in the browser. Workspaces back up to a checksum-validated ZIP. Retain original signed documents and verify records using the official source.
 
-Name suggestions use curated rules and [Sanscript](https://github.com/indic-transliteration/sanscript.js) v1.3.3 under MIT. The reference India map uses simplified [geoBoundaries India ADM1](https://www.geoboundaries.org/api/current/gbOpen/IND/ADM1/) paths sourced from DataMeet India and the Election Commission of India under [CC BY 2.5 India](https://creativecommons.org/licenses/by/2.5/in/).
+Odia spelling review uses an offline dictionary of 83,664 English-to-Odia pairs drawn from AI4Bharat Aksharantar’s public-domain sources. The app looks up entries locally and marks spelling evidence separately from occurrences in loaded plot text. [Spelling data and attribution](docs/DATA-SOURCES.md#odia-spellings)
+
+Name suggestions also use curated rules and [Sanscript](https://github.com/indic-transliteration/sanscript.js) v1.3.3 under MIT. The reference India map uses simplified [geoBoundaries India ADM1](https://www.geoboundaries.org/api/current/gbOpen/IND/ADM1/) paths sourced from DataMeet India and the Election Commission of India under [CC BY 2.5 India](https://creativecommons.org/licenses/by/2.5/in/).

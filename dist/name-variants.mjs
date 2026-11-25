@@ -48,18 +48,21 @@ const phonemes = {aa:'ā',ee:'ī',ii:'ī',oo:'ū',uu:'ū',chh:'ch',ch:'c',sh:'ś
 const phoneticRoman = word => word.replace(/aa|ee|ii|oo|uu|chh|ch|sh|tt|dd|th|dh|ph|bh|kh|gh|jh|ny|ng|qu|ck|[wxfzq]/g,x=>phonemes[x]);
 const useShortEO = new Set(['kn','ml','ta','te','mni']);
 
-function candidatesForWord(source, language, transliterator) {
+function candidatesForWord(source, language, transliterator, dictionary) {
   const word = normalize(source);
+  const listed = Object.hasOwn(dictionary,word) ? dictionary[word] : [];
   if (language==='or') {
     const entry = odiaInitialVariants.find(values=>values.includes(word));
     if (entry) {
       const [ja,ya] = entry;
-      return (word.startsWith('y') || word.startsWith('ଯ') ? [ya,ja] : [ja,ya]).map(value=>({value,curated:true}));
+      return (word.startsWith('y') || word.startsWith('ଯ') ? [ya,ja] : [ja,ya])
+        .map(value=>({value,curated:true,dictionary:listed.includes(value)}));
     }
     if (odiaWord.test(word)) return [{value:word,curated:false}];
   }
   const curated = [...(common[language]?.[word] ?? []), ...suggestSurname(word,language).filter(item=>item.source==='Curated spelling').map(item=>item.variant)];
-  if (language==='or' && curated.length) return curated.map(value=>({value,curated:true}));
+  if (language==='or' && curated.length) return [...new Set([...curated,...listed])].slice(0,4)
+    .map(value=>({value,curated:curated.includes(value),dictionary:listed.includes(value)}));
   const raw = phoneticRoman(word);
   const base = useShortEO.has(language) ? raw : raw.replace(/[eo]/g,vowel=>vowel==='e'?'ē':'ō');
   const loose = word.endsWith('a') ? base.replace(/a$/,'ā') : base;
@@ -71,35 +74,36 @@ function candidatesForWord(source, language, transliterator) {
     const shorter = result.replace(/[\u094d\u09cd\u0a4d\u0acd\u0b4d\u0bcd\u0c4d\u0ccd\u0d4d\uabed]$/u,'');
     return useShortEO.has(language) ? [result,shorter] : [shorter,result];
   }).filter(value=>value && !/[a-z]/i.test(value));
-  const primary = phonetic[0];
-  const alternate = language==='or' && /^(?:j(?!h)|y)/u.test(word)
-    ? primary?.replace(/^[ଜଯୟ]/u, initial=>initial==='ଜ'?'ଯ':'ଜ') : undefined;
-  return [...new Set([...curated,...[primary,alternate].filter(Boolean),...phonetic])]
-    .slice(0,4).map(value=>({value,curated:curated.includes(value),alternate:value===alternate}));
+  const primary = listed[0] ?? phonetic[0];
+  const alternateFrom = language==='or' && /^(?:j(?!h)|y)/u.test(word)
+    ? [primary,phonetic[0]].find(value=>value && /^[ଜଯୟ]/u.test(value)) : undefined;
+  const alternate = alternateFrom?.replace(/^[ଜଯୟ]/u,initial=>initial==='ଜ'?'ଯ':'ଜ');
+  return [...new Set([...curated,...[primary,alternate].filter(Boolean),...listed,...phonetic])]
+    .slice(0,4).map(value=>({value,curated:curated.includes(value),dictionary:listed.includes(value),alternate:value===alternate}));
 }
 
 function odiaCombinations(choices) {
   const limit = 12;
   let drafts = [{words:[],changes:0}];
   for (const items of choices) {
-    const preferred = items.filter((item,i)=>i===0 || item.curated || item.alternate);
+    const preferred = items.filter((item,i)=>i===0 || item.curated || item.alternate || item.dictionary);
     drafts = drafts.flatMap(({words,changes})=>preferred.map((item,i)=>({words:[...words,item],changes:changes+i})))
       .sort((a,b)=>a.changes-b.changes).slice(0,limit);
   }
   const best = choices.map(items=>items[0]);
-  const other = choices.flatMap((items,i)=>items.slice(1).filter(item=>!item.curated && !item.alternate)
+  const other = choices.flatMap((items,i)=>items.slice(1).filter(item=>!item.curated && !item.alternate && !item.dictionary)
     .map(item=>best.map((value,j)=>i===j?item:value)));
   return [...drafts.map(draft=>draft.words),...other].slice(0,limit);
 }
 
-export function proposeNames(terms,languages,transliterator=globalThis.Sanscript) {
+export function proposeNames(terms,languages,transliterator=globalThis.Sanscript,dictionaries={}) {
   const results = [];
   for (const original of terms) {
     const parts = original.split(/[ '\u2019-]+/u);
     if (parts.length>8) continue;
     for (const language of languages.filter(language=>Object.hasOwn(recordLanguages,language))) {
       if (!roman.test(original) && !(language==='or' && parts.every(word=>roman.test(word) || odiaWord.test(normalize(word))))) continue;
-      const choices = parts.map(word=>candidatesForWord(word,language,transliterator));
+      const choices = parts.map(word=>candidatesForWord(word,language,transliterator,dictionaries[language] ?? {}));
       if (choices.some(items=>!items.length)) continue;
       const best = choices.map(items=>items[0]);
       const drafts = [best,...choices.flatMap((items,i)=>items.slice(1).map(item=>best.map((value,j)=>i===j?item:value)))];
@@ -107,7 +111,8 @@ export function proposeNames(terms,languages,transliterator=globalThis.Sanscript
         : drafts.toSorted((a,b)=>b.filter(x=>x.curated).length-a.filter(x=>x.curated).length).slice(0,4);
       for (const words of ranked) {
         const spelling = words.map(word=>word.value).join(' ');
-        if (normalize(spelling)!==normalize(original)) results.push({original,language,spelling,curated:words.every(word=>word.curated)});
+        if (normalize(spelling)!==normalize(original)) results.push({original,language,spelling,
+          curated:words.every(word=>word.curated),dictionaryWords:words.filter(word=>word.dictionary).length});
       }
     }
   }
