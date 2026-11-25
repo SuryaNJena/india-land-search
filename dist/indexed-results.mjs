@@ -2,7 +2,7 @@ import {runtime} from './runtime.mjs';
 import {mountLiveOdishaMap} from './live-odisha-map.mjs';
 import {printHoldings} from './live-ror.mjs';
 
-export async function mountIndexedResults(root,{names,location,escape,tag,signal}) {
+export async function mountIndexedResults(root,{names,location,escape,tag,signal,onChooseVillage}) {
   const selected = new Map();
   const key = hit => hit.location.id+'/'+hit.khata;
   let offset=0;
@@ -13,6 +13,18 @@ export async function mountIndexedResults(root,{names,location,escape,tag,signal
         headers:{'Content-Type':'application/json'},body:JSON.stringify({names,location,offset}),signal});
       const data=await response.json();
       if (signal.aborted) return;
+      if (response.status===503 && data.code==='index_not_loaded') {
+        const scope=location?'selected-village index':'statewide';
+        const guidance=onChooseVillage
+          ? 'Choose a village to search Bhulekh with the names you already entered.'
+          : 'Use the official Bhulekh portal to search by village.';
+        root.innerHTML=`<h3>Odisha land records</h3><p role="status">Your ${scope} search did not run. The statewide Odisha index has no dataset loaded.</p>
+          <p>${guidance}</p><div class="actions">${onChooseVillage?'<button type="button" class="button secondary" data-choose-village>Choose a Bhulekh village</button>':''}
+          ${tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal')}</div>`;
+        const chooseVillage=root.querySelector('[data-choose-village]');
+        if (chooseVillage) chooseVillage.onclick=onChooseVillage;
+        return;
+      }
       if (!response.ok) throw Error(data.error||'The Odisha index is unavailable.');
       const {hits,coverage,next}=data;
       const maps=[...new Map(hits.filter(hit=>hit.location.riCode).map(hit=>[hit.location.id,hit.location])).values()];
