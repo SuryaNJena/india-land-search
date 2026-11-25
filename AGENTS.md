@@ -24,4 +24,4 @@ Use descriptive test names and keep requirement mappings in `docs/TEST-PLAN.md`.
 
 ## Commits and Pull Requests
 
-The Sites workflow has generated commits titled `Update Site source`. For manual commits, use a short imperative summary. In pull requests, describe the behavior change and verification, link related issues when available, and include screenshots for visible UI changes. Keep tenant data, workspace ZIPs, credentials, and generated deployment artifacts out of commits.
+Create a feature branch and merge changes through a GitHub pull request. Never commit or push changes directly to `main`. Follow the five checkpoints in order: CP1 Explain, CP2 Diagram, CP3 Test, CP4 Fix, CP5 Pull request. Make each checkpoint traceable in the branch history and PR. Summarize behavior changes and verification, link related issues, and include screenshots for visible UI changes when available. Keep tenant data, workspace ZIPs, credentials, and generated deployment artifacts out of commits.
