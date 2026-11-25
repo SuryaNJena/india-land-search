@@ -9,7 +9,7 @@ Run `node scripts/smoke-pages.mjs` against `pages-out/` or an extracted release'
 ## GitHub Pages
 
 1. Merge the release in GitHub. In the repository's Pages settings, select GitHub Actions as the source.
-2. Run **Publish optional GitHub Pages build** from Actions.
+2. Run **Publish India Land Search to GitHub Pages** from Actions for a manual deployment.
 3. The static build supports the Odisha village directory, name review, local workspaces, and official portal links. Preview locally with `node build-pages.mjs` and `python -m http.server 8000 --directory pages-out`.
 4. The repository workflow publishes the static build after relevant changes merge to main. It also supports manual publication. It builds without an index origin. An optional local build can still specify `LANDREVIEW_INDEX_ORIGIN` and a matching Worker Pages origin when testing a separately authorized index.
 
