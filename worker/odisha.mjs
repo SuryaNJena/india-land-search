@@ -190,11 +190,19 @@ export function makeBhunakshaPlotReader(fetcher=fetch) {
     const standard=new URL(primary);
     standard.port='';
     const body=new URLSearchParams({state:'21',giscode:gis,plotid:parcel.id,plotno:parcel.number,attrs:''});
-    for (const base of new Set([primary.href,standard.href])) {
+    const viewer=new URL('ScalarDatahandler',primary);
+    const levels=[location.districtCode,location.tehsilCode,location.riCode,location.villageCode,sheet.padStart(2,'0'),''].join(',');
+    viewer.search=new URLSearchParams({OP:'5',state:'21',levels,plotno:parcel.number});
+    const attempts=[
+      {endpoint:new URL('rest/MapInfo/getPlotInfo',primary),method:'POST',body},
+      {endpoint:viewer,method:'GET'}
+    ];
+    if (standard.href!==primary.href) attempts.push({endpoint:new URL('rest/MapInfo/getPlotInfo',standard),method:'POST',body});
+    let reportedMissing=false;
+    for (const {endpoint,method,body} of attempts) {
       let data;
       try {
-        const endpoint=new URL('rest/MapInfo/getPlotInfo',base);
-        const response=await fetcher(endpoint,{method:'POST',body,redirect:'error',signal:AbortSignal.timeout(8000)});
+        const response=await fetcher(endpoint,{method,body,redirect:'error',signal:AbortSignal.timeout(5000)});
         const limited=bhunakshaCooldown(response);
         if (!response.ok) {
           await response.body?.cancel();
@@ -206,16 +214,22 @@ export function makeBhunakshaPlotReader(fetcher=fetch) {
         if (error instanceof PortalError && error.status===429) throw error;
         continue;
       }
-      if (!data || typeof data!=='object' || !data.plotid) continue;
-      if (String(data.giscode)!==gis || data.plotid!==parcel.id ||
-          normalizeMapNumber(data.plotno)!==normalizeMapNumber(parcel.number)) {
+      if (!data || typeof data!=='object') continue;
+      if (method==='GET' && data.has_data==='N') reportedMissing=true;
+      if (method==='GET' && data.has_data!=='Y') continue;
+      const [id,code,number,links]=method==='GET'
+        ? [data.ID,data.gisCode,data.plotNo,data.plotInfoLinks]
+        : [data.plotid,data.giscode,data.plotno,data.infoLinks];
+      if (!id) continue;
+      if (String(code)!==gis || id!==parcel.id || normalizeMapNumber(number)!==normalizeMapNumber(parcel.number)) {
         throw new PortalError('BhuNaksha could not verify the selected parcel.',502);
       }
-      const khata=plotKhata(data.infoLinks,location);
-      return {info:plotText(data.info),area:plotText(data.formatedArea),khata,
-        front:khata?officialRoR(location,khata,'front'):'',back:khata?officialRoR(location,khata,'back'):''};
+      const info=plotText(data.info), area=plotText(data.formatedArea), khata=plotKhata(links,location);
+      if (!info && !area && !khata) continue;
+      return {info,area,khata,front:khata?officialRoR(location,khata,'front'):'',back:khata?officialRoR(location,khata,'back'):''};
     }
-    throw new PortalError('BhuNaksha did not return Plot Info for this parcel.',502);
+    if (reportedMissing) throw new PortalError('The official viewer reported no Plot Info for this plot number.',404);
+    throw new PortalError('India Land Search couldn’t retrieve Plot Info from BhuNaksha.',502);
   };
 }
 
@@ -452,8 +466,9 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
             typeof number!=='string' || number.length>120 || !/^[\p{L}\p{M}\p{N}./-]{1,80}$/u.test(normalizeMapNumber(number))) {
           return json(400,{error:'Choose a valid parcel on the map.'});
         }
+        const portal=new URL('#home-pane',officialMapBase(districtCode)).href;
         const wait=Math.ceil((mapPausedUntil-Date.now())/1000);
-        if (wait>0 || plotBusy) return json(429,{error:'BhuNaksha is busy. Try Plot Info again shortly.'},{'Retry-After':String(Math.max(1,wait))});
+        if (wait>0 || plotBusy) return json(429,{error:'BhuNaksha is busy. Try Plot Info again shortly.',portal},{'Retry-After':String(Math.max(1,wait))});
         plotBusy=true;
         try {
           return json(200,await readPlot(location,sheet,{id,number}));
@@ -461,9 +476,10 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
           if (error.status===429) {
             const seconds=error.retryAfter??60;
             mapPausedUntil=Date.now()+seconds*1000;
-            return json(429,{error:'BhuNaksha asked us to wait before loading Plot Info.'},{'Retry-After':String(seconds)});
+            return json(429,{error:'BhuNaksha asked us to wait before loading Plot Info.',portal},{'Retry-After':String(seconds)});
           }
-          return json(502,{error:error instanceof PortalError?error.message:'BhuNaksha Plot Info is temporarily unavailable.'});
+          return json(error instanceof PortalError?error.status:502,
+            {error:error instanceof PortalError?error.message:'BhuNaksha Plot Info is temporarily unavailable.',portal});
         } finally {
           plotBusy=false;
         }
