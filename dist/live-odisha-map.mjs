@@ -121,7 +121,12 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     if (!number) {
       plotInfo.innerHTML=heading+'<p>BhuNaksha did not supply a plot number for this parcel.</p>';
     } else if (plotError) {
-      plotInfo.innerHTML=heading+match+'<p>'+escape(plotError)+'</p><button type="button" class="plain-link" data-retry-plot>Retry Plot Info</button>';
+      const guidance=plotError.portal
+        ? '<p>In BhuNaksha, select '+escape(currentPlace().village)+', sheet '+escape(geometry.sheet)+', then search for plot '+escape(number)+'.</p>'
+        : '';
+      plotInfo.innerHTML=heading+match+'<p>'+escape(plotError.message)+'</p>'+guidance+
+        '<div class="actions"><button type="button" class="plain-link" data-retry-plot>Retry Plot Info</button>'+
+        tag(plotError.portal,'Open official BhuNaksha viewer')+'</div>';
       plotInfo.querySelector('[data-retry-plot]').onclick=()=>{plotError='';showPlotInfo();void loadSelectedPlot();};
     } else if (!entry) {
       plotInfo.innerHTML=heading+match+'<p>Loading the official Plot Info…</p>';
@@ -144,7 +149,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
       const response=await fetch('/api/odisha/maps',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({location,sheet:current.sheet,parcel:{id:plot.id,number:plot.kide}})});
       const data=await response.json();
-      if (!response.ok) throw Error(data.error||'BhuNaksha Plot Info is unavailable.');
+      if (!response.ok) throw Object.assign(Error(data.error||'BhuNaksha Plot Info is unavailable.'),{portal:data.portal});
       const matches=matchRows([{status:'Retrieved',info:data.info}],{names:searchNames})[0].full;
       if (details.size>=100) details.delete(details.keys().next().value);
       details.set(key,{data,matches});
@@ -154,7 +159,10 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
         if (currentPlace()===place) {render();refreshBasemap();}
       }
     } catch (error) {
-      if (selectedKey()===key) plotError=error instanceof SyntaxError?'The Plot Info response could not be read.':error.message;
+      if (selectedKey()===key) plotError={
+        message:error instanceof SyntaxError?'The Plot Info response could not be read.':error.message,
+        portal:error.portal
+      };
     } finally {
       loadingPlot=false;
       if (!root.isConnected) return;
