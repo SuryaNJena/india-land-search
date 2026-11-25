@@ -25,5 +25,5 @@ await Promise.all([
 ]);
 const worker = await import(`data:text/javascript;base64,${Buffer.from(bundle).toString('base64')}`);
 const home = await worker.default.fetch(new Request('https://landreview.example/'));
-if (!home.ok || !(await home.text()).includes('<title>LandReview</title>')) throw Error('The Worker did not serve the homepage.');
+if (!home.ok || !(await home.text()).includes('<title>India Land Search</title>')) throw Error('The Worker did not serve the homepage.');
 console.log(`Built the Sites Worker with ${Object.keys(assets).length} asset routes.`);

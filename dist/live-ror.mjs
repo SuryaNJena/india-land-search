@@ -30,7 +30,7 @@ export async function printHoldings(holdings,status,button) {
   windowRef.opener=null;
   const doc=windowRef.document;
   doc.documentElement.lang='or';
-  doc.title='LandReview Records of Rights';
+  doc.title='India Land Search Records of Rights';
   const style=doc.createElement('style');
   style.textContent='@page{size:A4 landscape;margin:12mm}body{font:12px "Nirmala UI","Noto Sans Oriya",sans-serif;color:#111}section+section{break-before:page}table{border-collapse:collapse;max-width:100%}td,th{border:1px solid #555;padding:4px;overflow-wrap:anywhere}tr{break-inside:avoid}h1{font-size:16px}a{color:inherit}';
   doc.head.append(style);

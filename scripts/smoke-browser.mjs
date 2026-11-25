@@ -53,7 +53,7 @@ try {
   const mapDownload = page.waitForEvent('download');
   await click('Export map PDF');
   const map = await mapDownload;
-  assert.equal(map.suggestedFilename(),'LandReview_Village_Maps.pdf');
+  assert.equal(map.suggestedFilename(),'India_Land_Search_Village_Maps.pdf');
   await click('Home');
   await click('Open sample RoRs');
   const recordsDownload = page.waitForEvent('download');

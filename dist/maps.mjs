@@ -57,8 +57,8 @@ export async function makeMapPDF(sheets,geometry,results,plain) {
     if (!features.length) continue;
     const page = doc.addPage([842,1191]);
     page.drawText(text(`${sheet.name} ${sheet.village} | Sheet ${sheet.sheet}`),{x:39,y:1134,size:23,font:bold,color:colour('#193b30')});
-    page.drawText(`${features.length} mapped plot entries | ${plain?'Uncoloured overview':'Name and source criteria overview'}`,{x:40,y:1109,size:11,font});
-    if (!plain) Object.entries({full:'Specific name',surname:'Surname',none:'Not selected',missing:'Missing info'}).forEach(([key,label],i)=>{
+    page.drawText(text(sheet.source?`${sheet.source} | ${sheet.gis}${sheet.captured?` | Saved ${sheet.captured}`:''} | ${features.length} parcels`:`${features.length} mapped plot entries | ${plain?'Uncoloured overview':'Name and source criteria overview'}`),{x:40,y:1109,size:11,font});
+    if (!plain) Object.entries(sheet.source?{full:'RoR match',missing:'Other parcel'}:{full:'Specific name',surname:'Surname',none:'Not selected',missing:'Missing info'}).forEach(([key,label],i)=>{
       const x=40+i*154;
       page.drawRectangle({x,y:1083,width:11,height:11,color:colour(colours[key]),borderWidth:.5,borderColor:colour('#64796c')});
       page.drawText(label,{x:x+17,y:1084,size:9,font});
@@ -74,7 +74,7 @@ export async function makeMapPDF(sheets,geometry,results,plain) {
       const label=text(feature.properties?.kide);
       if(label) page.drawText(label,{x:centre[0]-font.widthOfTextAtSize(label,6)/2,y:1058-centre[1],size:6,font,color:colour('#243c33')});
     }
-    page.drawText(sheet.demo?'LandReview | FICTIONAL DEMO - NOT AN OFFICIAL MAP':'LandReview | Source cadastral geometry | Local sheet coordinates | Review copy',{x:40,y:35,size:9,font});
+    page.drawText(sheet.demo?'India Land Search | FICTIONAL DEMO - NOT AN OFFICIAL MAP':'India Land Search | Source cadastral geometry | Review copy',{x:40,y:35,size:9,font});
   }
   if (!doc.getPageCount()) throw Error('This workspace has no importable map geometry.');
   return doc.save();

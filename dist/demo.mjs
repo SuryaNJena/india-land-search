@@ -43,7 +43,7 @@ export async function loadDemoWorkspace() {
       const lines=side==='Front' ? [demoPlace.village,`Example holder: ${khata==='9'?'Asha Jena':'Gopal Yena'}`]
         : ['Example plot schedule',`Plots: ${rows.map(row=>row.plot).join(', ')}`];
       lines.forEach((line,i)=>page.drawText(line,{x:48,y:662-i*27,size:14,font}));
-      page.drawText('LandReview demonstration. All names, plots, and holdings on this page are fictional.',{x:48,y:48,size:10,font});
+      page.drawText('India Land Search demonstration. All names, plots, and holdings on this page are fictional.',{x:48,y:48,size:10,font});
       files.push(new Blob([await document.save()],{type:'application/pdf'}));
     }
     workspace.pdfs[parcelKey(rows[0])]={name:`LandReview_Demo_Khata_${khata}.pdf`,bytes:await mergeROR(...files)};

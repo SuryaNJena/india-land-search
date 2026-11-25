@@ -135,7 +135,11 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
       const missing=failures.length?`<ul>${failures.map(([location,error])=>`<li>${escape(location.village)} · ${escape(error)}</li>`).join('')}</ul>`:'';
       const maps=busy?[]:completed.map(item=>item.location).filter(location=>location.riCode);
       results.innerHTML = `<h3>Live Odisha tenant search</h3>${busy?'':`<p role="status">${escape(message)}</p>`}<p>${count.format(completed.length)} of ${count.format(targets.length)} selected ${targets.length===1?'village':'villages'} checked${completed.length?` · ${count.format(hitCount)} matching tenant ${hitCount===1?'entry':'entries'}`:''}.</p>${busy?'<button class="button secondary" id="cancel-live">Cancel search</button>':''}${signin?'<a class="button primary" target="_top" href="/signin-with-chatgpt?return_to=%2F">Continue with ChatGPT</a>':''}${maps.length?'<details class="live-location live-map"></details>':''}${groups}${missing}${tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal')}`;
-      if (maps.length) mountLiveOdishaMap(results.querySelector('.live-map'),maps,escape,tag);
+      if (maps.length) {
+        const holdings=new Map(completed.filter(item=>item.location.riCode)
+          .map(item=>[item.location.id,item.hits.map(hit=>hit.khata).filter(Boolean)]));
+        mountLiveOdishaMap(results.querySelector('.live-map'),maps,escape,tag,new Map(),holdings);
+      }
       results.querySelector('#cancel-live')?.addEventListener('click',()=>{abort.abort();paint('Search stopped. Completed villages are listed below.',false);});
       results.querySelectorAll('[data-more]').forEach(button=>{button.onclick=()=>{
         const i=Number(button.dataset.more), start=shown.get(i)??100, hits=completed[i].hits;
@@ -153,7 +157,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
         if (response.status===401) { paint('Sign in to run the saved live search, then select Search again.',false,true); return; }
         if (!response.ok) {
           failures.push([location,item.error||'The village could not be checked.']);
-          if (response.status===429) { paint('The search paused because Bhulekh or LandReview is busy.',false); return; }
+          if (response.status===429) { paint('The search paused because Bhulekh or India Land Search is busy.',false); return; }
         } else completed.push(item);
       } catch {
         if (abort.signal.aborted || !active()) return;

@@ -63,5 +63,5 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
   const port = Number(process.argv[2] ?? 8080);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Specify a valid port, or omit it for 8080.');
   const {url} = await serveRelease(fileURLToPath(new URL('./site/',import.meta.url)), port);
-  console.log('LandReview local demo: ' + new URL('?demo=1', url));
+  console.log('India Land Search local demo: ' + new URL('?demo=1', url));
 }

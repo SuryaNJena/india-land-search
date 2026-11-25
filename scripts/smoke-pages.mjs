@@ -13,7 +13,7 @@ async function asset(path, type) {
 }
 try {
   const home = await (await asset('?demo=1', /^text\/html/)).text();
-  assert.match(home, /<title>LandReview<\/title>/);
+  assert.match(home, /<title>India Land Search<\/title>/);
   assert.match(home, /src="app\.mjs"/);
   await asset('app.mjs', /^text\/javascript/);
   await asset('style.css', /^text\/css/);

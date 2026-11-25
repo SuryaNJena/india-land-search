@@ -95,7 +95,7 @@ const directoryResult = await directorySite.fetch(directoryRequest);
 assert.equal(directoryResult.status,200);
 assert.equal((await directoryResult.json()).options[0].code,'2');
 const mapReader=makeBhunakshaReader(async (url,options)=>{
-  if (url.pathname.endsWith('ScalarDatahandler')) {assert.equal(url.searchParams.get('selections'),'3,11,8,102,');return new Response('<option value="01">01</option>');}
+  if (url.pathname.endsWith('ScalarDatahandler')) {assert.equal(options.method,'POST');assert.equal(options.body.get('selections'),'3,11,8,102');return new Response('<select id="level_5"><option value="01">01</option></select>');}
   assert.equal(options.body.get('giscode'),'03110810201');
   return Response.json({features:[{properties:{...geometry.demo.features[0].properties,info:'Discarded map metadata'},geometry:geometry.demo.features[0].geometry}]});
 });
