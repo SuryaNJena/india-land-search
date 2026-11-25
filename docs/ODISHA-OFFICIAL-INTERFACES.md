@@ -114,3 +114,11 @@ All 45 automated tests, both builds, the offline verifier, Pages smoke, and
 Chromium passed. Live probes confirmed base and selected BhuNaksha images,
 a blocked cross-origin Plot Info fetch, and a browser-readable Bhulekh report.
 Browser evidence includes `06-odisha-official-sources.png`.
+
+### Integration with the standalone Pages release
+
+The Pages build uses its browser-only runtime and permits only the required
+Bhulekh report origin and district BhuNaksha image origins. The hosted app
+retains signed-out village lookup. Chromium passed the imported workspace,
+native WMS, exact Plot Info import, direct RoR and signed-out hosted fixtures.
+All 49 Node tests, the verifier, both builds, and the Pages smoke check passed.

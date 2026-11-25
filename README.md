@@ -17,20 +17,36 @@ The Pages app needs no sign-in or search server. Fresh lookups use the official
 sources where the browser can read them. Saved workspaces and name searches stay
 in your browser. [Odisha source interfaces and coverage](docs/ODISHA-OFFICIAL-INTERFACES.md)
 
-## Try the challenge demo
+## Search and review your records
 
-1. Download `LandReview-portable.zip` from the [latest release](https://github.com/SuryaNJena/india-land-search/releases/latest) and extract it.
-2. Run `node serve.mjs` from the extracted folder using Node.js 24. Open the printed demo URL in a browser.
-3. Click **Find sample village**, choose **Anandapur Sample**, and select **Review name variants**. Approve spellings or use **Clear all**, then choose **Search loaded records**.
-4. Open the matched map and export its overview. In **Records of Rights**, choose **Download selected RoRs (PDF)** to download both sides of two fictional khatas in one file.
+1. Import a LandReview workspace ZIP, compatible JSON, or an Excel workbook with
+   a **Plots** tab. Existing v1 backups are supported.
+2. On **Home**, choose a state, enter names and review spelling suggestions.
+   Leave location blank to search all loaded records for that state.
+3. Choose **Show matches on map** where parcel shapes are available. Click a
+   parcel or enter its exact number to inspect the saved Plot Info and RoR links.
+4. Use **Village maps** for matched sheet PDFs, **Plot records** for Excel, and
+   **Records of Rights** to combine saved PDFs from selected khatas.
 
-The demo uses fictional records and runs without an account, uploads, or government portal requests. The regular app includes a public Odisha village directory and official links for map-point and plot-ID lookups. Verified RI and land-record portal codes cover selected villages. Statewide live ownership search needs verified production data. [Data-source research](docs/DATA-SOURCES.md)
+The Odisha village directory and dated geometry for selected sheets are bundled.
+A geometry snapshot joins by exact sheet, parcel ID, and plot number. A
+compatible workspace may supply its own parcel geometry or WGS84 GeoJSON for
+the geographic view. Workspace searches use your imported records. The Odisha source tools can also show fresh records by exact location and identifier.
 
-## Odisha cadastral maps
+The app runs in the browser on GitHub Pages. Searches, imported records and PDFs
+stay local. A [fictional demo](https://suryanjena.github.io/india-land-search/?demo=1)
+has sample plots, a map, and two RoRs ready to export.
 
-In a signed-in Bhulekh search, open **BhuNaksha village map**, select the matched khatas, and choose **Highlight plots from Bhulekh RoR**. Download the current vector sheet or the village PDF containing only sheets with matched plots. The app uses BhuNaksha’s sheet directory and parcel geometry and joins the official back schedule by exact plot number. A dated geometry-only fallback covers Kapaleswar sheets 01–03 if the map host is unavailable.
+## Hosted edition
 
-The **Geographic map and location pins** panel accepts a manual or device location. OpenStreetMap tiles load only when enabled. For a parcel overlay, add WGS84 GeoJSON with the current sheet's `giscode` and matching parcel `id` or plot `kide`. Coordinates remain in the browser unless you enable map tiles or open a provider link. BhuNaksha returned no usable WGS84 extent for Kapaleswar sheets 01–03. Keep its cadastral PDF in local sheet coordinates or consult [ORSAC’s georeferenced viewer](https://www.odishakyl.in/mapview.php).
+The separate hosted edition retains signed-out Bhulekh village lookup and BhuNaksha maps. The GitHub Pages build uses local records, snapshots and official portal links. [Data sources](docs/DATA-SOURCES.md)
+
+## Move an existing workspace
+
+On your previous installation, choose **Back up workspace** to download a ZIP.
+Open GitHub Pages and choose **Import records** to restore it. Browser storage
+is tied to the site address, so repeat this on each device that has a workspace
+you want to keep.
 
 ## Develop and verify
 
@@ -39,15 +55,16 @@ Use Node.js 24 from the repository root.
 ```sh
 node --test
 node verify.mjs
-node build.mjs
 node build-pages.mjs
 node scripts/smoke-pages.mjs
 ```
 
-The static build works under a repository subpath. See the [deployment guide](docs/DEPLOYMENT.md), [contributor guide](AGENTS.md), [release checklist](docs/RELEASE-CHECKLIST.md), and [Codex evidence pack](docs/CODEX-EVIDENCE.md).
+See the [deployment guide](docs/DEPLOYMENT.md), [contributor guide](AGENTS.md),
+and [Codex evidence pack](docs/CODEX-EVIDENCE.md).
 
-## Records and attribution
+## Attribution
 
-Imported LandReview ZIP, compatible JSON, and Excel workspaces stay in the browser. Workspaces back up to a checksum-validated ZIP. Retain original signed documents and verify records using the official source.
-
-Name suggestions use curated rules and [Sanscript](https://github.com/indic-transliteration/sanscript.js) v1.3.3 under MIT. The reference India map uses simplified [geoBoundaries India ADM1](https://www.geoboundaries.org/api/current/gbOpen/IND/ADM1/) paths sourced from DataMeet India and the Election Commission of India under [CC BY 2.5 India](https://creativecommons.org/licenses/by/2.5/in/).
+Name suggestions use curated rules and [Sanscript](https://github.com/indic-transliteration/sanscript.js)
+v1.3.3 under MIT. India boundary paths are adapted from
+[geoBoundaries India ADM1](https://www.geoboundaries.org/api/current/gbOpen/IND/ADM1/)
+under [CC BY 2.5 India](https://creativecommons.org/licenses/by/2.5/in/).

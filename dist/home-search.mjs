@@ -34,7 +34,7 @@ function parcelAt(canvas, event, hits) {
   return hits.findLast(({path}) => context.isPointInPath(path, x, y, 'evenodd'))?.key;
 }
 
-export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openOfficial, importRecords}) {
+export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMap, openOfficial, importRecords}) {
   const index = searchIndex(workspace);
   if (!criteria.state && workspace) {
     const known = new Set(index.map(x => x.state).filter(Boolean));
@@ -126,7 +126,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openOf
     const completed = [], failures = [], shown = new Map();
     const active = () => liveSearch===abort && root.isConnected;
     const listItems = hits => hits.map(hit=>`<li>${escape(hit.tenant)} <span class="muted">· ${escape(hit.matched.join(', '))}</span>${hit.khata?`<div class="actions live-ror-links"><span class="muted">Khata ${escape(hit.khata)}</span>${tag(hit.front,'RoR front')}${tag(hit.back,'RoR back')}</div>`:''}</li>`).join('');
-    function paint(message, busy, signin=false) {
+    function paint(message, busy) {
       if (!active()) return;
       feedback.textContent=busy ? message : '';
       submitButton.disabled=liveButton.disabled=busy;
@@ -138,7 +138,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openOf
       }).join('');
       const missing=failures.length?`<ul>${failures.map(([location,error])=>`<li>${escape(location.village)} · ${escape(error)}</li>`).join('')}</ul>`:'';
       const maps=busy?[]:completed.map(item=>item.location).filter(location=>location.riCode);
-      results.innerHTML = `<h3>Live Odisha tenant search</h3>${busy?'':`<p role="status">${escape(message)}</p>`}<p>${count.format(completed.length)} of ${count.format(targets.length)} selected ${targets.length===1?'village':'villages'} checked${completed.length?` · ${count.format(hitCount)} matching tenant ${hitCount===1?'entry':'entries'}`:''}.</p>${busy?'<button class="button secondary" id="cancel-live">Cancel search</button>':''}${signin?'<a class="button primary" target="_top" href="/signin-with-chatgpt?return_to=%2F">Continue with ChatGPT</a>':''}${maps.length?'<details class="live-location live-map"></details>':''}${groups}${missing}${tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal')}`;
+      results.innerHTML = `<h3>Live Odisha tenant search</h3>${busy?'':`<p role="status">${escape(message)}</p>`}<p>${count.format(completed.length)} of ${count.format(targets.length)} selected ${targets.length===1?'village':'villages'} checked${completed.length?` · ${count.format(hitCount)} matching tenant ${hitCount===1?'entry':'entries'}`:''}.</p>${busy?'<button class="button secondary" id="cancel-live">Cancel search</button>':''}${maps.length?'<details class="live-location live-map"></details>':''}${groups}${missing}${tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal')}`;
       if (maps.length) {
         const holdings=new Map(completed.filter(item=>item.location.riCode)
           .map(item=>[item.location.id,item.hits.map(hit=>hit.khata).filter(Boolean)]));
@@ -158,7 +158,6 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openOf
       try {
         const response=await fetch('/api/odisha/tenant-search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:location.id,names}),signal:abort.signal});
         const item=await response.json();
-        if (response.status===401) { paint('Sign in to run the saved live search, then select Search again.',false,true); return; }
         if (!response.ok) {
           failures.push([location,item.error||'The village could not be checked.']);
           if (response.status===429) { paint('The search paused because Bhulekh or India Land Search is busy.',false); return; }
@@ -194,6 +193,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openOf
       results.innerHTML = `<div class="empty"><strong>${found.searchable ? 'No names matched in the loaded records.' : 'The loaded entries have no searchable plot text.'}</strong>${coverage}</div>`;
       return;
     }
+    const mapped=found.hits.filter(({index:i})=>workspace.geometry?.[workspace.rows[i].gis]?.features?.length);
     const pageSize = 40;
     const showPage = page => {
       const start = page * pageSize;
@@ -201,8 +201,9 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openOf
         const row = workspace.rows[hit.index];
         return `<tr><td>${escape(row.village || '—')} <span class="muted">${escape(row.sheet ? `/ ${row.sheet}` : '')}</span></td><td><button type="button" class="plain-link" data-search-plot="${hit.index}">${escape(row.plot || row.id)}</button></td><td>${escape(row.khata || '—')}</td><td>${escape(hit.terms.join(' · '))}</td></tr>`;
       }).join('');
-      results.innerHTML = `<h3>${count.format(found.hits.length)} matching plot ${found.hits.length === 1 ? 'entry' : 'entries'}</h3>${coverage}<div class="table-scroll"><table><thead><tr><th>Village / sheet</th><th>Plot</th><th>Khata</th><th>Matched names</th></tr></thead><tbody>${rows}</tbody></table></div>
+      results.innerHTML = `<h3>${count.format(found.hits.length)} matching plot ${found.hits.length === 1 ? 'entry' : 'entries'}</h3>${coverage}${mapped.length?'<button type="button" class="button secondary" data-result-map>Show matches on map</button>':''}<div class="table-scroll"><table><thead><tr><th>Village / sheet</th><th>Plot</th><th>Khata</th><th>Matched names</th></tr></thead><tbody>${rows}</tbody></table></div>
         <div class="pagination"><span class="muted">${start+1}–${Math.min(start+pageSize, found.hits.length)} of ${count.format(found.hits.length)}</span><div class="actions"><button class="button secondary" data-page="${page-1}" ${!page ? 'disabled' : ''}>Previous</button><button class="button secondary" data-page="${page+1}" ${start+pageSize >= found.hits.length ? 'disabled' : ''}>Next</button></div></div>`;
+      results.querySelector('[data-result-map]')?.addEventListener('click',()=>openMap(mapped));
       results.querySelectorAll('[data-search-plot]').forEach((button, i) => { button.onclick = () => openPlot(found.hits[start+i].index, found.hits[start+i].terms); });
       results.querySelectorAll('[data-page]').forEach(button => { button.onclick = () => showPage(Number(button.dataset.page)); });
     };

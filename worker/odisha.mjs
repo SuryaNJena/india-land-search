@@ -300,9 +300,9 @@ export function readBhulekhPlotSchedule(html) {
   return header ? [...plots] : null;
 }
 
-export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),readPlot=makeBhunakshaPlotReader(),mapSnapshots={villages:{}},nameLimit=1000,requireIdentity=true,readIndex,fetchReport=fetch}) {
+export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),readPlot=makeBhunakshaPlotReader(),mapSnapshots={villages:{}},nameLimit=1000,readIndex,fetchReport=fetch}) {
   const cache = new Map(), mapCache = new Map();
-  let busyUntil = 0, pausedUntil = 0, mapPausedUntil = 0, plotBusy = false;
+  let busyUntil = 0, pausedUntil = 0, mapPausedUntil = 0, mapBusy = false;
   const json = (status, value, headers = {}) => Response.json(value,{status,headers:{'Cache-Control':'no-store',...headers}});
   return {async fetch(request, env = {}) {
     const url = new URL(request.url);
@@ -322,8 +322,6 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
     }
     if (request.method!=='POST') return json(405,{error:'Use POST for the tenant search.'},{Allow:'POST'});
     if (origin!==url.origin && !pages) return json(403,{error:'Run the search from the India Land Search site.'});
-    const signedIn=Boolean(request.headers.get('oai-authenticated-user-id'));
-    if (requireIdentity && !indexed && !report && !(map && env.DB) && !signedIn) return json(401,{error:'Sign in with ChatGPT to run a live search.'});
     if (!request.headers.get('content-type')?.startsWith('application/json')) return json(415,{error:'Expected a JSON search.'});
     let input;
     try {
@@ -367,14 +365,12 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
     if (report) {
       const {khata,side}=input;
       const plotsOnly=input.plots===true && side==='back';
-      const scoped=plotsOnly && signedIn;
       const official=typeof khata==='string' && officialRoR(location,khata,side);
       if (!official) return json(400,{error:'Select an indexed khata and a record side.'});
       const db=env.DB;
-      if (plotsOnly && !signedIn) return json(401,{error:'Sign in to load plots from the official RoR.'});
-      if (!db && !scoped) return json(503,{error:'The Odisha index is unavailable.'});
+      if (!db && !plotsOnly) return json(503,{error:'The Odisha index is unavailable.'});
       try {
-        if (!scoped) {
+        if (!plotsOnly) {
           const holding=await db.prepare('SELECT 1 FROM landreview_holdings h JOIN landreview_active a ON a.version=h.version WHERE h.village=? AND h.khata=? LIMIT 1').bind(location.id,khata).first();
           if (!holding) return json(404,{error:'This khata is unavailable in the index.'});
         }
@@ -431,14 +427,6 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       }
     }
     if (map) {
-      if (requireIdentity && !signedIn) {
-        try {
-          const valid=await env.DB.prepare('SELECT 1 FROM landreview_villages v JOIN landreview_active a ON a.version=v.version WHERE v.code=? AND v.ri=?').bind(parts.slice(0,3).join('-'),riCode).first();
-          if (!valid) return json(404,{error:'This map location is unavailable in the index.'});
-        } catch {
-          return json(503,{error:'The index could not verify this map location.'});
-        }
-      }
       const sheet=input.sheet??'';
       if (typeof sheet!=='string' || (sheet && !/^\d{1,3}$/.test(sheet))) return json(400,{error:'Choose a BhuNaksha sheet.'});
       if (Object.hasOwn(input,'parcel')) {
@@ -449,8 +437,8 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
         }
         const portal=new URL('#home-pane',officialMapBase(districtCode)).href;
         const wait=Math.ceil((mapPausedUntil-Date.now())/1000);
-        if (wait>0 || plotBusy) return json(429,{error:'BhuNaksha is busy. Try Plot Info again shortly.',portal},{'Retry-After':String(Math.max(1,wait))});
-        plotBusy=true;
+        if (wait>0 || mapBusy) return json(429,{error:'BhuNaksha is busy. Try Plot Info again shortly.',portal},{'Retry-After':String(Math.max(1,wait))});
+        mapBusy=true;
         try {
           return json(200,await readPlot(location,sheet,{id,number}));
         } catch(error) {
@@ -462,12 +450,14 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
           return json(error instanceof PortalError?error.status:502,
             {error:error instanceof PortalError?error.message:'BhuNaksha Plot Info is temporarily unavailable.',portal});
         } finally {
-          plotBusy=false;
+          mapBusy=false;
         }
       }
       const key=`${location.id}/${sheet}`, cached=mapCache.get(key);
       if (cached && Date.now()-cached.at<(cached.data.captured?300000:3600000)) return json(200,cached.data);
+      if (mapBusy) return json(429,{error:'Another BhuNaksha lookup is running. Try again shortly.'},{'Retry-After':'1'});
       let data;
+      mapBusy=true;
       try {
         if (Date.now()<mapPausedUntil) {
           throw new PortalError('BhuNaksha asked India Land Search to wait before fetching maps.',429);
@@ -483,6 +473,8 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
         }
         const captured=sheet?saved.captured:Object.values(village).map(item=>item.captured).filter(Boolean).sort().at(-1);
         data={...saved,captured:captured??mapSnapshots.collected};
+      } finally {
+        mapBusy=false;
       }
       mapCache.delete(key);
       if (mapCache.size>=4) mapCache.delete(mapCache.keys().next().value);

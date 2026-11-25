@@ -12,14 +12,13 @@ test('Official plot schedule selects only column 8, normalizes Odia digits, and 
   assert.deepEqual(readBhulekhPlotSchedule(schedule),['12/3','12']);
   assert.equal(readBhulekhPlotSchedule(schedule.replace('<th>8</th>','<th>7</th>')),null);
 });
-test('Signed-in scoped map matches receive only plot IDs from the fixed official back report',async()=>{
+test('Anonymous scoped map matches receive only plot IDs from the fixed official back report',async()=>{
   const calls=[];
   const worker=makeLandReviewWorker({assets:{},fetchReport:async url=>{calls.push(new URL(url));return new Response(schedule);}});
-  const req=signed=>new Request('https://sample.example/api/odisha/ror',{method:'POST',
-    headers:{'content-type':'application/json',origin:'https://sample.example',...(signed?{'oai-authenticated-user-id':'sign-in'}:{})},
+  const req=()=>new Request('https://sample.example/api/odisha/ror',{method:'POST',
+    headers:{'content-type':'application/json',origin:'https://sample.example'},
     body:JSON.stringify({location:'19-3-79',khata:'234/1',side:'back',plots:true})});
-  assert.equal((await worker.fetch(req(false))).status,401);
-  const response=await worker.fetch(req(true));
+  const response=await worker.fetch(req());
   assert.equal(response.status,200);
   assert.deepEqual(await response.json(),{plots:['12/3','12']});
   assert.equal(calls[0].origin,'https://bhulekh.ori.nic.in');

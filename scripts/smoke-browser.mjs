@@ -20,15 +20,16 @@ try {
   const context = await browser.newContext({acceptDownloads:true, serviceWorkers:'block', viewport:{width:1440,height:1000}});
   const external = [];
   const errors = [];
-  await context.route('**/*', route => {
+  const offlineGuard=route=>{
     const destination = new URL(route.request().url());
     if (destination.origin !== url.origin) {
       external.push(destination.origin);
       return route.abort();
     }
     return route.continue();
-  });
-  const page = await context.newPage();
+  };
+  await context.route('**/*',offlineGuard);
+  let page = await context.newPage();
   page.setDefaultTimeout(8000);
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(new URL('?demo=1',url).href);
@@ -68,6 +69,51 @@ try {
     await map.saveAs(resolve(evidence,map.suggestedFilename()));
     await page.screenshot({path:resolve(evidence,'03-roR-export.png'),fullPage:true});
   }
+  await page.goto(url.href);
+  await page.getByLabel('State or union territory').selectOption('Odisha');
+  await page.getByLabel('Names or surnames').fill('ଫିକ୍ସଚର');
+  await click('Search loaded records');
+  await page.getByRole('button',{name:'Import records for Odisha'}).waitFor();
+  await page.locator('#file').setInputFiles({
+    name:'saved-workspace.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({
+      title:'Saved record fixture',state:'Odisha',
+      rows:[{id:'parcel',gis:'fixture',village:'Fixture Village',sheet:'01',plot:'12/3',khata:'9',
+        info:'ଫିକ୍ସଚର ଜେନା',status:'Retrieved',front:'https://bhulekh.ori.nic.in/ViewRoR.aspx?type=front'}],
+      summary:[{gis:'fixture',name:'Fixture Village',sheet:'01'}],
+      geometry:{fixture:{features:[{properties:{id:'parcel',kide:'12/3'},geometry:{type:'Polygon',
+        coordinates:[[[0,0],[10,0],[10,8],[0,8],[0,0]]]}}]}},
+      rules:{names:[],surnames:[]}
+    }))
+  });
+  await page.getByRole('heading',{name:'1 matching plot entry',exact:true}).waitFor();
+  await click('Show matches on map');
+  await page.getByRole('heading',{name:'Village overviews',exact:true}).waitFor();
+  await click('Zoom in');
+  await page.getByText('141%',{exact:true}).waitFor();
+  await click('Zoom in');
+  await page.getByText('200%',{exact:true}).waitFor();
+  await click('Fit sheet');
+  await page.getByText('100%',{exact:true}).waitFor();
+  await page.getByRole('searchbox',{name:'Find plot number'}).fill('୧୨/୩');
+  await click('Find plot');
+  await page.getByRole('heading',{name:'Plot Info · 12/3',exact:true}).waitFor();
+  await page.getByText('ଫିକ୍ସଚର ଜେନା',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('link',{name:'Official RoR front',exact:true}).getAttribute('href'),'https://bhulekh.ori.nic.in/ViewRoR.aspx?type=front');
+  if (evidence) await page.screenshot({path:resolve(evidence,'04-pages-imported-map.png'),fullPage:true});
+  await page.getByText('Geographic parcels and reference pin',{exact:true}).click();
+  await page.getByLabel('Latitude',{exact:true}).fill('20.5');
+  await page.getByLabel('Longitude',{exact:true}).fill('86.4');
+  await click('Set coordinate pin');
+  await page.getByText('Coordinate pin · 20.500000, 86.400000',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Show OpenStreetMap'}).count(),0);
+  await page.reload();
+  await page.getByRole('heading',{name:'Saved record fixture',exact:true}).waitFor();
+  await context.close();
+  const hostedContext=await browser.newContext({acceptDownloads:true,serviceWorkers:'block',viewport:{width:1440,height:1000}});
+  await hostedContext.route('**/*',offlineGuard);
+  page=await hostedContext.newPage();
+  page.setDefaultTimeout(8000);
+  page.on('pageerror',error=>errors.push(error.message));
   const mapPage=new URL('interactive-map-smoke',url);
   await page.route(mapPage.href,route=>route.fulfill({contentType:'text/html',body:
     '<!doctype html><title>Interactive Odisha map fixture</title><link rel="stylesheet" href="./style.css">'+
@@ -191,9 +237,40 @@ try {
   await page.getByText('Fixture schedule',{exact:true}).waitFor();
   assert.deepEqual(officialCalls,['VILLAGE_MAP','PLOT_LIST','front','back']);
   if (evidence) await page.screenshot({path:resolve(evidence,'06-odisha-official-sources.png'),fullPage:true});
-  assert.deepEqual(external, [], 'The browser smoke made an unexpected external request');
+  await page.route(new URL('runtime.mjs',url).href,route=>route.fulfill({
+    contentType:'text/javascript',body:"export const runtime={hosted:true,indexBase:'',pages:false};"
+  }));
+  const usedLocations=[];
+  await page.route('**/api/odisha/locations',route=>{
+    assert.equal(route.request().headers()['oai-authenticated-user-id'],undefined);
+    const {location}=route.request().postDataJSON();
+    usedLocations.push(location);
+    const option={'':['19','Fixture district'],'19':['3','Fixture tehsil'],'19-3':['79','Fixture village']}[location];
+    return route.fulfill({json:{options:[{code:option[0],label:option[1]}]}});
+  });
+  await page.route('**/api/odisha/tenant-search',route=>{
+    assert.equal(route.request().headers()['oai-authenticated-user-id'],undefined);
+    assert.deepEqual(route.request().postDataJSON(),{location:'19-3-79',names:['ଫିକ୍ସଚର']});
+    return route.fulfill({json:{location:{id:'19-3-79',districtCode:'19',tehsilCode:'3',villageCode:'79',village:'Fixture village',district:'Fixture district',tehsil:'Fixture tehsil'},checked:1,
+      hits:[{tenant:'ଫିକ୍ସଚର ଜେନା',matched:['ଫିକ୍ସଚର'],khata:''}]}});
+  });
+  await page.goto(url.href);
+  await page.getByLabel('State or union territory').selectOption('Odisha');
+  await page.getByLabel('Names or surnames').fill('ଫିକ୍ସଚର');
+  await page.getByText('Choose villages from Bhulekh',{exact:true}).click();
+  await page.locator('#directory-district').selectOption('19');
+  await page.locator('#directory-tehsil').selectOption('3');
+  await page.locator('#directory-village').selectOption('79');
+  await click('Add village');
+  await click('Search selected villages on Bhulekh');
+  await page.getByRole('heading',{name:'Live Odisha tenant search',exact:true}).waitFor();
+  await page.getByText('ଫିକ୍ସଚର ଜେନା',{exact:false}).waitFor();
+  assert.deepEqual(usedLocations,['','19','19-3']);
+  assert.equal(await page.locator('a[href^="/signin-with-chatgpt"]').count(),0);
+  if (evidence) await page.screenshot({path:resolve(evidence,'06-anonymous-live-odisha.png'),fullPage:true});
+  assert.deepEqual(external, [], 'The browser smoke made an external request');
   assert.deepEqual(errors, [], 'The browser smoke raised a page error');
-  console.log('Signed-out browser smoke passed: village filters, name matching, map PDF, two-khata RoR PDF, interactive Odisha map, and explicit official-source requests.');
+  console.log('Browser smoke passed: standalone and hosted workspaces, official map and RoR requests, and signed-out tenant search, all with mocked portal responses.');
 } finally {
   if (browser) await browser.close();
   await new Promise((accept,reject)=>server.close(error=>error?reject(error):accept()));
