@@ -26,3 +26,22 @@ flowchart TD
     G --> H["Search selected villages using the same names"]
     E -->|"Open the official website"| I["Bhulekh portal"]
 ```
+
+## CP3 Test
+
+The two cases in `tests/index-availability.test.mjs` both failed on the previous
+implementation. They cover a missing dataset versus an outage, plus the fallback
+action and official link.
+
+## CP4 Fix
+
+The index route now gives a missing dataset its own response code. The results
+panel explains that the search did not run and can open the existing Bhulekh
+picker. All 34 automated tests, the offline verifier, both builds, and the Pages
+smoke check passed.
+
+## CP5 Pull request
+
+Review the five checkpoint commits in order. Merge through the pull request after
+verification. A verified statewide ownership dataset remains a separate
+production dependency.
