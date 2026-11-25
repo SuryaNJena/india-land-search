@@ -20,3 +20,7 @@ flowchart LR
     F --> D
     D --> G[Search approved spellings and typed terms]
 ```
+
+## CP5 Pull request evidence
+
+The focused tests confirm all four pairings, middle words, equivalent English and Odia spellings, and exact evidence from retrieved records. Chromium checks that the proposed spellings and alternate orders are selectable and that loaded synthetic plots contribute visible counts.
