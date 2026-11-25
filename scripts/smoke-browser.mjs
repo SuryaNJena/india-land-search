@@ -141,9 +141,56 @@ try {
   await page.getByText('Different name',{exact:true}).waitFor();
   assert.equal(await page.getByRole('link',{name:'Open official BhuNaksha viewer',exact:true}).count(),0);
   assert.deepEqual(requests.slice(-2),[{id:'b',number:'12/3'},{id:'b',number:'12/3'}]);
-  assert.deepEqual(external, [], 'The browser smoke made an external request');
+  await page.goto(url.href);
+  const officialCalls=[];
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64');
+  await page.route('https://bhunakshaodisha.nic.in:8443/bhunaksha/WMS?*',route=>{
+    const request=new URL(route.request().url());
+    officialCalls.push(request.searchParams.get('LAYERS'));
+    assert.equal(request.searchParams.get('gis_code'),'04010100101');
+    return route.fulfill({contentType:'image/png',body:png});
+  });
+  await page.route('https://bhulekh.ori.nic.in/ViewRoR.aspx?*',route=>{
+    const request=new URL(route.request().url());
+    const side=request.searchParams.get('type');
+    officialCalls.push(side);
+    assert.equal(request.searchParams.get('KhataNo'),'12/3');
+    assert.equal(route.request().headers().cookie,undefined);
+    const body=side==='front'?'<p>Fixture official front</p><img src="https://unexpected.example/inactive.png">'
+      :'<table id="gvRorBack"><tr><td>Fixture schedule</td></tr></table>';
+    return route.fulfill({contentType:'text/html',headers:{'Access-Control-Allow-Origin':'*'},body:'<div id="ContentArea">'+body+'</div>'});
+  });
+  await click('State portals');
+  await page.getByText('Odisha maps and RoR lookup',{exact:true}).click();
+  await page.getByRole('link',{name:'ORSAC village boundaries',exact:true}).waitFor();
+  assert.deepEqual(officialCalls,[]);
+  await page.getByText('BhuNaksha sheet and Plot Info',{exact:true}).click();
+  await click('Fill verified map example');
+  await click('Load map image');
+  await page.getByText('Live BhuNaksha sheet image.',{exact:true}).waitFor();
+  await click('Find official Plot Info');
+  const plotLink=await page.getByRole('link',{name:'Open exact BhuNaksha Plot Info in a new tab'}).getAttribute('href');
+  assert.equal(new URL(plotLink).searchParams.get('plotno'),'58');
+  const fixtureRoR='https://bhulekh.ori.nic.in/ViewRoR.aspx?DistCode=4&TehCode=1&VillCode=1&KhataNo=12%2F3&type=front';
+  await page.getByLabel('Add the Plot Info JSON saved from that tab',{exact:true}).setInputFiles({
+    name:'plot.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({
+      has_data:'Y',ID:'fixture-parcel',gisCode:'04010100101',plotNo:'58',info:'Fixture source text',plotInfoLinks:'<a href="'+fixtureRoR+'">RoR</a>'
+    }))
+  });
+  await page.getByText('Fixture source text',{exact:true}).waitFor();
+  await click('Highlight imported plot on map');
+  await page.getByAltText('Selected parcel overlay',{exact:true}).waitFor();
+  await page.getByText('Bhulekh Records of Rights',{exact:true}).click();
+  assert.equal(await page.getByLabel('Khata number',{exact:true}).inputValue(),'12/3');
+  await click('Load front and back');
+  await page.getByText('Both RoR pages are ready.',{exact:true}).waitFor();
+  await page.getByText('Back page and plot schedule',{exact:true}).click();
+  await page.getByText('Fixture schedule',{exact:true}).waitFor();
+  assert.deepEqual(officialCalls,['VILLAGE_MAP','PLOT_LIST','front','back']);
+  if (evidence) await page.screenshot({path:resolve(evidence,'06-odisha-official-sources.png'),fullPage:true});
+  assert.deepEqual(external, [], 'The browser smoke made an unexpected external request');
   assert.deepEqual(errors, [], 'The browser smoke raised a page error');
-  console.log('Signed-out browser smoke passed: village filters, name matching, map PDF, two-khata RoR PDF, and interactive Odisha map with no external requests.');
+  console.log('Signed-out browser smoke passed: village filters, name matching, map PDF, two-khata RoR PDF, interactive Odisha map, and explicit official-source requests.');
 } finally {
   if (browser) await browser.close();
   await new Promise((accept,reject)=>server.close(error=>error?reject(error):accept()));

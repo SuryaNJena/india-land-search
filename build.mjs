@@ -13,12 +13,14 @@ for (const folder of ['', 'vendor/']) {
 }
 assets['/'] = assets['/index.html'];
 const statewide = await readFile(new URL('./worker/statewide.mjs',import.meta.url),'utf8');
-const app = await readFile(new URL('./worker/odisha.mjs',import.meta.url),'utf8');
+const endpoints=await readFile(new URL('odisha-endpoints.mjs',dist),'utf8');
+const app=(await readFile(new URL('./worker/odisha.mjs',import.meta.url),'utf8'))
+  .replace("import {officialMapBase,officialRoR} from '../dist/odisha-endpoints.mjs';\nexport {officialMapBase,officialRoR};\n",'');
 const snapshots = JSON.parse(await readFile(new URL('./worker/odisha-map-snapshots.json',import.meta.url),'utf8'));
 const matcher = await readFile(new URL('core.mjs',dist),'utf8');
 const manifest = await readFile(new URL('./.openai/hosting.json',import.meta.url),'utf8');
 await Promise.all([mkdir(new URL('server/',dist),{recursive:true}),mkdir(new URL('.openai/',dist),{recursive:true})]);
-const bundle = `${matcher}\n${statewide}\n${app}\nexport default makeLandReviewWorker({readIndex:readStatewideIndex,assets:${JSON.stringify(assets)},mapSnapshots:${JSON.stringify(snapshots)},matchRows,nameLimit:liveNameLimit});\n`;
+const bundle = `${matcher}\n${statewide}\n${endpoints}\n${app}\nexport default makeLandReviewWorker({readIndex:readStatewideIndex,assets:${JSON.stringify(assets)},mapSnapshots:${JSON.stringify(snapshots)},matchRows,nameLimit:liveNameLimit});\n`;
 await Promise.all([
   writeFile(new URL('server/index.js',dist),bundle),
   writeFile(new URL('.openai/hosting.json',dist),manifest)

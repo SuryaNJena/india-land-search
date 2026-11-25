@@ -12,6 +12,7 @@ test('The master map host routes the selected sheet and serves only the requeste
   assert.equal(url.searchParams.get('gis_code'),'04010100101');
   assert.equal(url.searchParams.get('LAYERS'),'VILLAGE_MAP');
   assert.equal(url.searchParams.get('BBOX'),'964,816,1811,1618');
+  assert.equal(mapImageURL(place,[964,816,1811,1618],'parcel').searchParams.get('LAYERS'),'PLOT_LIST');
   assert.throws(()=>mapImageURL(place,[1,0,0,1]),/bounds/i);
 });
 

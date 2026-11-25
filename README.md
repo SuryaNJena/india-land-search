@@ -1,6 +1,21 @@
 # India Land Search
 
-Find an Odisha village, review English and Odia name variants, inspect matched plots, and assemble a map and Record of Rights (RoR) packet. LandReview also reviews records you already have and links to official portals across India.
+India Land Search is a free browser workspace for finding and reviewing land records.
+Start with a village, plot, or khata. Compare names across scripts, highlight parcels,
+and assemble a map and Record of Rights (RoR) packet you can keep or share.
+
+[Open India Land Search on GitHub Pages](https://suryanjena.github.io/india-land-search/).
+
+## Work with official Odisha records
+
+Choose **State portals → Odisha maps and RoR lookup**. View a BhuNaksha sheet
+and open the official Plot Info for an exact plot. Load both Bhulekh report
+pages for a known khata and save them as one PDF. Use ORSAC Know Your Land to
+inspect village boundaries and geographic context.
+
+The Pages app needs no sign-in or search server. Fresh lookups use the official
+sources where the browser can read them. Saved workspaces and name searches stay
+in your browser. [Odisha source interfaces and coverage](docs/ODISHA-OFFICIAL-INTERFACES.md)
 
 ## Try the challenge demo
 

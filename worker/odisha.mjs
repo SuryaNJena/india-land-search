@@ -1,3 +1,5 @@
+import {officialMapBase,officialRoR} from '../dist/odisha-endpoints.mjs';
+export {officialMapBase,officialRoR};
 const portalOrigin = 'https://bhulekh.ori.nic.in';
 const prefix = 'ctl00$ContentPlaceHolder1$';
 const paths = new Set(['/', '/rorview.aspx', '/bhulekherror.aspx', '/index.aspx']);
@@ -115,20 +117,6 @@ export function makeBhulekhReader(fetcher = fetch, delay = ms => new Promise(res
       tenants:options.filter(option=>option.value.trim() && !['0','-1'].includes(option.value.trim()) && option.label)
         .map(option=>({name:option.label,khata:option.value.trim()}))};
   };
-}
-
-// District assignments from the official BhuNaksha Odisha district picker.
-const mapServers = [
-  ['app4',443,['7','8','18']], ['app4',8443,['3','17','29']],
-  ['app3',443,['20','23','26']], ['app3',8443,['5','24','28']],
-  ['app2',443,['11','22','27']], ['app2',8443,['12','15','30']],
-  ['app1',443,['1','10','16']], ['app1',8443,['2','9','25']],
-  ['',8443,['4','14','19']]
-];
-
-export function officialMapBase(districtCode) {
-  const [server,port]=mapServers.find(([, ,districts])=>districts.includes(districtCode)) ?? ['',443];
-  return `https://${server}bhunakshaodisha.nic.in${port===443?'':`:${port}`}/bhunaksha/`;
 }
 
 const maxMapBytes=8*1024*1024;
@@ -310,13 +298,6 @@ export function readBhulekhPlotSchedule(html) {
     if (/^\d{1,12}(?:\/\d{1,12}){0,4}$/.test(plot)) plots.add(plot);
   }
   return header ? [...plots] : null;
-}
-
-export function officialRoR(location,khata,type) {
-  if (!/^\d{1,12}(?:\/\d{1,12}){0,4}$/.test(khata) || !['front','back'].includes(type)) return '';
-  const url=new URL('/ViewRoR.aspx',portalOrigin);
-  url.search=new URLSearchParams({DistCode:location.districtCode,TehCode:location.tehsilCode,VillCode:location.villageCode,KhataNo:khata,type});
-  return url.href;
 }
 
 export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),readPlot=makeBhunakshaPlotReader(),mapSnapshots={villages:{}},nameLimit=1000,requireIdentity=true,readIndex,fetchReport=fetch}) {
