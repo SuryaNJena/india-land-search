@@ -15,15 +15,10 @@ const site = resolve(root, 'pages-out');
 const date = new Date('2000-01-01T00:00:00Z');
 const options = {date, createFolders:false};
 const assets = /\.(?:html|mjs|js|css|json|txt|svg|webp|png|pdf|woff2)$/;
-const runtime = await readFile(resolve(site,'runtime.mjs'),'utf8');
-const configuration = /^export const runtime = (\{.*\});\s*$/.exec(runtime);
-if (!configuration) throw new Error('Build the static Pages release first with node build-pages.mjs.');
-const settings = JSON.parse(configuration[1]);
-if (!settings.pages || settings.hosted || settings.indexBase) {
-  throw new Error('Build with no LANDREVIEW_INDEX_ORIGIN for an offline release.');
-}
+const home = await readFile(resolve(site,'index.html'),'utf8');
+if (!home.includes("connect-src 'self'")) throw new Error('Build the Pages release first with node build-pages.mjs.');
 
-for (const path of ['AGENTS.md','LICENSE','README.md','docs/BRD.md','docs/CODEX-EVIDENCE.md','docs/DATA-SOURCES.md','docs/DEPLOYMENT.md','docs/RELEASE-CHECKLIST.md','docs/TEST-PLAN.md','docs/TRD.md']) {
+for (const path of ['AGENTS.md','LICENSE','README.md','docs/BRD.md','docs/CODEX-EVIDENCE.md','docs/DATA-SOURCES.md','docs/DEPLOYMENT.md','docs/GITHUB-PAGES-MIGRATION.md','docs/RELEASE-CHECKLIST.md','docs/TEST-PLAN.md','docs/TRD.md']) {
   archive.file(path, await readFile(resolve(root,path)), options);
 }
 archive.file('serve.mjs', await readFile(resolve(root,'scripts/serve-release.mjs')), options);
@@ -41,8 +36,8 @@ archive.file('START-HERE.txt', [
 ].join('\n'), options);
 
 for (const folder of ['', 'vendor']) {
-  // Select assets from the tracked browser source layout so stale output files cannot enter the ZIP.
-  const files = await readdir(resolve(root,'dist',folder), {withFileTypes:true});
+  // The Pages build recreates this directory from its static asset list.
+  const files = await readdir(resolve(site,folder), {withFileTypes:true});
   const names = files.filter(file => file.isFile() && assets.test(file.name)).map(file => file.name).sort();
   for (const name of names) {
     const asset = folder ? folder + '/' + name : name;
