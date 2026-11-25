@@ -174,10 +174,11 @@ try {
   const fixtureRoR='https://bhulekh.ori.nic.in/ViewRoR.aspx?DistCode=4&TehCode=1&VillCode=1&KhataNo=12%2F3&type=front';
   await page.getByLabel('Add the Plot Info JSON saved from that tab',{exact:true}).setInputFiles({
     name:'plot.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({
-      has_data:'Y',ID:'fixture-parcel',gisCode:'04010100101',plotNo:'58',info:'Fixture source text',plotInfoLinks:'<a href="'+fixtureRoR+'">RoR</a>'
+      has_data:'Y',ID:'fixture-parcel',gisCode:'04010100101',plotNo:'58',info:'<b>Fixture source text</b>',plotInfoLinks:'<a href="'+fixtureRoR+'">RoR</a>'
     }))
   });
-  await page.getByText('Fixture source text',{exact:true}).waitFor();
+  await page.getByText('<b>Fixture source text</b>',{exact:true}).waitFor();
+  assert.equal(await page.locator('[data-plot-info] b').count(),0);
   await click('Highlight imported plot on map');
   const overlay=page.getByAltText('Selected parcel overlay',{exact:true});
   await overlay.waitFor();

@@ -24,6 +24,7 @@ test('Saved Plot Info must match the exact sheet and plot number',()=>{
   const saved={has_data:'Y',ID:'parcel',gisCode:'04010100101',plotNo:'58',info:'Fixture',
     plotInfoLinks:'<a href="'+official.replaceAll('&','&amp;')+'">Report</a>'};
   assert.equal(readSavedPlot(saved,place,'୫୮').khata,'12/3');
+  assert.equal(readSavedPlot({...saved,info:'  <b>Source text</b>  '},place,'58').info,'<b>Source text</b>');
   assert.throws(()=>readSavedPlot({...saved,plotNo:'58/2'},place,'58'),/does not match/i);
   assert.equal(readSavedPlot({...saved,plotInfoLinks:'<a href="https://different.example/?KhataNo=12">Fixture</a>'},place,'58').khata,'');
 });

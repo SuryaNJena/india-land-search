@@ -50,7 +50,7 @@ export function readSavedPlot(data,place,number) {
       plotNumber(data.plotNo)!==exactPlot(number) || typeof data.info!=='string') {
     throw Error('This response does not match the selected sheet and plot number.');
   }
-  const info=data.info.replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]*>/g,'').trim().slice(0,16000);
+  const info=data.info.trim().slice(0,16000);
   let khata='';
   for (const [,href] of String(data.plotInfoLinks??'').matchAll(/\bhref\s*=\s*["']([^"']+)["']/gi)) {
     try {
