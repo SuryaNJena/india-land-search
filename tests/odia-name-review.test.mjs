@@ -33,4 +33,3 @@ test('UT-11 observed spelling counts use whole names in retrieved records', () =
   const rows=[retrieved(`(${seen}) · ${seen}`),retrieved(seen.replace(' ','\t')),retrieved(seen+'ମଣି'),{info:seen,status:'No plot information'}];
   assert.deepEqual([...countObservedNames(rows,[seen,unseen])],[[seen,2]]);
 });
-
