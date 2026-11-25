@@ -16,7 +16,7 @@ await mkdir(target,{recursive:true});
 const files=[
   'app.mjs','core.mjs','demo.mjs','files.mjs','home-search.mjs','indexed-results.mjs','live-odisha-map.mjs','live-ror.mjs',
   'odisha-live-search.mjs','odisha-scope.mjs',
-  'india-states.mjs','maps.mjs','matcher.mjs','name-review.mjs','name-variants.mjs',
+  'india-states.mjs','maps.mjs','matcher.mjs','name-review.mjs','name-variants.mjs','name-dictionary.mjs','name-dictionary-or.json','name-dictionary-or-NOTICE.txt',
   'parcel-basemap.mjs','portals.mjs','search.mjs','sheet-overlays.mjs','style.css',
   'village-finder.mjs','villages.json','workspace-maps.mjs'
 ];

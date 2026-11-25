@@ -24,6 +24,7 @@ Characterization tests capture behavior in the current release so changes can be
 | `UT-05`–`UT-08` | Scoped coverage, jurisdiction attribution, parcel identity, and validated RoR links | BR-04, BR-06, BR-07, TR-03, TR-04, TR-06, TR-07 |
 | `UT-09`–`UT-11` | Odia initial combinations, middle names, local-script aliases, and exact occurrence counts | BR-03, TR-03 |
 | `UT-12`–`UT-13` | Sequential traversal of the official village list and resuming a failed branch | BR-06, TR-04, TR-08 |
+| `UT-14`–`UT-15` | Local lookup of source-backed Odia spellings, language scope, and preserved curated variants | BR-03, TR-03 |
 | `CT-01`–`CT-03` | Current sign-in and village rules, matched fields and links, cached source reuse, and unavailable versus zero results | BR-04, BR-06, TR-04, TR-06 |
 | `CT-04` | Dated fallback maps stay within the requested village and sheet | BR-05, TR-05 |
 | `CT-05`–`CT-07` | Workspace v1 preservation, checksum rejection, and local front-before-back merge | BR-07, TR-07 |

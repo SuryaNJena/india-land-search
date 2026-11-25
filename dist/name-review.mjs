@@ -1,5 +1,6 @@
 import {normalize} from './core.mjs';
 import {searchTerms} from './search.mjs';
+import {loadNameDictionary} from './name-dictionary.mjs';
 import {proposeNames,proposeNameOrders,recordLanguages,suggestedLanguages} from './name-variants.mjs';
 
 const key = 'landreview.home-name-review';
@@ -8,6 +9,7 @@ try { saved=JSON.parse(localStorage.getItem(key)); } catch { /* Review remains a
 
 export function mountNameReview(root, escape, onEdit, persistent = true, observe) {
   let state='', text='', choice='', drafts=[], approval, evidenceTimer;
+  const dictionaries={}, requested=new Set();
   const signature = () => JSON.stringify([state,searchTerms(text).map(normalize),choice]);
   const languages = () => choice ? [choice] : suggestedLanguages(state);
   const options = Object.entries(recordLanguages).toSorted(([,a],[,b])=>a[0].localeCompare(b[0]));
@@ -36,7 +38,7 @@ export function mountNameReview(root, escape, onEdit, persistent = true, observe
     const active = new Set(selected().map(normalize));
     const approved = reviewed();
     const ordersOpen=root.querySelector('.name-orders')?.open;
-    const cards= drafts.map((item,index)=>`<label class="variant-option"><input type="checkbox" data-spelling="${index}" ${active.has(normalize(item.spelling))?'checked':''}><span><strong ${item.language?`lang="${item.language}"`:''} dir="auto">${escape(item.spelling)}</strong><small>${escape(item.original)} · ${escape(recordLanguages[item.language]?.[0] || 'Typed spelling')}${item.curated && !item.reordered?' · Curated spelling':''}<span data-spelling-evidence="${index}"></span></small></span></label>`);
+    const cards= drafts.map((item,index)=>`<label class="variant-option"><input type="checkbox" data-spelling="${index}" ${active.has(normalize(item.spelling))?'checked':''}><span><strong ${item.language?`lang="${item.language}"`:''} dir="auto">${escape(item.spelling)}</strong><small>${escape(item.original)} · ${escape(recordLanguages[item.language]?.[0] || 'Typed spelling')}${item.curated && !item.reordered?' · Curated spelling':''}${item.dictionaryWords?` · ${item.dictionaryWords} ${item.dictionaryWords===1?'word':'words'} in the spelling dictionary`:''}<span data-spelling-evidence="${index}"></span></small></span></label>`);
     const originalOrder=cards.filter((_,i)=>!drafts[i].reordered);
     const otherOrders=cards.filter((_,i)=>drafts[i].reordered);
     root.innerHTML = `<div class="variant-head"><div><h3 id="variant-heading" tabindex="-1">Review name spellings</h3><p>Checked spellings are included when you search, along with the names you typed.</p></div><label class="label">Record language<select id="variant-language"><option value="">${escape(suggestedLanguages(state).map(code=>recordLanguages[code][0]).join(', ') || 'Latin spelling')}</option>${options.map(([code,[name]])=>`<option value="${code}">${escape(name)}</option>`).join('')}</select></label></div>
@@ -65,7 +67,20 @@ export function mountNameReview(root, escape, onEdit, persistent = true, observe
     if (nextState!==state) choice=persistent && saved?.state===nextState && Object.hasOwn(recordLanguages,saved.choice) ? saved.choice : '';
     state=nextState; text=nextText;
     const terms=searchTerms(text).slice(0,30);
-    const localized=proposeNames(terms,languages());
+    const activeLanguages=languages();
+    if (terms.some(term=>/[a-z]/i.test(term))) {
+      for (const language of activeLanguages) {
+        if (requested.has(language)) continue;
+        const download=loadNameDictionary(language);
+        if (!download) continue;
+        requested.add(language);
+        void download.then(dictionary=>{
+          dictionaries[language]=dictionary;
+          if (root.isConnected && languages().includes(language)) update(state,text);
+        },()=>{ /* Curated and phonetic suggestions remain available. */ });
+      }
+    }
+    const localized=proposeNames(terms,activeLanguages,globalThis.Sanscript,dictionaries);
     drafts=[...localized,...proposeNameOrders(terms,localized)];
     if (persistent && saved?.signature===signature() && approval?.signature!==signature()) approval=saved;
     render();

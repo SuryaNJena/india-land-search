@@ -40,8 +40,19 @@ try {
     Object.fromEntries(['state','district','tehsil','ri'].map(name=>[name,form.elements.namedItem(name).value])));
   assert.deepEqual(filters,{state:'Odisha',district:'Cuttack',tehsil:'Mahanga',ri:'Kurujanga'});
   const nameInput=page.getByLabel('Names or surnames');
-  await nameInput.fill('Jadumani Jena');
+  const dictionaryRequest=page.waitForRequest(request=>new URL(request.url()).pathname.endsWith('/name-dictionary-or.json'));
+  await nameInput.fill('Samal');
   const originalOrder=page.locator('#home-name-review > .variant-options');
+  await originalOrder.locator('label').filter({hasText:'ସାମଲ'}).getByText(/in the spelling dictionary/).waitFor();
+  const request=await dictionaryRequest;
+  assert.equal(request.method(),'GET');
+  assert.equal(request.postData(),null);
+  assert.equal(new URL(request.url()).search,'');
+  if (evidence) {
+    await mkdir(evidence,{recursive:true});
+    await page.locator('#home-name-review').screenshot({path:resolve(evidence,'08-odia-spelling-dictionary.png')});
+  }
+  await nameInput.fill('Jadumani Jena');
   const spellings=['ଜଦୁମଣି ଜେନା','ଜଦୁମଣି ଯେନା','ଯଦୁମଣି ଜେନା','ଯଦୁମଣି ଯେନା'];
   assert.deepEqual(new Set(await originalOrder.locator('strong').allTextContents()),new Set(spellings));
   await page.getByText('Other name orders (5)',{exact:true}).click();

@@ -1,0 +1,12 @@
+Odia spelling dictionary from AI4Bharat Aksharantar
+Data designation for this extract: CC0 1.0 (mined Wikidata, Samanantar, and IndicCorp pairs)
+CC0: https://creativecommons.org/publicdomain/zero/1.0/
+Research publication: https://aclanthology.org/2023.findings-emnlp.4/
+Source and licensing: https://indicnlp.ai4bharat.org/aksharantar/
+Archive revision: https://huggingface.co/datasets/ai4bharat/Aksharantar/blob/b311c19b4a66bfac52ca4d95456b4b5646aca49e/ori.zip
+
+This derivative indexes individual transliteration pairs by normalized Roman spelling.
+It filters out non-word pairs, lower-scoring IndicCorp pairs, other source categories,
+and the test split. It ranks by source and score and keeps up to three pairs per key.
+The upstream subset contains words and named entities. These pairs are spelling
+suggestions. They do not verify an ownership record.
