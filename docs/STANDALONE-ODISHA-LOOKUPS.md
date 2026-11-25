@@ -9,3 +9,17 @@ Keep the GitHub Pages build static. When an official browser response is readabl
 Automatically add successful standalone map sheets, Plot Info and both RoR pages to local Workspace storage. Each item can be reopened, selected and removed. Keep the old workspace format and storage identifiers compatible. Update public branding to India Land Search.
 
 Chrome’s built-in Translator documentation does not list Odia. Use the local Aksharantar dictionary, curated variants and phonetic rules for Odia name suggestions.
+
+## CP2 Diagram
+
+```mermaid
+flowchart LR
+    A[District and locality filters] --> B[Official BhuNaksha or Bhulekh lookup]
+    B --> C[Sheet, parcel or RoR preview]
+    C --> D[Local saved lookups]
+    D --> E[Workspace reopen and remove]
+    B --> F{Validated geographic parcel coordinates}
+    F -->|Yes| G[Parcel overlay and pins on OpenStreetMap]
+    F -->|Unavailable| H[Native survey sheet]
+    I[Names entered locally] --> J[Reviewed Odia spellings and record search]
+```
