@@ -31,8 +31,22 @@ try {
   const page = await context.newPage();
   page.setDefaultTimeout(8000);
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto(new URL('?demo=1',url).href);
   const click = name => page.getByRole('button',{name,exact:true}).click();
+  await page.goto(url.href);
+  await click('Name matching');
+  await page.getByRole('heading',{name:'Search names in land records',exact:true}).waitFor();
+  await page.getByLabel('State or union territory').selectOption('Odisha');
+  await page.getByLabel('Names or surnames').fill('Samal');
+  await page.getByText(/in the spelling dictionary/).waitFor();
+  for (const name of ['Village maps','Plot records','Records of Rights']) {
+    await click(name);
+    await page.locator('[data-odisha-field="districtCode"]').waitFor();
+    await page.locator('[data-odisha-field="tehsilCode"]').waitFor();
+    await page.locator('[data-odisha-field="villageCode"]').waitFor();
+  }
+  await click('Workspace');
+  await page.getByRole('heading',{name:'Workspace',exact:true}).waitFor();
+  await page.goto(new URL('?demo=1',url).href);
   await click('Find sample village');
   await page.getByRole('button',{name:/Anandapur Sample.*Cuttack/}).first().click();
   const filters = await page.locator('#home-search-form').evaluate(form =>
