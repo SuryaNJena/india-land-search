@@ -23,7 +23,7 @@ if (!settings.pages || settings.hosted || settings.indexBase) {
   throw new Error('Build the standalone Pages release with node build-pages.mjs.');
 }
 
-for (const path of ['AGENTS.md','LICENSE','README.md','docs/BRD.md','docs/CODEX-EVIDENCE.md','docs/DATA-SOURCES.md','docs/DEPLOYMENT.md','docs/GITHUB-PAGES-MIGRATION.md','docs/RELEASE-CHECKLIST.md','docs/STANDALONE-ODISHA-LOOKUPS.md','docs/TEST-PLAN.md','docs/TRD.md']) {
+for (const path of ['AGENTS.md','LICENSE','README.md','docs/BRD.md','docs/CODEX-EVIDENCE.md','docs/DATA-SOURCES.md','docs/DEPLOYMENT.md','docs/GITHUB-PAGES-MIGRATION.md','docs/ODIA-SPELLING-DICTIONARY.md','docs/ODISHA-OFFICIAL-INTERFACES.md','docs/RELEASE-CHECKLIST.md','docs/STANDALONE-ODISHA-LOOKUPS.md','docs/TEST-PLAN.md','docs/TRD.md']) {
   archive.file(path, await readFile(resolve(root,path)), options);
 }
 archive.file('serve.mjs', await readFile(resolve(root,'scripts/serve-release.mjs')), options);

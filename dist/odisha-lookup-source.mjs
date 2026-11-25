@@ -1,19 +1,9 @@
+import {officialMapBase,officialRoR} from './odisha-endpoints.mjs';
 import {plotNumber} from './sheet-overlays.mjs';
 
 export const mapPortal='https://bhunakshaodisha.nic.in/';
 export const reportPortal='https://bhulekh.ori.nic.in/';
-const districts=[
-  ['app4',443,['7','8','18']], ['app4',8443,['3','17','29']],
-  ['app3',443,['20','23','26']], ['app3',8443,['5','24','28']],
-  ['app2',443,['11','22','27']], ['app2',8443,['12','15','30']],
-  ['app1',443,['1','10','16']], ['app1',8443,['2','9','25']],
-  ['',8443,['4','14','19']]
-];
-
-export function districtMapBase(districtCode) {
-  const [host,port]=districts.find(([, ,codes])=>codes.includes(districtCode)) ?? ['',443];
-  return new URL('https://'+host+'bhunakshaodisha.nic.in'+(port===443?'':':'+port)+'/bhunaksha/');
-}
+export const districtMapBase=districtCode=>new URL(officialMapBase(districtCode));
 
 export const locationFields=[
   {code:'districtCode',label:'District',name:'district',width:2},
@@ -66,12 +56,7 @@ export function officialPlotURL(place,sheet,number) {
   return url.href;
 }
 
-export function reportURL(place,khata,side) {
-  const url=new URL('ViewRoR.aspx',reportPortal);
-  url.search=new URLSearchParams({DistCode:place.districtCode,TehCode:place.tehsilCode,
-    VillCode:place.villageCode,KhataNo:khata,type:side});
-  return url.href;
-}
+export const reportURL=officialRoR;
 
 export function checkBounds(bounds) {
   if (!Array.isArray(bounds) || bounds.length!==4 || !bounds.every(Number.isFinite) ||

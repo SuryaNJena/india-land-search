@@ -2,6 +2,7 @@ import {normalize,parcelKey,safeURL,sourceCaste,suggestSurname,validateWorkspace
 import {download,localStore,savedLookupStore,zipWorkspace,importFile,exportWorkbook,mergeROR,savedHoldings,combineSavedHoldings,exportRORBundle} from './files.mjs';
 import {drawMap,makeMapPDF,colours} from './maps.mjs';
 import {portals,directoryURL} from './portals.mjs';
+import {mountOfficialOdisha} from './official-odisha.mjs';
 import {renderHomeSearch} from './home-search.mjs';
 import {assignImportState} from './search.mjs';
 import {mountOdishaLookup} from './odisha-lookup.mjs';
@@ -66,8 +67,8 @@ async function task(message, handler) {
   finally{busy=false;$('import').disabled=false;$('backup').disabled=!workspace;}
 }
 
-let mapSearchHits;
-function navigate(view,hits) { selected=view; mapSearchHits=hits; status(); render(); }
+let officialVillage, mapSearchHits;
+function navigate(view,{village,hits}={}) { selected=view; officialVillage=village; mapSearchHits=hits; status(); render(); }
 function matchingCount(kind) { return matches.filter(m=>kind==='full'?m.fullSelected:m.surnameSelected).length; }
 function metric(count, label, accent='') { return `<div class="stat ${accent}"><small>${escape(label)}</small><strong>${number.format(count)}</strong></div>`; }
 const maps = () => (workspace?.summary ?? []).filter(m => workspace.geometry?.[m.gis]?.features?.length);
@@ -79,9 +80,9 @@ function chooseImport(state = '') {
 
 function overview() {
   const search = '<section id="home-search" class="card home-search"></section>';
-  const mountSearch = () => renderHomeSearch($('home-search'), {workspace,escape,tag,openPlot:showPlot,openMap:hits=>navigate('maps',hits),importRecords:chooseImport,onSave:saveLookup});
+  const mountSearch = () => renderHomeSearch($('home-search'), {workspace,escape,tag,openPlot:showPlot,openMap:hits=>navigate('maps',{hits}),openOfficial:village=>navigate('portals',{village}),importRecords:chooseImport,onSave:saveLookup});
   if (!workspace) {
-    $('view').innerHTML = `${search}<section class="card"><div class="card-head"><div><h2>Records and maps</h2><p>Open an official portal, import records you already have, or explore with fictional plots.</p></div></div><div class="actions">${demoLink}<button class="button secondary" id="go-portals">Browse state portals</button></div></section>`;
+    $('view').innerHTML = `${search}<section class="card"><div class="card-head"><div><h2>Records and maps</h2><p>Open an official portal, import records you already have, or explore with fictional plots.</p></div></div><div class="actions">${demoLink}<button class="button secondary" id="go-portals">Open official sources</button></div></section>`;
     mountSearch();
     $('go-portals').onclick=()=>navigate('portals');
     return;
@@ -210,7 +211,7 @@ function names() {
         ...item.place,state:'Odisha',gis:item.place.id+'/'+item.place.riCode+'/'+item.sheet,id:item.key,
         sheet:item.sheet,plot:item.number,khata:item.data.khata,info:item.data.info,status:'Retrieved'
       }))} : null;
-      renderHomeSearch(root,{workspace:local,escape,tag,openPlot:i=>openSavedLookup(plots[i]),importRecords:chooseImport,onSave:saveLookup});
+      renderHomeSearch(root,{workspace:local,escape,tag,openPlot:i=>openSavedLookup(plots[i]),openOfficial:village=>navigate('portals',{village}),importRecords:chooseImport,onSave:saveLookup});
     });
     return;
   }
@@ -313,7 +314,8 @@ function ror() {
 }
 
 function portalView() {
-  $('view').innerHTML=`<section class="card"><div class="card-head"><div><h2>Official land-record directory</h2><p>36 states and union territories. Open the government portal to obtain records for import.</p></div>${tag(directoryURL,'DILRMP directory')}</div><div class="toolbar"><input type="search" id="portal-search" aria-label="Search states and portals" placeholder="Find a state or portal"></div><div class="portal-grid" id="portal-results"></div></section>`;
+  $('view').innerHTML=`<section class="card"><div class="card-head"><div><h2>Official land-record directory</h2><p>36 states and union territories. Open the government portal to obtain records for import.</p></div>${tag(directoryURL,'DILRMP directory')}</div><details class="live-location" id="odisha-official-sources"></details><div class="toolbar"><input type="search" id="portal-search" aria-label="Search states and portals" placeholder="Find a state or portal"></div><div class="portal-grid" id="portal-results"></div></section>`;
+  mountOfficialOdisha($('odisha-official-sources'),tag,officialVillage);
   const results=()=>{const q=normalize($('portal-search').value);$('portal-results').innerHTML=portals.filter(p=>normalize(`${p.name} ${p.label}`).includes(q)).map(p=>`<article class="card"><span class="badge">${escape(p.mode)}</span><h3>${escape(p.name)}</h3><div class="actions">${tag(p.record,p.label)}${tag(p.map,'Cadastral maps')}</div></article>`).join('')||empty('No portals match your search.');};$('portal-search').oninput=results;results();
 }
 

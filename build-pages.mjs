@@ -1,7 +1,8 @@
 import {cp,lstat,mkdir,readFile,readdir,realpath,rm,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {configureOfflineWorker} from './scripts/offline-assets.mjs';
-import {districtMapBase,reportPortal} from './dist/odisha-lookup-source.mjs';
+import {reportPortal} from './dist/odisha-lookup-source.mjs';
+import {officialMapBase} from './dist/odisha-endpoints.mjs';
 
 const root=await realpath(new URL('./',import.meta.url));
 const source=join(root,'dist');
@@ -15,8 +16,9 @@ if (prior) {
   await rm(target,{recursive:true,force:true});
 }
 await mkdir(target,{recursive:true});
+const mapOrigins=[...new Set(Array.from({length:30},(_,i)=>new URL(officialMapBase(String(i+1))).origin))];
 const files=[
-  'app-icon.svg','app.mjs','app.webmanifest','core.mjs','demo.mjs','files.mjs','home-search.mjs','indexed-results.mjs','live-odisha-map.mjs','live-ror.mjs','odisha-scope.mjs',
+  'app-icon.svg','app.mjs','app.webmanifest','core.mjs','demo.mjs','files.mjs','home-search.mjs','indexed-results.mjs','live-odisha-map.mjs','live-ror.mjs','odisha-endpoints.mjs','official-odisha.mjs','odisha-scope.mjs',
   'india-states.mjs','maps.mjs','matcher.mjs','name-review.mjs','name-variants.mjs',
   'parcel-basemap.mjs','portals.mjs','search.mjs','sheet-overlays.mjs','style.css',
   'lookup-workspace.mjs','name-dictionary.mjs','name-dictionary-or.json','name-dictionary-or-NOTICE.txt',
@@ -24,7 +26,7 @@ const files=[
   'odisha-lookup.mjs','offline-worker.js','village-finder.mjs','villages.json','workspace-maps.mjs'
 ];
 files.push(...(await readdir(source)).filter(file=>/^odisha-boundaries-[a-z]+\.json$/.test(file)));
-const bhuOrigins=[...new Set(Array.from({length:30},(_,i)=>districtMapBase(String(i+1)).origin))].sort().join(' ');
+const bhuOrigins=mapOrigins.sort().join(' ');
 const csp=["default-src 'self'", "script-src 'self'", "worker-src 'self'", "manifest-src 'self'", "connect-src 'self' "+new URL(reportPortal).origin, "img-src 'self' data: blob: https://tile.openstreetmap.org "+bhuOrigins,
   "form-action 'self' "+bhuOrigins, "style-src 'self' 'unsafe-inline'", "object-src 'none'", "base-uri 'none'"].join('; ');
 const homepage=(await readFile(join(source,'index.html'),'utf8')).replace('  <meta name="description"',  `  <meta http-equiv="Content-Security-Policy" content="${csp}">\n  <meta name="description"`);

@@ -8,6 +8,8 @@ relevant changes from `main`. Use **Run workflow** to republish manually.
 
 The build publishes `pages-out/` with the installable app, vendored JavaScript, the village catalogue, and dated public cadastral geometry. The content security policy permits app resources from the same origin, direct RoR previews from Bhulekh, official BhuNaksha forms and images, and OpenStreetMap tiles when enabled.
 
+Choose **State portals → Odisha maps and RoR lookup** to view an official sheet and open the exact Plot Info response. The Pages release needs no backend or account. [Odisha source interfaces](ODISHA-OFFICIAL-INTERFACES.md)
+
 ## Browser data
 
 Records, saved PDF copies, and name rules are stored in the current browser.

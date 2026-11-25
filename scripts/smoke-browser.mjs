@@ -308,6 +308,56 @@ try {
   await page.getByText('Different name',{exact:true}).waitFor();
   assert.equal(await page.getByRole('link',{name:'Open official BhuNaksha viewer',exact:true}).count(),0);
   assert.deepEqual(requests.slice(-2),[{id:'b',number:'12/3'},{id:'b',number:'12/3'}]);
+  await page.goto(url.href);
+  const officialCalls=[];
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64');
+  await page.route('https://bhunakshaodisha.nic.in:8443/bhunaksha/WMS?*',route=>{
+    const request=new URL(route.request().url());
+    officialCalls.push(request.searchParams.get('LAYERS'));
+    assert.equal(request.searchParams.get('gis_code'),'04010100101');
+    return route.fulfill({contentType:'image/png',body:png});
+  });
+  await page.route('https://bhulekh.ori.nic.in/ViewRoR.aspx?*',route=>{
+    const request=new URL(route.request().url());
+    const side=request.searchParams.get('type');
+    officialCalls.push(side);
+    assert.equal(request.searchParams.get('KhataNo'),'12/3');
+    assert.equal(route.request().headers().cookie,undefined);
+    const body=side==='front'?'<p>Fixture official front</p><img src="https://unexpected.example/inactive.png">'
+      :'<table id="gvRorBack"><tr><td>Fixture schedule</td></tr></table>';
+    return route.fulfill({contentType:'text/html',headers:{'Access-Control-Allow-Origin':'*'},body:'<div id="ContentArea">'+body+'</div>'});
+  });
+  await click('State portals');
+  await page.getByText('Odisha maps and RoR lookup',{exact:true}).click();
+  await page.getByRole('link',{name:'ORSAC village boundaries',exact:true}).waitFor();
+  assert.deepEqual(officialCalls,[]);
+  await page.getByText('BhuNaksha sheet and Plot Info',{exact:true}).click();
+  await click('Fill verified map example');
+  await click('Load map image');
+  await page.getByText('Live BhuNaksha sheet image.',{exact:true}).waitFor();
+  await click('Find official Plot Info');
+  const exactPlotLink=await page.getByRole('link',{name:'Open exact BhuNaksha Plot Info in a new tab'}).getAttribute('href');
+  assert.equal(new URL(exactPlotLink).searchParams.get('plotno'),'58');
+  const fixtureRoR='https://bhulekh.ori.nic.in/ViewRoR.aspx?DistCode=4&TehCode=1&VillCode=1&KhataNo=12%2F3&type=front';
+  await page.getByLabel('Add the Plot Info JSON saved from that tab',{exact:true}).setInputFiles({
+    name:'plot.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({
+      has_data:'Y',ID:'fixture-parcel',gisCode:'04010100101',plotNo:'58',info:'<b>Fixture source text</b>',plotInfoLinks:'<a href="'+fixtureRoR+'">RoR</a>'
+    }))
+  });
+  await page.getByText('<b>Fixture source text</b>',{exact:true}).waitFor();
+  assert.equal(await page.locator('[data-plot-info] b').count(),0);
+  await click('Highlight imported plot on map');
+  const overlay=page.getByAltText('Selected parcel overlay',{exact:true});
+  await overlay.waitFor();
+  assert.deepEqual(await overlay.boundingBox(),await page.getByAltText('Live cadastral sheet from BhuNaksha',{exact:true}).boundingBox());
+  await page.getByText('Bhulekh Records of Rights',{exact:true}).click();
+  assert.equal(await page.getByLabel('Khata number',{exact:true}).inputValue(),'12/3');
+  await click('Load front and back');
+  await page.getByText('Both RoR pages are ready.',{exact:true}).waitFor();
+  await page.getByText('Back page and plot schedule',{exact:true}).click();
+  await page.getByText('Fixture schedule',{exact:true}).waitFor();
+  assert.deepEqual(officialCalls,['VILLAGE_MAP','PLOT_LIST','front','back']);
+  if (evidence) await page.screenshot({path:resolve(evidence,'06-odisha-official-sources.png'),fullPage:true});
   await page.route(new URL('runtime.mjs',url).href,route=>route.fulfill({
     contentType:'text/javascript',body:"export const runtime={hosted:true,indexBase:'',pages:false};"
   }));
@@ -388,7 +438,7 @@ try {
   await offline.getByRole('heading',{name:'Search names in land records',exact:true}).waitFor();
   await install.close();
   assert.deepEqual(errors, [], 'The browser smoke raised a page error');
-  console.log('Signed-out browser smoke passed: village filters, name matching, map PDF, two-khata RoR PDF, interactive Odisha map, and signed-out Odisha tenant search and batch fallback with no live portal calls.');
+  console.log('Browser smoke passed: workspaces, name variants and dictionary, official maps and RoR, and signed-out Odisha search with batch fallback.');
 } finally {
   if (browser) await browser.close();
   await new Promise((accept,reject)=>server.close(error=>error?reject(error):accept()));
