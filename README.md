@@ -9,11 +9,11 @@ Find an Odisha village, review English and Odia name variants, inspect matched p
 3. Click **Find sample village**, choose **Anandapur Sample**, and select **Review name variants**. Approve spellings or use **Clear all**, then choose **Search loaded records**.
 4. Open the matched map and export its overview. In **Records of Rights**, choose **Download selected RoRs (PDF)** to download both sides of two fictional khatas in one file.
 
-The demo uses fictional records and runs without an account, uploads, or government portal requests. The regular app includes a public Odisha village directory and official links for map-point and plot-ID lookups. Verified RI and land-record portal codes cover selected villages. Statewide live ownership search needs verified production data. [Data-source research](docs/DATA-SOURCES.md)
+The demo uses fictional records and runs without an account, uploads, or government portal requests. The regular app includes a public Odisha village directory and official links for map-point and plot-ID lookups. Verified RI and land-record portal codes cover selected villages. Live Odisha village searches on the hosted site work without a ChatGPT account. Statewide name search needs verified production data. [Data-source research](docs/DATA-SOURCES.md)
 
 ## Odisha cadastral maps
 
-In a signed-in Bhulekh search, open **BhuNaksha village map**, select the matched khatas, and choose **Highlight plots from Bhulekh RoR**. Download the current vector sheet or the village PDF containing only sheets with matched plots. The app uses BhuNaksha’s sheet directory and parcel geometry and joins the official back schedule by exact plot number. A dated geometry-only fallback covers Kapaleswar sheets 01–03 if the map host is unavailable.
+After a live Bhulekh search, open **BhuNaksha village map**, select the matched khatas, and choose **Highlight plots from Bhulekh RoR**. Download the current vector sheet or the village PDF containing only sheets with matched plots. The app uses BhuNaksha’s sheet directory and parcel geometry and joins the official back schedule by exact plot number. A dated geometry-only fallback covers Kapaleswar sheets 01–03 if the map host is unavailable.
 
 The **Geographic map and location pins** panel accepts a manual or device location. OpenStreetMap tiles load only when enabled. For a parcel overlay, add WGS84 GeoJSON with the current sheet's `giscode` and matching parcel `id` or plot `kide`. Coordinates remain in the browser unless you enable map tiles or open a provider link. BhuNaksha returned no usable WGS84 extent for Kapaleswar sheets 01–03. Keep its cadastral PDF in local sheet coordinates or consult [ORSAC’s georeferenced viewer](https://www.odishakyl.in/mapview.php).
 

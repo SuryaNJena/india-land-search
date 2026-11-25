@@ -122,7 +122,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
     const completed = [], failures = [], shown = new Map();
     const active = () => liveSearch===abort && root.isConnected;
     const listItems = hits => hits.map(hit=>`<li>${escape(hit.tenant)} <span class="muted">· ${escape(hit.matched.join(', '))}</span>${hit.khata?`<div class="actions live-ror-links"><span class="muted">Khata ${escape(hit.khata)}</span>${tag(hit.front,'RoR front')}${tag(hit.back,'RoR back')}</div>`:''}</li>`).join('');
-    function paint(message, busy, signin=false) {
+    function paint(message, busy) {
       if (!active()) return;
       feedback.textContent=busy ? message : '';
       submitButton.disabled=liveButton.disabled=busy;
@@ -134,7 +134,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
       }).join('');
       const missing=failures.length?`<ul>${failures.map(([location,error])=>`<li>${escape(location.village)} · ${escape(error)}</li>`).join('')}</ul>`:'';
       const maps=busy?[]:completed.map(item=>item.location).filter(location=>location.riCode);
-      results.innerHTML = `<h3>Live Odisha tenant search</h3>${busy?'':`<p role="status">${escape(message)}</p>`}<p>${count.format(completed.length)} of ${count.format(targets.length)} selected ${targets.length===1?'village':'villages'} checked${completed.length?` · ${count.format(hitCount)} matching tenant ${hitCount===1?'entry':'entries'}`:''}.</p>${busy?'<button class="button secondary" id="cancel-live">Cancel search</button>':''}${signin?'<a class="button primary" target="_top" href="/signin-with-chatgpt?return_to=%2F">Continue with ChatGPT</a>':''}${maps.length?'<details class="live-location live-map"></details>':''}${groups}${missing}${tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal')}`;
+      results.innerHTML = `<h3>Live Odisha tenant search</h3>${busy?'':`<p role="status">${escape(message)}</p>`}<p>${count.format(completed.length)} of ${count.format(targets.length)} selected ${targets.length===1?'village':'villages'} checked${completed.length?` · ${count.format(hitCount)} matching tenant ${hitCount===1?'entry':'entries'}`:''}.</p>${busy?'<button class="button secondary" id="cancel-live">Cancel search</button>':''}${maps.length?'<details class="live-location live-map"></details>':''}${groups}${missing}${tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal')}`;
       if (maps.length) {
         const holdings=new Map(completed.filter(item=>item.location.riCode)
           .map(item=>[item.location.id,item.hits.map(hit=>hit.khata).filter(Boolean)]));
@@ -154,7 +154,6 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
       try {
         const response=await fetch('/api/odisha/tenant-search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:location.id,names}),signal:abort.signal});
         const item=await response.json();
-        if (response.status===401) { paint('Sign in to run the saved live search, then select Search again.',false,true); return; }
         if (!response.ok) {
           failures.push([location,item.error||'The village could not be checked.']);
           if (response.status===429) { paint('The search paused because Bhulekh or India Land Search is busy.',false); return; }
