@@ -19,9 +19,9 @@ try {
   await asset('app.mjs', /^text\/javascript/);
   await asset('style.css', /^text\/css/);
   await asset('vendor/pdf-lib.js', /^text\/javascript/);
-  for (const legacy of ['runtime.mjs','indexed-results.mjs','odisha-scope.mjs','live-ror.mjs','live-odisha-map.mjs','server/index.js']) {
-    assert.equal((await fetch(new URL(legacy,url))).status,404,legacy);
-  }
+  const runtime=await (await asset('runtime.mjs', /^text\/javascript/)).text();
+  assert.match(runtime, /hosted:false, indexBase:"", pages:true/);
+  assert.equal((await fetch(new URL('server/index.js',url))).status,404);
   const maps=await (await asset('odisha-map-snapshots.json', /^application\/json/)).json();
   assert.ok(maps.villages['19-3-79-8']['01'].features.length>1000);
   const directory = await (await asset('villages.json', /^application\/json/)).json();

@@ -38,7 +38,7 @@ test('Kapaleswar uses the browser sheet form on HTTPS and the assigned map serve
 
 test('Kapaleswar has dated, exact-sheet fallback data if the hosted worker cannot reach BhuNaksha', async ()=>{
   const mapSnapshots=JSON.parse(await readFile(snapshotUrl,'utf-8'));
-  const site=makeLandReviewWorker({assets:{},requireIdentity:false,mapSnapshots,
+  const site=makeLandReviewWorker({assets:{},mapSnapshots,
     async readMap(){throw Error('fixture transport error');}});
   assert.deepEqual(await (await site.fetch(request(kapaleswarCode))).json(),{sheets:['01','02','03'],captured:'2026-11-24'});
   const one=await (await site.fetch(request(kapaleswarCode,'01'))).json();
@@ -58,7 +58,7 @@ test('A BhuNaksha throttle does not fan out across hosts or trigger another look
     calls++;
     return new Response('Throttle',{status:429,headers:{'Retry-After':'30'}});
   });
-  const site=makeLandReviewWorker({assets:{},requireIdentity:false,readMap});
+  const site=makeLandReviewWorker({assets:{},readMap});
   const first=await site.fetch(request(kapaleswarCode));
   assert.equal(first.status,429);
   assert.ok(Number(first.headers.get('retry-after'))>0);

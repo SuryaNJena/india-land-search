@@ -25,6 +25,10 @@ The app runs in the browser on GitHub Pages. Searches, imported records and PDFs
 stay local. A [fictional demo](https://suryanjena.github.io/india-land-search/?demo=1)
 has sample plots, a map, and two RoRs ready to export.
 
+## Hosted edition
+
+The separate hosted edition retains signed-out Bhulekh village lookup and BhuNaksha maps. The GitHub Pages build uses local records, snapshots and official portal links. [Data sources](docs/DATA-SOURCES.md)
+
 ## Move an existing workspace
 
 On your previous installation, choose **Back up workspace** to download a ZIP.

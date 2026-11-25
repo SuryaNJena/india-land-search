@@ -73,9 +73,8 @@ const lookup=makeBhulekhReader(async (url, options)=>{
 const site=makeLandReviewWorker({assets:{},matchRows,readTenants:lookup});
 const api='https://landreview.example/api/odisha/tenant-search';
 const request=(headers={})=>new Request(api,{method:'POST',headers:{origin:'https://landreview.example','content-type':'application/json',...headers},body:JSON.stringify({location:'3-11-102',names:['ଜେନା']})});
-assert.equal((await site.fetch(request())).status,401);
 assert.equal((await site.fetch(request({origin:'https://elsewhere.example'}))).status,403);
-const tenantResult=await site.fetch(request({'oai-authenticated-user-id':'fixture-user'}));
+const tenantResult=await site.fetch(request());
 assert.equal(tenantResult.status,200);
 const tenant=(await tenantResult.json());
 assert.equal(tenant.hits[0].tenant,'ଆଶା ଜେନା');
@@ -85,7 +84,7 @@ assert.equal(new URL(tenant.hits[0].front).searchParams.get('KhataNo'),'12/3');
 assert.equal(new URL(tenant.hits[0].back).searchParams.get('type'),'back');
 assert.equal(officialRoR({districtCode:'3',tehsilCode:'11',villageCode:'102'},'Unknown','front'),'');
 assert.deepEqual(posts,['ddlDistrict','ddlTahsil','ddlVillage','rbtnRORSearchtype$2'].map(x=>prefix+x));
-const directorySite=makeLandReviewWorker({assets:{},matchRows,requireIdentity:false,async readTenants(location,{directory}){
+const directorySite=makeLandReviewWorker({assets:{},matchRows,async readTenants(location,{directory}){
   assert.equal(directory,true);
   assert.equal(location.districtCode,'17');
   return {level:'tehsil',options:[{code:'2',label:'Test tehsil'}]};
@@ -101,7 +100,7 @@ const mapReader=makeBhunakshaReader(async (url,options)=>{
 });
 assert.equal(officialMapBase('20'),'https://app3bhunakshaodisha.nic.in/bhunaksha/');
 assert.equal(officialMapBase('19'),'https://bhunakshaodisha.nic.in:8443/bhunaksha/');
-const mapSite=makeLandReviewWorker({assets:{},matchRows,readMap:mapReader,requireIdentity:false});
+const mapSite=makeLandReviewWorker({assets:{},matchRows,readMap:mapReader});
 const mapRequest=sheet=>new Request('https://landreview.example/api/odisha/maps',{method:'POST',headers:{origin:'https://landreview.example','content-type':'application/json'},body:JSON.stringify({location:'3-11-102-8',sheet})});
 assert.deepEqual(await (await mapSite.fetch(mapRequest(''))).json(),{sheets:['01']});
 const map=await (await mapSite.fetch(mapRequest('01'))).json();
@@ -109,7 +108,7 @@ assert.equal(map.features[0].properties.kide,'101/2');
 assert.equal(map.features[0].properties.info,undefined);
 const savedMaps=JSON.parse(await fs.readFile(new URL('./worker/odisha-map-snapshots.json',import.meta.url),'utf8'));
 assert.ok(Object.values(savedMaps.villages).flatMap(Object.values).every(sheet=>sheet.features.every(f=>Object.keys(f.properties).sort().join(',')==='id,kide')));
-const fallbackSite=makeLandReviewWorker({assets:{},matchRows,requireIdentity:false,mapSnapshots:savedMaps,async readMap(){throw Error('fixture outage');}});
+const fallbackSite=makeLandReviewWorker({assets:{},matchRows,mapSnapshots:savedMaps,async readMap(){throw Error('fixture outage');}});
 const savedSheets=await (await fallbackSite.fetch(mapRequest(''))).json();
 assert.deepEqual(savedSheets.sheets,['01','02','03']);
 const savedSheet=await (await fallbackSite.fetch(mapRequest('01'))).json();

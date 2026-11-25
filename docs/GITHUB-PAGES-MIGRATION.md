@@ -27,8 +27,7 @@ flowchart LR
 
 Existing v1 workspace ZIPs retain geometry, name rules, and RoR documents when
 moved between origins. Geography supplied through an uploaded WGS84 file is
-drawn locally. The Pages build excludes legacy hosted modules and refuses
-cross-origin network resources through a browser content security policy.
+drawn locally. The Pages build disables hosted lookups and refuses cross-origin network resources through a browser content security policy. The separate hosted build keeps its signed-out government lookup.
 
 ## CP3 Test
 
@@ -52,3 +51,11 @@ portable release passed. Chromium verified local search, map inspection,
 name highlights, pin placement, persisted imports, and PDF exports with
 zero external requests. The packaged release also passed with the old index
 origin environment variable set, because the build no longer reads it.
+
+### Conflict resolution with the signed-out release
+
+The Pages runtime disables hosted lookups, and only the Pages build injects its
+local-only content policy. The hosted app retains its existing signed-out
+Bhulekh search and BhuNaksha map flows. Both browser paths have independent
+regression coverage. The reconciled branch passed all 46 Node tests, the
+offline verifier, the Sites build, the extracted Pages smoke check and Chromium.
