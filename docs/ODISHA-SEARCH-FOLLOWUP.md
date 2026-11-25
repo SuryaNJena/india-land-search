@@ -12,3 +12,17 @@ so the user has received no finding about the name.
   way to open the official village picker for a scoped live search.
 - Keep the official Bhulekh link available. Statewide name-only search still depends
   on loading a verified production dataset.
+
+## CP2 Diagram
+
+```mermaid
+flowchart TD
+    A["Submit Odisha name search"] --> B["Query the statewide index"]
+    B --> C{"Index response"}
+    C -->|"Available"| D["Show matches and coverage"]
+    C -->|"No active dataset"| E["Explain that the statewide search did not run"]
+    C -->|"Other error"| F["Show the service error and official link"]
+    E -->|"Choose a village in the hosted app"| G["Open the Bhulekh village picker"]
+    G --> H["Search selected villages using the same names"]
+    E -->|"Open the official website"| I["Bhulekh portal"]
+```
