@@ -5,3 +5,16 @@
 Use a public-domain subset of AI4Bharat Aksharantar to offer more English-to-Odia spelling matches in the name review. Use training and validation rows marked Wikidata, Samanantar, or IndicCorp. The data card and publication distinguish these mined pairs from the other subsets.
 
 Bundle the dictionary with the app and look up entries in the browser. The dictionary lookup needs no account, API key, billing, or personal name requests to a third party. Each card should distinguish dictionary spellings from the exact count found in loaded land records. Preserve curated spellings, the letter variants, and explicit approval. The corpus contains ordinary words and place names as well as personal names.
+
+## CP2 Diagram
+
+```mermaid
+flowchart LR
+  A[Pinned Aksharantar archive] --> B[Check checksum and keep allowed sources]
+  B --> C[Deploy compact Odia spelling asset]
+  C --> D[Look up approved language in browser]
+  E[Typed name] --> D
+  D --> F[Combine curated and dictionary spelling choices]
+  F --> G[Review spelling and source evidence]
+  G --> H[Search approved spelling choices]
+```
