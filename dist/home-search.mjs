@@ -309,7 +309,10 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, import
       }
       indexedSearch?.abort();
       indexedSearch=new AbortController();
-      void mountIndexedResults(results,{names,location:selectedVillage?.portalCode??'',escape,tag,signal:indexedSearch.signal});
+      void mountIndexedResults(results,{
+        names,location:selectedVillage?.portalCode??'',escape,tag,signal:indexedSearch.signal,
+        onChooseVillage:odisha ? ()=>odisha.focusLocation() : undefined
+      });
     } else {
       indexedSearch?.abort(); indexedSearch=undefined;
       submitted=true;

@@ -285,7 +285,7 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       try {
         const data=await readIndex?.(env.DB,{names,location,offset});
         if (data?.invalid) return json(400,{error:'Enter a name containing letters or digits.'},cors);
-        if (!data) return json(503,{error:'The statewide Odisha land-record index has not been loaded.'},cors);
+        if (!data) return json(503,{code:'index_not_loaded',error:'The statewide Odisha land-record index has not been loaded.'},cors);
         return json(200,{...data,hits:data.hits.map(hit=>({...hit,
           front:officialRoR(hit.location,hit.khata,'front'),back:officialRoR(hit.location,hit.khata,'back')}))},cors);
       } catch {
