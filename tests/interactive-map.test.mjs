@@ -64,7 +64,10 @@ test('Plot Info matches by parcel ID and RoR matches by exact plot number',()=>{
     {properties:{id:'parcel-a',kide:'12/3'}},{properties:{id:'parcel-b',kide:'12/3'}},{properties:{id:'parcel-c',kide:'12'}}
   ]};
   const fromInfo=new Set([gis+'/parcel-b','19030807902/parcel-a']);
-  assert.deepEqual([...sheetHighlights(sheet,['12'],fromInfo).keys()],[gis+'/parcel-b',gis+'/parcel-c']);
+  const highlights=sheetHighlights(sheet,['12','12/3'],fromInfo);
+  assert.equal(highlights.get(gis+'/parcel-a').level,'holding');
+  assert.equal(highlights.get(gis+'/parcel-b').level,'full');
+  assert.equal(highlights.get(gis+'/parcel-c').level,'holding');
 });
 
 function officialViewerRecord() {
