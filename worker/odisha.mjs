@@ -512,7 +512,7 @@ export function readBhulekhPlotSchedule(html) {
   const consolidatedPlots=new Set();
   let consolidated=false;
   let header=false;
-  const value=cell=>decode(cell[2].replace(/<[^>]+>/g,'')).trim();
+  const value=cell=>decode(cell[2].split(/<[^>]+>/u).join(' ')).trim();
   const plotFormat=/^\d{1,12}(?:\/\d{1,12}){0,4}$/;
   const hasControl=(cell,suffix)=>[...cell[2].matchAll(/<a\b([^>]*)>/gi)]
     .some(([,attrs])=>attributes(attrs).get('id')?.match(/^gvRorBack_ctl\d+_lblPlot(cni|ci)$/i)?.[1].toLowerCase()===suffix);
