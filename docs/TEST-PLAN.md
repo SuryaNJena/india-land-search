@@ -72,3 +72,12 @@ flowchart LR
 ```
 
 `tests/live-map-matches.test.mjs` covers both layouts, Odia digits, exact subdivisions and exclusion of consolidation block numbers. The browser fixture checks that a map with four matching khatas colours the scheduled parcels before any Plot Info call.
+
+## Plot text beyond the tenant directory
+
+A tenant option contains a listed name and khata. A parcel's Plot Info can also name a parent or co-holder. For Bharatapada sheet 01, the queried parent spelling occurs in plot 43 and the back schedule for khata 150 includes 43, but its tenant options omit that parent. The geometry response supplies an ID and number with empty plot text.
+
+    Open search map → colour tenant-hit schedules → check remaining numbered parcels
+    Plot Info name match → colour exact parcel → look up discovered khata → colour scheduled plots
+
+The browser regression must detect a Plot Info match outside the tenant hits and colour a sibling parcel from its khata without selecting any plot. Changing or closing the sheet must stop further background lookups.
