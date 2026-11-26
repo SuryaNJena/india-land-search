@@ -15,6 +15,8 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     <div class="toolbar"><label class="label" ${showVillage?'':'hidden'}>Village<select id="bhu-village">${locations.map((place,i)=>`<option value="${i}">${escape(place.village)} · ${escape(place.tehsil)}</option>`).join('')}</select></label>
     <label class="label">Sheet<select id="bhu-sheet" disabled></select></label></div>
     <div data-roR-plots></div><p id="bhu-match-status" role="status"></p>
+    <div id="bhu-discovery" hidden><span data-progress role="status"></span>
+      <button type="button" class="plain-link" data-scan-control>Pause</button></div>
     <p data-bhu-save-status role="status" hidden></p>
     <p id="bhu-status" role="status"></p>
     <button class="plain-link" type="button" id="bhu-retry" hidden>Retry map</button>
@@ -93,6 +95,10 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
   const zoomIn=get('bhu-zoom-in'), zoomOut=get('bhu-zoom-out'), fitButton=get('bhu-fit');
   const plotInfo=get('bhu-plot-info');
   const details=new Map(), verifiedPlots=new Set(), verifiedVillages=new Set(), autoAttempted=new Set();
+  const checkedParcels=new Set(), discoveredNumbers=new Map(), parcelRequests=new Map();
+  const discovery=get('bhu-discovery'), progress=discovery.querySelector('[data-progress]');
+  const scanControl=discovery.querySelector('button');
+  let scanVersion=0, parcelQueue=Promise.resolve();
   let view=newSheetView(), projection, selected, mapFrame=0, loadingPlot=false, plotError='';
   let pending, plotRequest, exportRequest, geometry, paths=[], loaded=false, unmountGeo, busyExport=false;
   const selectedKey=()=>selected && geometry ? geometry.gis+'/'+selected.properties.id : '';
@@ -109,7 +115,8 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     return data;
   }
 
-  const getNumbers=place=>new Set([...(matchedPlots.get(place.id)??[]),...(fromRoR.get(place.id)??[])].map(plotNumber).filter(Boolean));
+  const getNumbers=place=>new Set([...(matchedPlots.get(place.id)??[]),...(fromRoR.get(place.id)??[]),
+    ...(discoveredNumbers.get(place.id)??[])].map(plotNumber).filter(Boolean));
   function refreshBasemap() {
     const geographic=geometry && (geometry.geographic ?? userLayers.get(geometry.gis));
     geoFile.disabled=!geometry;
@@ -250,23 +257,35 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     }
   }
 
-  async function loadSelectedPlot() {
-    if (isLocal || loadingPlot || !selected?.properties.kide || details.has(selectedKey())) return;
-    const key=selectedKey(), place=currentPlace(), plot=selected.properties, current=geometry;
-    loadingPlot=true;
-    try {
-      const location=[place.districtCode,place.tehsilCode,place.villageCode,place.riCode].join('-');
-      const data=await postOdisha('maps',{location,sheet:current.sheet,parcel:{id:plot.id,number:plot.kide}});
+  function readParcel(place,current,plot) {
+    const key=current.gis+'/'+plot.id;
+    if (details.has(key)) return Promise.resolve(details.get(key));
+    if (parcelRequests.has(key)) return parcelRequests.get(key);
+    const request=parcelQueue.then(async()=>{
+      const data=await postOdisha('maps',{location:mapLocation(place),sheet:current.sheet,parcel:{id:plot.id,number:plot.kide}});
       const matches=matchRows([{status:'Retrieved',info:data.info}],{names:searchNames})[0].full;
       if (details.size>=100) details.delete(details.keys().next().value);
       details.set(key,{data,matches});
-      if (root.isConnected) void remember({kind:'plot',place,sheet:current.sheet,number:plot.kide,
-        data:{...data,id:plot.id,number:plot.kide}});
       if (matches.length) {
         verifiedPlots.add(key);
         verifiedVillages.add(place.id);
-        if (currentPlace()===place) {render();refreshBasemap();}
+        if (geometry===current && root.isConnected) {render();refreshBasemap();}
       }
+      return {data,matches};
+    }).finally(()=>parcelRequests.delete(key));
+    parcelRequests.set(key,request);
+    parcelQueue=request.catch(()=>{});
+    return request;
+  }
+
+  async function loadSelectedPlot() {
+    if (isLocal || loadingPlot || !selected?.properties.kide) return;
+    const key=selectedKey(), place=currentPlace(), plot=selected.properties, current=geometry;
+    loadingPlot=true;
+    try {
+      const {data}=await readParcel(place,current,plot);
+      if (root.isConnected) void remember({kind:'plot',place,sheet:current.sheet,number:plot.kide,
+        data:{...data,id:plot.id,number:plot.kide}});
     } catch (error) {
       if (selectedKey()===key) plotError={
         message:error instanceof SyntaxError?'The Plot Info response could not be read.':error.message,
@@ -278,6 +297,63 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
       showPlotInfo();
       if (selectedKey()!==key) void loadSelectedPlot();
     }
+  }
+
+  async function scanSheet() {
+    const version=++scanVersion, current=geometry, place=currentPlace();
+    if (!current || isLocal || !searchNames.length || !root.open) return;
+    const active=()=>version===scanVersion && geometry===current && root.open && root.isConnected;
+    const pace=()=>new Promise(resolve=>setTimeout(resolve,1100));
+    const order=new Intl.Collator('en',{numeric:true});
+    const plots=current.features.map(f=>f.properties).filter(p=>p.kide)
+      .sort((a,b)=>order.compare(a.kide,b.kide));
+    discovery.hidden=false;
+    scanControl.hidden=false;
+    scanControl.textContent='Pause';
+    scanControl.onclick=()=>{++scanVersion;finish('Paused.',true);};
+    let covered=0, missing=0, consecutiveFailures=0;
+    function finish(message,canResume) {
+      progress.textContent=`${covered} of ${plots.length} numbered parcels checked or matched by khata. ${message}`;
+      scanControl.hidden=!canResume;
+      scanControl.textContent='Resume checking';
+      scanControl.onclick=()=>void scanSheet();
+    }
+    // Let the selected tenant schedules colour known plots before querying additional parcels.
+    while (plotRequest && active()) await pace();
+    for (const plot of plots) {
+      if (!active()) return;
+      const key=current.gis+'/'+plot.id;
+      if (checkedParcels.has(key) || getNumbers(place).has(plotNumber(plot.kide))) {covered++;continue;}
+      progress.textContent=`${covered} of ${plots.length} numbered parcels checked or matched by khata. Checking plot ${plot.kide}…`;
+      try {
+        await pace();
+        if (!active()) return;
+        const {data,matches}=await readParcel(place,current,plot);
+        if (!active()) return;
+        if (matches.length && data.khata && !matchedHoldings.get(place.id)?.includes(data.khata)) {
+          const docKey=place.id+'/'+data.khata;
+          if (!documents.has(docKey)) {
+            const report=await postOdisha('ror',{location:place.id,khata:data.khata,side:'back',plots:true});
+            if (!active()) return;
+            documents.set(docKey,report.plots);
+          }
+          const numbers=discoveredNumbers.get(place.id)??new Set();
+          for (const number of documents.get(docKey)) numbers.add(plotNumber(number));
+          discoveredNumbers.set(place.id,numbers);
+          render();refreshBasemap();showPlotInfo();
+        }
+        checkedParcels.add(key);
+        consecutiveFailures=0;
+        covered++;
+      } catch (error) {
+        if (!active()) return;
+        if (error.status===404) {missing++;consecutiveFailures=0;continue;}
+        if (error.status===502 && ++consecutiveFailures<3) {missing++;continue;}
+        finish(error.message,true);
+        return;
+      }
+    }
+    if (active()) finish(missing?`Plot Info unavailable for ${missing}.`:'Sheet check complete.',missing>0);
   }
 
   function selectPlot(feature,focus=false) {
@@ -336,6 +412,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
         }
       } catch (error) { issue=error.message; }
       finally {
+        if (plotRequest===abort) plotRequest=undefined;
         button.disabled=false;
         if (!abort.signal.aborted) {
           fromRoR.set(place.id,numbers);
@@ -349,6 +426,8 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
   }
 
   async function load(sheetCode) {
+    ++scanVersion;
+    discovery.hidden=true;
     pending?.abort();
     const abort = new AbortController();
     pending=abort;
@@ -391,6 +470,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
       layerDetails.hidden=isLocal&&!next.layerCatalog;
       render();
       refreshBasemap();
+      void scanSheet();
       if (layerDetails.open || geoDetails.open) void loadLayers();
       if (root.isConnected && (!initialMap || next!==initialMap)) void remember({kind:'map',place,sheet:next.sheet,data:next});
     } catch(error) {
@@ -452,7 +532,11 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     } catch (error) { if (geometry===current) geoStatus.textContent=error.message; }
   };
   geoDetails.ontoggle=()=>{if (geoDetails.open) {refreshBasemap();void loadLayers();}};
-  root.ontoggle=()=>{if (root.open&&!loaded){loaded=true;showHoldings();void load(initialSheet);}};
+  root.ontoggle=()=>{
+    if (!root.open) {++scanVersion;return;}
+    if (!loaded) {loaded=true;showHoldings();void load(initialSheet);}
+    else if (geometry) void scanSheet();
+  };
   if (root.open) queueMicrotask(()=>root.ontoggle());
   village.onchange=()=>{plotRequest?.abort();exportRequest?.abort();busyExport=false;sheet.replaceChildren();showHoldings();void load();};
   sheet.onchange=()=>{exportRequest?.abort();busyExport=false;void load(sheet.value);};
