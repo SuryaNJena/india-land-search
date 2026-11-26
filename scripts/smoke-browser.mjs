@@ -245,9 +245,9 @@ try {
     "CanvasRenderingContext2D.prototype.fillText=function(label,...args){if(this.canvas.id==='bhu-canvas')plotTexts.push(label);return draw.call(this,label,...args);};"+
     "const place={id:'19-3-79',districtCode:'19',tehsilCode:'3',villageCode:'79',riCode:'8',village:'Fixture village',tehsil:'Fixture tehsil'};"+
     "const tag=(href,label)=>href?'<a href=\"'+href+'\">'+label+'</a>':'';"+
-    "mountLiveOdishaMap(document.querySelector('details'),[place],String,tag,new Map(),new Map([[place.id,['7']]]),['Fixture Name']);"+
+    "mountLiveOdishaMap(document.querySelector('details'),[place],String,tag,new Map(),new Map([[place.id,['7','8','9','10']]]),['Fixture Name']);"+
     '</script>'}));
-  const requests=[];
+  const requests=[], scheduleRequests=[];
   const fallbackPortal='https://bhunakshaodisha.nic.in:8443/bhunaksha/#home-pane';
   const rectangularParcel=(id,kide,x)=>({properties:{id,kide},geometry:{type:'Polygon',
     coordinates:[[[x,0],[x+90,0],[x+90,100],[x,100],[x,0]]]}});
@@ -268,12 +268,15 @@ try {
     return route.fulfill({json:sheet?{sheet,gis:'19030807901',features}:{sheets:['01']}});
   });
   await page.route('**/api/odisha/ror',route=>{
-    assert.deepEqual(route.request().postDataJSON(),{location:'19-3-79',khata:'7',side:'back',plots:true});
-    return route.fulfill({json:{plots:['12/3']}});
+    const {khata,...scope}=route.request().postDataJSON();
+    assert.deepEqual(scope,{location:'19-3-79',side:'back',plots:true});
+    scheduleRequests.push(khata);
+    return route.fulfill({json:{plots:[khata==='10'?'12/3':'900/'+khata]}});
   });
   await page.goto(mapPage.href);
   await page.getByText('BhuNaksha village map',{exact:true}).click();
   await page.getByText(/1 search-matched parcel on sheet 01/).waitFor();
+  assert.deepEqual(scheduleRequests,['7','8','9','10']);
   assert.deepEqual(requests,[]);
   assert.deepEqual(await page.evaluate(()=>window.plotTexts),[]);
   await click('Zoom in');

@@ -58,3 +58,17 @@ Start in an empty browser. Use Name matching, pick Bharatpada from labelled vill
 ## GitHub Pages smoke check
 
 Serve the static build at a repository subpath. Verify that assets load, village lookup and local workspace import work, and official portal links are visible. With no search API configured, confirm that village lookup sends no requests to Site Worker routes. If live search is enabled, verify the Pages origin and run the signed-out search flow against the configured API.
+
+## Automatic colouring on live village maps
+
+In a consolidated Bhulekh back report, column 8 is a consolidation block number. Columns 9 and 10 contain the plots inside and outside those blocks. The regular report uses column 8 for plot numbers. Reading the block number as a plot number can colour an unrelated parcel and leave the real match blank until Plot Info is opened.
+
+```mermaid
+flowchart LR
+  Search[Matching khatas] --> Report[Bhulekh back reports]
+  Report --> Plots[Plot numbers from the verified report layout]
+  Plots --> Map[Exact plot numbers on the open BhuNaksha sheet]
+  Map --> Colour[Colour matches when the schedules load]
+```
+
+`tests/live-map-matches.test.mjs` covers both layouts, Odia digits, exact subdivisions and exclusion of consolidation block numbers. The browser fixture checks that a map with four matching khatas colours the scheduled parcels before any Plot Info call.

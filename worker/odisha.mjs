@@ -509,21 +509,34 @@ export function readBhulekhPlotSchedule(html) {
   const schedule=/<table\b[^>]*\sid\s*=\s*["']gvRorBack["'][^>]*>([\s\S]*?)<\/table>/i.exec(html);
   if (!schedule) return null;
   const plots=new Set();
+  const consolidatedPlots=new Set();
+  let consolidated=false;
   let header=false;
+  const value=cell=>decode(cell[2].split(/<[^>]+>/u).join(' ')).trim();
+  const plotFormat=/^\d{1,12}(?:\/\d{1,12}){0,4}$/;
+  const hasControl=(cell,suffix)=>[...cell[2].matchAll(/<a\b([^>]*)>/gi)]
+    .some(([,attrs])=>attributes(attrs).get('id')?.match(/^gvRorBack_ctl\d+_lblPlot(cni|ci)$/i)?.[1].toLowerCase()===suffix);
   for (const [,row] of schedule[1].matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
     const cells=[...row.matchAll(/<t([hd])\b[^>]*>([\s\S]*?)<\/t\1>/gi)];
-    const value=cell=>decode(cell[2].replace(/<[^>]+>/g,'')).trim();
     if (!header) {
       header=cells.length===9 && cells.every(cell=>cell[1].toLowerCase()==='h') &&
         cells.map(value).join(',')==='8,9,10,11,1,2,13,14,15';
       continue;
     }
     if (cells.length!==9 || !cells.every(cell=>cell[1].toLowerCase()==='d')) continue;
-    const plot=value(cells[0]).normalize('NFKC').replace(/[\u0b66-\u0b6f]/gu,digit=>String(digit.charCodeAt(0)-0x0b66))
-      .replace(/[\u200c\u200d\s]/gu,'');
-    if (/^\d{1,12}(?:\/\d{1,12}){0,4}$/.test(plot)) plots.add(plot);
+    const plot=normalizeMapNumber(value(cells[0]));
+    if (plotFormat.test(plot)) plots.add(plot);
+    // Consolidated reports keep block numbers in column 8 and plot links in columns 9 and 10.
+    for (const [cell,suffix] of [[cells[1],'ci'],[cells[2],'cni']]) {
+      if (!hasControl(cell,suffix)) continue;
+      consolidated=true;
+      const number=value(cell).replace(/[\u200c\u200d]/gu,'')
+        .match(/^(\p{Nd}+(?:\s*\/\s*\p{Nd}+)*)(?:\s+\p{L}[\s\S]*)?$/u)?.[1];
+      const id=normalizeMapNumber(number);
+      if (plotFormat.test(id)) consolidatedPlots.add(id);
+    }
   }
-  return header ? [...plots] : null;
+  return header ? [...(consolidated?consolidatedPlots:plots)] : null;
 }
 
 export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),

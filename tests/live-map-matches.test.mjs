@@ -8,9 +8,24 @@ const schedule='<div id="ContentArea"><table><tr><td><table id="gvRorBack">'
   + ['୧୨ / ୩','12/3','12','', 'Unverified'].map(plot=>`<tr><td>${plot}</td>${'<td>999</td>'.repeat(8)}</tr>`).join('')
   + '</table></td></tr></table></div>';
 
-test('Official plot schedule selects only column 8, normalizes Odia digits, and preserves subdivisions',()=>{
+test('A regular RoR reads column 8, normalizes Odia digits, and preserves subdivisions',()=>{
   assert.deepEqual(readBhulekhPlotSchedule(schedule),['12/3','12']);
   assert.equal(readBhulekhPlotSchedule(schedule.replace('<th>8</th>','<th>7</th>')),null);
+});
+test('A consolidated RoR colours exact plots from columns 9 and 10 and ignores block numbers',()=>{
+  const row=(index,block,inside,outside)=>`<tr><td>${block}</td>
+    <td><a id="gvRorBack_ctl${index}_lblPlotci">${inside}</a></td>
+    <td><a id="gvRorBack_ctl${index}_lblPlotcni">${outside}</a></td>${'<td>999</td>'.repeat(6)}</tr>`;
+  const consolidated='<table id="gvRorBack"><tr>'+['8','9','10','11','1','2','13','14','15'].map(n=>`<th>${n}</th>`).join('')+'</tr>'+
+    row('05','8','୫୨୧ / ୧୪୦୦&nbsp; ବାଲିଚକ','')+
+    row('06','','521 ବାଲିଚକ','')+
+    row('07','123','','41')+
+    '<tr><td></td><td>&nbsp;</td><td>3 plots</td>'+ '<td>999</td>'.repeat(6) + '</tr></table>';
+  const numbers=readBhulekhPlotSchedule(consolidated);
+  assert.deepEqual(numbers,['521/1400','521','41']);
+  const gis='03110810201';
+  const features=['8','123','521/1400','521','41','41/2'].map(number=>({properties:{id:number,kide:number}}));
+  assert.deepEqual([...sheetHighlights({gis,features},numbers).keys()],['521/1400','521','41'].map(id=>gis+'/'+id));
 });
 test('Anonymous scoped map matches receive only plot IDs from the fixed official back report',async()=>{
   const calls=[];

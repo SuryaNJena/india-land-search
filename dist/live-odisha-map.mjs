@@ -5,7 +5,7 @@ import {mountParcelBasemap} from './parcel-basemap.mjs';
 import {localMapLayer,plotNumber,sheetHighlights} from './sheet-overlays.mjs';
 import {mapImageURL,mapLocation,officialPlotURL,postOdisha,readExactPlot,safeMapRaster} from './odisha-lookup-source.mjs';
 
-const limit=12, autoLimit=3;
+const limit=12;
 const asciiName=name=>/[\u0b00-\u0b7f]/u.test(name) && globalThis.Sanscript ? globalThis.Sanscript.t(name,'oriya','iso').normalize('NFD').replace(/[^\x20-\x7e]/g,'') : name;
 
 export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Map(),matchedHoldings=new Map(),searchNames=[],options={}) {
@@ -303,7 +303,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     const button=plotBox.querySelector('[data-load-plots]');
     if (!button) return;
     button.onclick=()=>void loadHoldingPlots([...plotBox.querySelectorAll('input:checked')].map(box=>khatas[Number(box.value)]));
-    if (khatas.length<=autoLimit && !autoAttempted.has(place.id)) {
+    if (khatas.length<=limit && !autoAttempted.has(place.id)) {
       autoAttempted.add(place.id);
       void loadHoldingPlots(khatas);
     }
