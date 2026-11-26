@@ -1,5 +1,5 @@
 import {drawMap,makeMapPDF,mapViewLimit,newSheetView,panSheetView,parcelFocus,sheetProjection,zoomSheetView} from './maps.mjs';
-import {matchRows} from './core.mjs';
+import {extractCaste,matchRows,normalize} from './core.mjs';
 import {download} from './files.mjs';
 import {mountParcelBasemap} from './parcel-basemap.mjs';
 import {localMapLayer,plotNumber,sheetHighlights} from './sheet-overlays.mjs';
@@ -42,7 +42,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
           aria-label="BhuNaksha parcel map. Drag or use the arrow keys to pan. Use plus and minus to zoom. Click a parcel or use Find plot for Plot Info."></canvas></div>
         <section id="bhu-plot-info" class="bhu-plot-info" aria-label="Plot Info" aria-live="polite" hidden></section>
       </div>
-      <div class="legend"><span><i class="bhu-selected-swatch"></i>Selected plot</span><span><i class="bhu-matched-swatch"></i>Search match</span><span>Plot numbers appear from 200% zoom when there is room.</span></div>
+      <div class="legend"><span><i class="bhu-selected-swatch"></i>Selected plot</span><span><i class="bhu-matched-swatch"></i>Name in Plot Info</span><span><i class="bhu-khata-swatch" style="background:white;border:2px solid #7c54ad"></i>Listed in matching khata</span><span>Plot numbers appear from 200% zoom when there is room.</span></div>
     </div>
     <div class="actions" id="bhu-map-actions" hidden>
       <button class="button secondary" type="button" id="bhu-export">Download this sheet PDF</button>
@@ -125,8 +125,12 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     if (!geoDetails.open) return;
     unmountGeo?.();
     const numbers=getNumbers(currentPlace());
-    const highlights=new Set((geographic?.features??[]).filter(feature=>numbers.has(plotNumber(feature.properties.kide)) || verifiedPlots.has(geometry.gis+'/'+feature.properties.id))
-      .map(feature=>String(feature.properties.id)));
+    const highlights=new Map();
+    if (geographic && geometry) for (const feature of geographic.features) {
+      const id=String(feature.properties.id);
+      if (verifiedPlots.has(geometry.gis+'/'+id)) highlights.set(id,{level:'full'});
+      else if (numbers.has(plotNumber(feature.properties.kide))) highlights.set(id,{level:'holding'});
+    }
     const rasterURL=safeMapRaster(raster?.url,geometry?.gis);
     unmountGeo=mountParcelBasemap(get('bhu-basemap'),{geographic,highlights,pinState,
       geographicRaster:raster?.projection==='EPSG:3857' && rasterURL?{...raster,url:rasterURL}:undefined});
@@ -196,7 +200,8 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     exportVillage.disabled=busyExport||!hasHighlights(currentPlace());
     const capture=geometry.captured?`Saved BhuNaksha copy · ${geometry.captured}. `:'';
     const revision=geometry.sourceUpdated?` Source updated ${geometry.sourceUpdated}.`:'';
-    const message=`${capture}${geometry.features.length} mapped parcels · ${highlights.size} search-matched ${highlights.size===1?'parcel':'parcels'} on sheet ${geometry.sheet}.${
+    const direct=[...highlights.values()].filter(hit=>hit.level==='full').length;
+    const message=`${capture}${geometry.features.length} mapped parcels · ${direct} direct ${direct===1?'match':'matches'} · ${highlights.size-direct} khata-only on sheet ${geometry.sheet}.${
       selected?.properties.kide?` Selected plot ${selected.properties.kide}.`:''}${revision}`;
     if (status.textContent!==message) status.textContent=message;
   }
@@ -207,9 +212,10 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     const number=selected.properties.kide;
     const key=selectedKey();
     const entry=details.get(key);
-    const matched=sheetHighlights(geometry,getNumbers(currentPlace()),verifiedPlots).has(key);
+    const level=sheetHighlights(geometry,getNumbers(currentPlace()),verifiedPlots).get(key)?.level;
     const heading='<h3>Plot Info · '+escape(number||'Unnumbered parcel')+'</h3>';
-    const match=matched?'<p class="bhu-plot-match">Search match'+(entry?.matches.length?' · '+escape(entry.matches.join(', ')):'')+'</p>':'';
+    const match=level==='full'?'<p class="bhu-plot-match">Search match'+(entry?.matches.length?' · '+escape(entry.matches.join(', ')):'')+'</p>':
+      level==='holding'?'<p class="bhu-plot-match">Listed in a matching khata</p>':'';
     if (!number) {
       plotInfo.innerHTML=heading+'<p>BhuNaksha did not supply a plot number for this parcel.</p>';
     } else if (plotError) {
@@ -249,8 +255,14 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
       plotInfo.innerHTML=heading+match+'<p>Loading the official Plot Info…</p>';
     } else {
       const {data}=entry;
+      const caste=extractCaste(data.info).raw;
+      const parentName=entry.matches.some(name=>normalize(data.info).split(/(?:ପି|ପିତା|parent)\s*[:ଃ]\s*/u).slice(1)
+        .some(fragment=>normalize(fragment).startsWith(normalize(name))));
       plotInfo.innerHTML=heading+match+
+        (parentName?'<p>Name appears in the parent field.</p>':'')+
+        (!entry.matches.length && searchNames.length && data.info?'<p>Checked · no name match in this parcel’s Plot Info.</p>':'')+
         (data.info?'<p class="bhu-plot-source">'+escape(data.info)+'</p>':'<p>BhuNaksha returned no source text for this parcel.</p>')+
+        (caste?'<details><summary>Jaati · as recorded</summary><p>'+escape(caste)+'</p></details>':'')+
         (data.area?'<p>'+escape(data.area)+'</p>':'')+
         '<div class="actions">'+(data.khata?'<span>Khata '+escape(data.khata)+'</span>':'')+
         tag(data.front,'RoR front')+tag(data.back,'RoR back')+'</div>';
@@ -300,57 +312,74 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
   }
 
   async function scanSheet() {
-    const version=++scanVersion, current=geometry, place=currentPlace();
+    const version=++scanVersion, visible=geometry, visiblePlace=currentPlace();
+    let current=visible,place=visiblePlace;
     if (!current || isLocal || !searchNames.length || !root.open) return;
-    const active=()=>version===scanVersion && geometry===current && root.open && root.isConnected;
+    const active=()=>version===scanVersion && geometry===visible && root.open && root.isConnected;
     const pace=()=>new Promise(resolve=>setTimeout(resolve,1100));
     const order=new Intl.Collator('en',{numeric:true});
-    const plots=current.features.map(f=>f.properties).filter(p=>p.kide)
-      .sort((a,b)=>order.compare(a.kide,b.kide));
+    let plots=[];
     discovery.hidden=false;
     scanControl.hidden=false;
     scanControl.textContent='Pause';
     scanControl.onclick=()=>{++scanVersion;finish('Paused.',true);};
     let covered=0, missing=0, consecutiveFailures=0;
     function finish(message,canResume) {
-      progress.textContent=`${covered} of ${plots.length} numbered parcels checked or matched by khata. ${message}`;
+      progress.textContent=`${covered} of ${plots.length} numbered parcels checked. ${message}`;
       scanControl.hidden=!canResume;
       scanControl.textContent='Resume checking';
       scanControl.onclick=()=>void scanSheet();
     }
     // Let the selected tenant schedules colour known plots before querying additional parcels.
     while (plotRequest && active()) await pace();
-    for (const plot of plots) {
-      if (!active()) return;
-      const key=current.gis+'/'+plot.id;
-      if (checkedParcels.has(key) || getNumbers(place).has(plotNumber(plot.kide))) {covered++;continue;}
-      progress.textContent=`${covered} of ${plots.length} numbered parcels checked or matched by khata. Checking plot ${plot.kide}…`;
-      try {
-        await pace();
-        if (!active()) return;
-        const {data,matches}=await readParcel(place,current,plot);
-        if (!active()) return;
-        if (matches.length && data.khata && !matchedHoldings.get(place.id)?.includes(data.khata)) {
-          const docKey=place.id+'/'+data.khata;
-          if (!documents.has(docKey)) {
-            const report=await postOdisha('ror',{location:place.id,khata:data.khata,side:'back',plots:true});
+    const ordered=[visiblePlace,...locations.filter(p=>p.id!==visiblePlace.id)];
+    for(const target of ordered){
+      if(!active())return;
+      place=target;
+      let sheets;
+      try {sheets=(await request(place,'',undefined)).sheets??[];}
+      catch(error){if(active())finish(error.message,true);return;}
+      if(place===visiblePlace)sheets=[visible.sheet,...sheets.filter(s=>s!==visible.sheet)];
+      for(const code of sheets){
+        if(!active())return;
+        try {current=place===visiblePlace && code===visible.sheet?visible:await request(place,code,undefined);}
+        catch(error){if(active())finish(error.message,true);return;}
+        covered=0;
+        plots=current.features.map(f=>f.properties).filter(p=>p.kide)
+          .sort((a,b)=>order.compare(a.kide,b.kide));
+        for (const plot of plots) {
+          if (!active()) return;
+          const key=current.gis+'/'+plot.id;
+          if (checkedParcels.has(key)) {covered++;continue;}
+          progress.textContent=`${covered} of ${plots.length} numbered parcels checked on ${place.village} sheet ${current.sheet}. Checking plot ${plot.kide}…`;
+          try {
+            await pace();
             if (!active()) return;
-            documents.set(docKey,report.plots);
+            const {data,matches}=await readParcel(place,current,plot);
+            if (!active()) return;
+            if (matches.length && data.khata && !matchedHoldings.get(place.id)?.includes(data.khata)) {
+              const docKey=place.id+'/'+data.khata;
+              if (!documents.has(docKey)) {
+                const report=await postOdisha('ror',{location:place.id,khata:data.khata,side:'back',plots:true});
+                if (!active()) return;
+                documents.set(docKey,report.plots);
+              }
+              const numbers=discoveredNumbers.get(place.id)??new Set();
+              for (const number of documents.get(docKey)) numbers.add(plotNumber(number));
+              discoveredNumbers.set(place.id,numbers);
+              render();refreshBasemap();showPlotInfo();
+            }
+            checkedParcels.add(key);
+            consecutiveFailures=0;
+            covered++;
+          } catch (error) {
+            if (!active()) return;
+            if (error.status===404) {missing++;consecutiveFailures=0;continue;}
+            if (error.status===502 && ++consecutiveFailures<3) {missing++;continue;}
+            finish(error.message,true);
+            return;
           }
-          const numbers=discoveredNumbers.get(place.id)??new Set();
-          for (const number of documents.get(docKey)) numbers.add(plotNumber(number));
-          discoveredNumbers.set(place.id,numbers);
-          render();refreshBasemap();showPlotInfo();
         }
-        checkedParcels.add(key);
-        consecutiveFailures=0;
-        covered++;
-      } catch (error) {
-        if (!active()) return;
-        if (error.status===404) {missing++;consecutiveFailures=0;continue;}
-        if (error.status===502 && ++consecutiveFailures<3) {missing++;continue;}
-        finish(error.message,true);
-        return;
       }
     }
     if (active()) finish(missing?`Plot Info unavailable for ${missing}.`:'Sheet check complete.',missing>0);

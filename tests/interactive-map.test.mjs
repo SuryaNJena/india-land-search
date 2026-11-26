@@ -34,7 +34,8 @@ test('The map route validates identity, serves one parcel, and respects BhuNaksh
   const worker=portal.makeLandReviewWorker({assets:{},readMap:async()=>assert.fail('No geometry fetch expected'),
     readPlot:async (place,sheet,value)=>{
       calls++;
-      assert.deepEqual([place,sheet,value],[location,'01',parcel]);
+      assert.deepEqual([place,sheet],[location,'01']);
+      if(calls===1)assert.deepEqual(value,parcel);
       if(calls===2) throw limited;
       return {info:'Fixture Plot Info'};
     }});
@@ -44,10 +45,13 @@ test('The map route validates identity, serves one parcel, and respects BhuNaksh
   }));
   assert.equal((await send({id:'../parcel',number:'12/3'})).status,400);
   assert.deepEqual(await (await send(parcel)).json(),{info:'Fixture Plot Info'});
-  const throttle=await send(parcel);
+  assert.equal((await send(parcel)).status,200);
+  assert.equal(calls,1);
+  const next={id:'another',number:'14'};
+  const throttle=await send(next);
   assert.equal(throttle.status,429);
   assert.equal(throttle.headers.get('Retry-After'),'20');
-  assert.equal((await send(parcel)).status,429);
+  assert.equal((await send(next)).status,429);
   assert.equal(calls,2);
 });
 

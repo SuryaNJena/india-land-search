@@ -2,7 +2,8 @@ FROM node:24-bookworm-slim
 
 ENV NODE_ENV=production BIND_HOST=0.0.0.0 PORT=8787
 WORKDIR /app
-COPY --chown=node:node backend/server.mjs /app/backend/server.mjs
+COPY --chown=node:node backend/server.mjs backend/locality-index.mjs /app/backend/
+RUN mkdir -p /app/index && chown node:node /app/index
 COPY --chown=node:node worker/odisha.mjs /app/worker/odisha.mjs
 COPY --chown=node:node worker/odisha-map-snapshots.json /app/worker/odisha-map-snapshots.json
 COPY --chown=node:node dist/core.mjs /app/dist/core.mjs

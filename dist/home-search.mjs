@@ -8,7 +8,8 @@ import {mountOdishaScope} from './odisha-scope.mjs';
 import {loadBhulekhLocations,requestBhulekh,walkBhulekhVillages} from './odisha-live-search.mjs';
 import {mountLiveOdishaMap} from './live-odisha-map.mjs';
 import {mountVillageFinder} from './village-finder.mjs';
-import {mountOdishaBoundaries} from './odisha-boundaries.mjs';
+import {mountLocationAtlas} from './location-atlas.mjs';
+import {selectedPlaces,setMapTerms} from './shared-villages.mjs';
 import {runtime} from './runtime.mjs';
 import {mountIndexedResults} from './indexed-results.mjs';
 import {demoPlace} from './demo.mjs';
@@ -42,8 +43,10 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     const known = new Set(index.map(x => x.state).filter(Boolean));
     if (known.size === 1) criteria.state = [...known][0];
   }
-  root.innerHTML = `<div class="card-head"><div><h2>Search names in land records</h2><p>Choose a state and enter a surname or full name. Add a district, tehsil, RI, or village if you know it.</p></div></div>
-    <details class="live-location" id="village-finder"></details>
+  root.classList.add('field-panorama-home');
+  root.innerHTML = `<nav id="home-pivots" aria-label="Search approach"><button type="button" data-home-mode="village" aria-pressed="true">Find villages</button><button type="button" data-home-mode="family" aria-pressed="false">Start with a name</button></nav>
+    <div class="card-head"><div><h2>Search names in land records</h2><p>Choose a state and enter a surname or full name. Add a district, tehsil, RI, or village if you know it.</p></div></div>
+    <div class="panorama-explorer"><div id="home-atlas" ${workspace?.demo?'hidden':''}></div><details open class="live-location" id="village-finder"></details></div>
     <form id="home-search-form" novalidate>
       <div class="search-fields">
         <label class="label">State or union territory<select name="state" required><option value="">Choose a state</option>${portals.map(p => `<option>${escape(p.name)}</option>`).join('')}</select></label>
@@ -56,7 +59,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
       <p id="home-search-feedback" role="status"></p>
       <p class="muted" id="home-search-scope"></p>
     </form>
-    <details class="search-picker"><summary>Pick a location on the map <span class="optional">Optional</span></summary><div id="home-maps"></div></details>
+    <details class="search-picker" ${workspace?'':'hidden'}><summary>Pick a location on the map <span class="optional">Optional</span></summary><div id="home-maps"></div></details>
     <div id="home-search-results" class="search-results"></div>`;
   const form = root.querySelector('form');
   const results = root.querySelector('#home-search-results');
@@ -72,18 +75,56 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
   let liveSearch, indexedSearch, selectedVillage;
   const review = mountNameReview(root.querySelector('#home-name-review'),escape,clearResults,!workspace?.demo,
     workspace ? (state,names)=>countObservedNames(index.filter(entry=>entry.state===state).map(entry=>workspace.rows[entry.index]),names) : undefined);
-  const odisha = runtime.hosted && !workspace?.demo ? mountOdishaScope(scopeElement,escape,clearResults) : null;
-  const applyVillage=place=>{
-    selectState(place.state);
+  const odisha = runtime.hosted && !workspace?.demo ? mountOdishaScope(scopeElement,escape,()=>{
+    clearResults();refreshVillageFinder.chips();atlas?.show(chosen(),criteria.state);
+  }) : null;
+  const atlas=workspace?.demo?null:mountLocationAtlas(root.querySelector('#home-atlas'),{
+    onChoose:place=>refreshVillageFinder.select(place),onState:selectState
+  });
+  const chosen=()=>workspace?.demo?[]:selectedPlaces().filter(p=>!criteria.state||p.state===criteria.state);
+  const applyVillage=(place,all)=>{
+    if(place)selectState(place.state||'Odisha');
     clearResults();
-    selectedVillage=place;
-    for (const field of locationFields) criteria[field]=place[field]??'';
-    loadFields(); saveSearch(); refreshScope();
-    feedback.textContent=workspace?.demo || place.portalCode || !runtime.hosted
-      ? `Location filled from ${place.village}.`
-      : `Location filled from ${place.village}. Choose it in Bhulekh to run a village-specific live search.`;
+    selectedVillage=place??all.at(-1);
+    for (const field of locationFields) criteria[field]=selectedVillage?.[field]??'';
+    loadFields();saveSearch();refreshScope();atlas?.show(all,criteria.state);
+    feedback.textContent=all.length?all.map(p=>p.village).join(', ')+' selected.':'';
   };
-  const refreshVillageFinder=mountVillageFinder(root.querySelector('#village-finder'),escape,applyVillage,workspace?.demo ? demoPlace : undefined);
+  const refreshVillageFinder=mountVillageFinder(root.querySelector('#village-finder'),escape,applyVillage,
+    workspace?.demo?demoPlace:undefined,{onFilter:places=>atlas?.show(places.length?places:chosen(),criteria.state)});
+  atlas?.show(chosen(),criteria.state);
+  const explorer=root.querySelector('.panorama-explorer');
+  const familyNext=document.createElement('button');
+  familyNext.type='button';familyNext.className='button secondary';familyNext.textContent='Continue to villages';familyNext.hidden=true;
+  root.querySelector('#home-name-review').after(familyNext);
+  const familyTools=document.createElement('div');familyTools.className='family-tools';
+  const familyLabel=document.createElement('p');familyLabel.setAttribute('role','status');
+  const familyBack=document.createElement('button');familyBack.type='button';familyBack.className='button secondary';familyBack.textContent='Back';
+  familyTools.append(familyLabel,familyBack,familyNext);
+  explorer.after(familyTools);
+  let stage=1;
+  function familyStage(next){
+    stage=next;root.dataset.stage=String(stage);
+    const active=root.dataset.mode==='family';
+    familyTools.hidden=!active;
+    familyNext.hidden=!active || stage===3;familyBack.hidden=!active || stage===1;
+    familyNext.textContent=stage===1?'Continue to villages':'Review search';
+    familyLabel.textContent=stage===1?'1 of 3 · Enter a family name and review its spellings.':stage===2?'2 of 3 · Choose villages.':'3 of 3 · '+review.names().join(', ')+' · '+(chosen().map(p=>p.village).join(', ')||criteria.state||'All locations');
+    if(active && stage===2){root.querySelector('#village-finder').open=true;explorer.querySelector('input').focus();}
+  }
+  function switchMode(mode){
+    root.dataset.mode=mode;
+    root.querySelectorAll('[data-home-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.homeMode===mode)));
+    familyStage(1);if(mode==='family')control('names').focus();
+  }
+  familyNext.onclick=()=>{
+    if(stage===1 && !control('names').value.trim()){control('names').focus();familyLabel.textContent='Enter a name to continue.';return;}
+    if(stage===2 && !criteria.state){familyLabel.textContent='Choose a village or state to continue.';return;}
+    familyStage(Math.min(3,stage+1));
+  };
+  familyBack.onclick=()=>familyStage(Math.max(1,stage-1));
+  switchMode('village');
+  root.querySelectorAll('[data-home-mode]').forEach(button=>button.onclick=()=>switchMode(button.dataset.homeMode));
   loadFields();
   review.update(criteria.state,criteria.names);
 
@@ -114,7 +155,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     indexButton.hidden = !live || !hasLocal;
     liveButton.textContent='Search selected villages on Bhulekh';
     scopeElement.hidden=!live || !runtime.hosted;
-    form.querySelectorAll('.location-input').forEach(label=>{label.hidden=live && !hasLocal && !selectedVillage;});
+    form.querySelectorAll('.location-input').forEach(label=>{label.hidden=live && !hasLocal;});
     form.querySelector('#home-search-scope').textContent = workspace?.demo ? 'Search checks the fictional plots loaded in this tab.' : live
       ? runtime.indexBase ? 'Search the Odisha index by name, or choose a village to search Bhulekh directly.'
         : 'No statewide name index is loaded. Choose one or more villages to search the public Bhulekh records.'
@@ -127,8 +168,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
 
   const villageBatch=10;
   function portalTargets() {
-    return selectedVillage?.portalCode ?
-      [{...selectedVillage,id:selectedVillage.portalCode}] : odisha?.targets() ?? [];
+    return odisha?.targets() ?? [];
   }
 
   function extendedActions(names, completed=[]) {
@@ -309,6 +349,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     clearResults();
     selectedVillage=undefined;
     criteria = criteriaFrom({state, names:criteria.names});
+    atlas?.show(chosen(),state);
     submitted = false;
     loadFields(); review.update(criteria.state,criteria.names); refreshScope(); showResults();
   }
@@ -321,9 +362,9 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     const paths = Object.entries(statePaths).map(([name, path]) => `<path d="${path}" data-state="${escape(name)}" tabindex="0" role="button" aria-label="${escape(name)}" aria-pressed="${name === criteria.state}"><title>${escape(name)}</title></path>`).join('');
     mapBox.innerHTML = `<div class="picker-maps"><div><h3>Choose a state on the India map</h3><div class="state-map"><svg viewBox="0 0 490 490" aria-label="India state and union territory picker">${paths}</svg></div><p class="muted">Reference boundaries from ${tag('https://www.geoboundaries.org/api/current/gbOpen/IND/ADM1/', 'geoBoundaries')} and DataMeet, adapted under ${tag('https://creativecommons.org/licenses/by/2.5/in/', 'CC BY 2.5 India')}.</p></div>
       <div><h3>Pinpoint on a parcel sheet</h3>${visibleSheets.length ? `<label class="label">Map sheet<select id="home-sheet">${visibleSheets.map(s => `<option value="${escape(s.gis)}">${escape(s.name)} · Sheet ${escape(s.sheet)}</option>`).join('')}</select></label><div class="map-frame"><canvas id="home-parcel-map" width="750" height="490" aria-label="Select a parcel to fill the location fields"></canvas></div><p id="home-map-status" class="muted" role="status">Click a parcel to fill the location fields.</p><button type="button" id="use-sheet" class="button secondary">Use this sheet's location</button>` : `<p>${criteria.state ? 'Load a workspace containing parcel maps for this state, or use its official map.' : 'Choose a state to see any parcel sheets loaded for it.'}</p>`}
-      ${tag(portals.find(p => p.name === criteria.state)?.map, 'Open official cadastral map')}</div></div>${criteria.state==='Odisha' && !workspace?.demo?'<section class="live-location" id="odisha-boundary-picker"></section>':''}`;
-    const boundaries=mapBox.querySelector('#odisha-boundary-picker');
-    if (boundaries) mountOdishaBoundaries(boundaries,{tag,onChoose:applyVillage});
+      ${tag(portals.find(p => p.name === criteria.state)?.map, 'Open official cadastral map')}</div></div>`;
+
+
     mapBox.querySelectorAll('[data-state]').forEach(shape => {
       const choose = () => { selectState(shape.dataset.state); showMaps(); mapBox.querySelector('[aria-pressed="true"]')?.focus(); };
       shape.onclick = choose;
@@ -379,10 +420,16 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
       return;
     }
     saveSearch();
+    if(!workspace?.demo)setMapTerms(names);
     const found = criteria.state==='Odisha' && !workspace?.demo ? findRecords(workspace,index,reviewedCriteria()) : null;
     if (scopedPortalSearch || forceIndex || (runtime.hosted || runtime.indexBase) && found && !found.scopedCount) {
       const targets=portalTargets();
-      const verifiedVillage=targets.length>0 && (!selectedVillage || selectedVillage.portalCode);
+      const verifiedVillage=targets.length>0;
+      const unresolved=chosen().filter(place=>!place.portalCode);
+      if(unresolved.length&&!forceIndex){
+        feedback.textContent='Resolve or remove these villages before searching: '+unresolved.map(p=>p.village).join(', ')+'.';
+        return;
+      }
       if (names.length>liveNameLimit || names.some(x=>x.length>140)) {
         feedback.textContent=`Search up to ${count.format(liveNameLimit)} spellings of 140 characters each.`;
         control('names').focus(); return;

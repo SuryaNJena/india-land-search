@@ -1,3 +1,6 @@
+import {selectedPlaces,mapTerms,lookupPlace,resolveRI,rememberPlace,placeKey} from './shared-villages.mjs';
+import {mountVillageFinder} from './village-finder.mjs';
+import {mountLocationAtlas} from './location-atlas.mjs';
 import {runtime} from './runtime.mjs';
 import {loadBhulekhLocations} from './odisha-live-search.mjs';
 import {mountLiveOdishaMap} from './live-odisha-map.mjs';
@@ -78,10 +81,11 @@ export function mountOdishaLookup(root,mode,{escape,tag,onSave,initial}={}) {
     ? '<label class="label">Plot number<input name="number" maxlength="64" required></label>'
     : needsRI?'':'<label class="label">Khata number<input name="khata" maxlength="64" required></label>';
   root.innerHTML='<div class="card-head"><h2>'+config.title+'</h2></div>'+
-    '<form data-odisha-lookup novalidate><div class="search-fields">'+fieldMarkup+'</div>'+
-    '<p class="muted" data-location-status role="status"></p>'+
+    '<div class="panorama-explorer">'+(isMap?'<div data-location-atlas></div>':'')+'<div><details open data-shared-picker></details><label class="label" data-active-place hidden>Active village<select></select></label></div></div>'+
+    '<form data-odisha-lookup novalidate><details data-alternate><summary>Browse official directory</summary><div class="search-fields">'+fieldMarkup+'</div>'+
+
     '<details class="live-location" data-manual-codes><summary>Enter official location codes</summary><div class="search-fields">'+manualMarkup+'</div></details>'+
-    '<div class="actions">'+sheetMarkup+detailMarkup+
+    '</details><p class="muted" data-location-status role="status"></p><div class="actions">'+sheetMarkup+detailMarkup+
     (isMap?'<label class="label" data-direct-bounds '+(runtime.hosted?'hidden':'')+
       '>Native sheet bounds (if known)<input name="bounds" placeholder="xmin, ymin, xmax, ymax"></label>':'')+
     (isMap && runtime.hosted?'<label class="check"><input type="checkbox" data-direct-map> Use official sheet image</label>':'')+
@@ -221,7 +225,7 @@ export function mountOdishaLookup(root,mode,{escape,tag,onSave,initial}={}) {
     details.className='live-location live-map';
     details.open=true;
     output.replaceChildren(details);
-    mountLiveOdishaMap(details,[place],escape,tag,new Map(),new Map(),[],{
+    mountLiveOdishaMap(details,[place],escape,tag,new Map(),new Map(),mapTerms(),{
       showVillage:false,initialSheet:sheet,initialMap:data,localSheets,
       onSave:(entry)=>save(entry,entry.kind==='map'?'Village map loaded.':'Plot Info loaded.')
     });
@@ -433,6 +437,33 @@ export function mountOdishaLookup(root,mode,{escape,tag,onSave,initial}={}) {
     } catch(error) {status.textContent=error.message;}
   }
 
+  let resolving;
+  const active=get('[data-active-place]'), activeSelect=active.querySelector('select');
+  const atlas=isMap?mountLocationAtlas(get('[data-location-atlas]'),{onChoose:p=>finder.select(p)}):undefined;
+  async function useShared(place){
+    resolving?.abort();const controller=new AbortController();resolving=controller;
+    clear();chosen={};fill();
+    const choices=selectedPlaces();active.hidden=choices.length<2;
+    activeSelect.replaceChildren(...choices.map(p=>new Option(p.village+' · '+p.tehsil,placeKey(p))));
+    atlas?.show(choices,'Odisha');
+    if(!place)return;
+    activeSelect.value=placeKey(place);
+    try{
+      if(needsRI && runtime.hosted && place.portalCode && !place.riCode){
+        locationStatus.textContent='Finding the revenue circle…';
+        place=await resolveRI(place,async(key,signal)=>(await postOdisha('map-locations',{location:key},signal)).options,controller.signal)??place;
+        if(controller.signal.aborted || !root.isConnected)return;
+        if(place.riCode)rememberPlace(place);
+      }
+      chosen=lookupPlace(place)??{};
+      fill(chosen);
+      locationStatus.textContent=chosen.villageCode&&(!needsRI||chosen.riCode)?'Selected '+place.village+'.':'Official location unresolved. Browse the directory or select another village.';
+    }catch(error){if(!controller.signal.aborted)locationStatus.textContent=error.message;}
+  }
+  activeSelect.onchange=()=>void useShared(selectedPlaces().find(p=>placeKey(p)===activeSelect.value));
+  const finder=mountVillageFinder(get('[data-shared-picker]'),escape,(place,all)=>void useShared(place??all.at(-1)),undefined,{onFilter:rows=>atlas?.show(rows.length?rows:selectedPlaces(),'Odisha')});
+  finder('Odisha');
+  if (!initial?.place)void useShared(selectedPlaces().at(-1));
   if (runtime.hosted) {
     if (initial?.place) {
       const district=fields[0];

@@ -9,7 +9,7 @@ Type=simple
 Restart=always
 RestartSec=5
 ExecStartPre=-/usr/bin/docker rm -f india-land-search-api
-ExecStart=/usr/bin/docker run --rm --name india-land-search-api --publish 127.0.0.1:8787:8787 --env-file /etc/india-land-search/api.env --read-only --tmpfs /tmp:rw,noexec,nosuid,size=8m --cap-drop=ALL --security-opt=no-new-privileges --memory=384m --memory-swap=384m --cpus=0.50 --pids-limit=64 india-land-search-api:current
+ExecStart=/usr/bin/docker run --rm --name india-land-search-api --publish 127.0.0.1:8787:8787 --env-file /etc/india-land-search/api.env --env LANDREVIEW_LOCALITY_INDEX=/app/index/locations.sqlite --mount type=volume,source=india-land-search-localities,target=/app/index --read-only --tmpfs /tmp:rw,noexec,nosuid,size=8m --cap-drop=ALL --security-opt=no-new-privileges --memory=384m --memory-swap=384m --cpus=0.50 --pids-limit=64 india-land-search-api:current
 ExecStop=/usr/bin/docker stop --time 10 india-land-search-api
 TimeoutStartSec=0
 TimeoutStopSec=20

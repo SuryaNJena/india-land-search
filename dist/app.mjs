@@ -1,3 +1,4 @@
+import {mountTour} from './guided-tour.mjs';
 import {normalize,parcelKey,safeURL,sourceCaste,suggestSurname,validateWorkspace,matchRows} from './core.mjs';
 import {download,localStore,savedLookupStore,zipWorkspace,importFile,exportWorkbook,mergeROR,savedHoldings,combineSavedHoldings,exportRORBundle} from './files.mjs';
 import {drawMap,makeMapPDF,colours} from './maps.mjs';
@@ -68,7 +69,7 @@ async function task(message, handler) {
 }
 
 let officialVillage, mapSearchHits;
-function navigate(view,{village,hits}={}) { selected=view; officialVillage=village; mapSearchHits=hits; status(); render(); }
+function navigate(view,{village,hits}={}) { $('nav-toggle').setAttribute('aria-expanded','false'); selected=view; officialVillage=village; mapSearchHits=hits; status(); render(); }
 function matchingCount(kind) { return matches.filter(m=>kind==='full'?m.fullSelected:m.surnameSelected).length; }
 function metric(count, label, accent='') { return `<div class="stat ${accent}"><small>${escape(label)}</small><strong>${number.format(count)}</strong></div>`; }
 const maps = () => (workspace?.summary ?? []).filter(m => workspace.geometry?.[m.gis]?.features?.length);
@@ -84,6 +85,7 @@ function overview() {
   if (!workspace) {
     $('view').innerHTML = `${search}<section class="card"><div class="card-head"><div><h2>Records and maps</h2><p>Open an official portal, import records you already have, or explore with fictional plots.</p></div></div><div class="actions">${demoLink}<button class="button secondary" id="go-portals">Open official sources</button></div></section>`;
     mountSearch();
+    $('view').querySelector('[href="?demo=1"]').onclick=event=>{event.preventDefault();$('take-tour').click();};
     $('go-portals').onclick=()=>navigate('portals');
     return;
   }
@@ -321,13 +323,19 @@ function portalView() {
 
 function render() {
   lastView=selected;
-  $('heading').textContent=labels[selected];
+  $('heading').textContent=selected==='overview'?'Field atlas':labels[selected];
   $('crumb').textContent=workspace?.title||'Land records';
   $('backup').disabled=!workspace||busy;
   document.querySelectorAll('.nav').forEach(b=>{const active=b.dataset.view===selected;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
   ({overview,plots,names,maps:()=>mapView(mapSearchHits),ror,workspace:lookupWorkspace,portals:portalView})[selected]();
 }
 
+$('nav-toggle').onclick=()=>{
+  const open=$('nav-toggle').getAttribute('aria-expanded')==='true';
+  $('nav-toggle').setAttribute('aria-expanded',String(!open));
+};
+mountTour($('take-tour'));
+if (demoSession) $('take-tour').hidden=true;
 document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>navigate(b.dataset.view));
 $('import').onclick=()=>chooseImport();
 $('file').onchange=()=>{const file=$('file').files[0],state=importState;$('file').value='';importState='';if(!file)return;task('Validating and importing records…',async()=>{await activate(assignImportState(await importFile(file),state));const saved=await persist();selected='overview';render();status(`Imported ${number.format(workspace.rows.length)} records. ${saved?'Saved in this browser.':'Use Back up workspace to retain this session.'}`);});};

@@ -543,11 +543,13 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
   readPlot=makeBhunakshaPlotReader(),readMapLocations=makeBhunakshaLocationReader(),readMapLayers=makeBhunakshaLayerReader(),
   mapSnapshots={villages:{}},nameLimit=1000,readIndex,fetchReport=fetch}) {
   const cache = new Map(), mapCache = new Map(), mapMetadataCache = new Map();
+  const plotCache=new Map(), pendingPlots=new Map();
+  const month=30*24*60*60*1000;
   let busyUntil = 0, pausedUntil = 0, mapPausedUntil = 0, mapBusy = false;
   const json = (status, value, headers = {}) => Response.json(value,{status,headers:{'Cache-Control':'no-store',...headers}});
   async function mapMetadata(key,load,cors={}) {
     const cached=mapMetadataCache.get(key);
-    if (cached && Date.now()-cached.at<3600000) return json(200,cached.data,cors);
+    if (cached && Date.now()-cached.at<(key.startsWith('location/')?month:3600000)) return json(200,cached.data,cors);
     const wait=Math.ceil((mapPausedUntil-Date.now())/1000);
     if (wait>0 || mapBusy) return json(429,{error:'BhuNaksha is busy. Try the map lookup again shortly.'},{'Retry-After':String(Math.max(1,wait))});
     mapBusy=true;
@@ -584,7 +586,7 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
     if (!directory && !map && !mapDirectory && !indexed && !report && url.pathname !== '/api/odisha/tenant-search') {
       const asset = Object.hasOwn(assets,url.pathname) ? assets[url.pathname] : null;
       if (!asset || !['GET','HEAD'].includes(request.method)) return new Response('Not found',{status:404});
-      return new Response(request.method==='HEAD'?null:asset.text,{headers:{'Content-Type':asset.type,'X-Content-Type-Options':'nosniff'}});
+      return new Response(request.method==='HEAD'?null:asset.base64?Uint8Array.from(atob(asset.base64),c=>c.charCodeAt(0)):asset.text,{headers:{'Content-Type':asset.type,'X-Content-Type-Options':'nosniff'}});
     }
     if (request.method!=='POST') return json(405,{error:'Use POST for the tenant search.'},{Allow:'POST'});
     if (origin!==url.origin && !pages) return json(403,{error:'Run the search from the India Land Search site.'});
@@ -711,12 +713,21 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
             typeof number!=='string' || number.length>120 || !/^[\p{L}\p{M}\p{N}./-]{1,80}$/u.test(normalizeMapNumber(number))) {
           return json(400,{error:'Choose a valid parcel on the map.'});
         }
+        const parcelKey=JSON.stringify([location.id,sheet,id,number]);
+        const cached=plotCache.get(parcelKey);
+        if(cached && Date.now()-cached.at<300000)return json(200,cached.data);
+        const pending=pendingPlots.get(parcelKey);
+        if(pending)return (await pending).clone();
         const portal=new URL('#home-pane',officialMapBase(districtCode)).href;
         const wait=Math.ceil((mapPausedUntil-Date.now())/1000);
         if (wait>0 || mapBusy) return json(429,{error:'BhuNaksha is busy. Try Plot Info again shortly.',portal},{'Retry-After':String(Math.max(1,wait))});
         mapBusy=true;
+        const flight=(async()=>{
         try {
-          return json(200,await readPlot(location,sheet,{id,number}));
+          const data=await readPlot(location,sheet,{id,number});
+          if(plotCache.size>=256)plotCache.delete(plotCache.keys().next().value);
+          plotCache.set(parcelKey,{at:Date.now(),data});
+          return json(200,data);
         } catch(error) {
           if (error.status===429) {
             const seconds=error.retryAfter??60;
@@ -728,6 +739,9 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
         } finally {
           mapBusy=false;
         }
+        })();
+        pendingPlots.set(parcelKey,flight);
+        try {return (await flight).clone();}finally{pendingPlots.delete(parcelKey);}
       }
       const key=`${location.id}/${sheet}`, cached=mapCache.get(key);
       if (cached && Date.now()-cached.at<(cached.data.captured?300000:3600000)) return json(200,cached.data);
@@ -764,7 +778,7 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
     try {
       const key=`${directory?'directory':'tenants'}/${location.id}`;
       let data=cache.get(key);
-      if (!data || Date.now()-data.at>(directory?3600000:300000)) {
+      if (!data || Date.now()-data.at>(directory?month:300000)) {
         const wait=Math.ceil((pausedUntil-Date.now())/1000);
         if (wait>0) return json(429,{error:'Bhulekh is limiting live requests. Try again later.'},{'Retry-After':String(wait)});
         if (Date.now()<busyUntil) return json(429,{error:'Another live lookup is running. Try again shortly.'},{'Retry-After':'10'});

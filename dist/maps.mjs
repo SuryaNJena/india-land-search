@@ -1,6 +1,7 @@
 import { parcelKey } from './core.mjs';
 
-export const colours = { full:'#b9a4e8', surname:'#f3bf5f', none:'#e4ebe6', missing:'#ffffff' };
+export const colours = { full:'#b9a4e8', holding:'#ffffff', surname:'#f3bf5f', none:'#e4ebe6', missing:'#ffffff' };
+const holdingStroke='#7c54ad';
 const rings = feature => feature.geometry?.type === 'Polygon' ? feature.geometry.coordinates : feature.geometry?.type === 'MultiPolygon' ? feature.geometry.coordinates.flat() : [];
 
 function fit(features,width,height,pad) {
@@ -71,6 +72,11 @@ export function drawMap(canvas, features, gis, result, options={}) {
     }
     hits.push({path,key,feature});
   }
+  if (!options.plain) {
+    ctx.lineWidth=2.8;
+    ctx.strokeStyle=holdingStroke;
+    for (const {key,path} of hits) if (result.get(key)?.level==='holding') ctx.stroke(path);
+  }
   const selected=options.selected && hits.find(hit=>hit.key===options.selected);
   if (selected) {
     if (options.selectionFill) {
@@ -112,9 +118,9 @@ export async function makeMapPDF(sheets,geometry,results,plain) {
     const page = doc.addPage([842,1191]);
     page.drawText(text(`${sheet.name} ${sheet.village} | Sheet ${sheet.sheet}`),{x:39,y:1134,size:23,font:bold,color:colour('#193b30')});
     page.drawText(text(sheet.source?`${sheet.source} | ${sheet.gis}${sheet.captured?` | Saved ${sheet.captured}`:''} | ${features.length} parcels`:`${features.length} mapped plot entries | ${plain?'Uncoloured overview':'Name and source criteria overview'}`),{x:40,y:1109,size:11,font});
-    if (!plain) Object.entries(sheet.source?{full:'RoR match',missing:'Other parcel'}:{full:'Specific name',surname:'Surname',none:'Not selected',missing:'Missing info'}).forEach(([key,label],i)=>{
+    if (!plain) Object.entries(sheet.source?{full:'Name in Plot Info',holding:'Listed in matching khata',missing:'Other parcel'}:{full:'Specific name',surname:'Surname',none:'Not selected',missing:'Missing info'}).forEach(([key,label],i)=>{
       const x=40+i*154;
-      page.drawRectangle({x,y:1083,width:11,height:11,color:colour(colours[key]),borderWidth:.5,borderColor:colour('#64796c')});
+      page.drawRectangle({x,y:1083,width:11,height:11,color:colour(colours[key]),borderWidth:key==='holding'?1.8:.5,borderColor:colour(key==='holding'?holdingStroke:'#64796c')});
       page.drawText(label,{x:x+17,y:1084,size:9,font});
     });
     const project=fit(features,842,990,38);
@@ -123,7 +129,8 @@ export async function makeMapPDF(sheets,geometry,results,plain) {
       const path=paths.map(r=>r.map(([x,y],i)=>`${i?'L':'M'}${x.toFixed(2)} ${y.toFixed(2)}`).join(' ')+' Z').join(' ');
       if (!path) continue;
       const result=results.get(keyOf(feature,sheet.gis));
-      page.drawSvgPath(path,{x:0,y:1058,color:plain?rgb(1,1,1):colour(colours[result?.level??'missing']),borderWidth:.45,borderColor:colour('#64796c')});
+      const holding=!plain && result?.level==='holding';
+      page.drawSvgPath(path,{x:0,y:1058,color:plain?rgb(1,1,1):colour(colours[result?.level??'missing']),borderWidth:holding?1.8:.45,borderColor:colour(holding?holdingStroke:'#64796c')});
       const ring=paths[0], centre=ring.reduce(([x,y],p)=>[x+p[0]/ring.length,y+p[1]/ring.length],[0,0]);
       const label=text(feature.properties?.kide);
       if(label) page.drawText(label,{x:centre[0]-font.widthOfTextAtSize(label,6)/2,y:1058-centre[1],size:6,font,color:colour('#243c33')});
