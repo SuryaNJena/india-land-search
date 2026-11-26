@@ -1,6 +1,6 @@
 import {loadBhulekhLocations} from './odisha-live-search.mjs';
+import {lookupPlace,rememberPlace,selectedPlaces} from './shared-villages.mjs';
 
-const storageKey = 'landreview.odisha-villages';
 const fields = ['district','tehsil','village'];
 const labels = {district:'District',tehsil:'Tehsil',village:'Village'};
 const script = /[\u0b01-\u0b7f]/u;
@@ -9,37 +9,18 @@ const readable = label => {
   const latin = globalThis.Sanscript.t(label,'oriya','iso').normalize('NFD').replace(/\p{M}/gu,'').replace(/[:\u00b7]/g,'');
   return `${label} · ${latin}`;
 };
-let persisted=[];
-try {
-  const value=JSON.parse(localStorage.getItem(storageKey));
-  if (Array.isArray(value)) persisted=value.slice(0,20).filter(place=>typeof place.id==='string' && /^[1-9]\d{0,5}(?:-[1-9]\d{0,5}){2}$/.test(place.id));
-} catch { /* A fresh browser can pick villages from the directory. */ }
-
 export function mountOdishaScope(root,escape,onEdit) {
-  const picked=new Map(persisted.map(place=>[place.id,place]));
   const branch={};
   let pending;
-  root.innerHTML=`<summary>Choose villages from Bhulekh</summary><div class="search-fields">${fields.map((field,i)=>`<label class="label">${labels[field]}<select id="directory-${field}" ${i?'disabled':''}><option value="">Choose ${labels[field].toLowerCase()}</option></select></label>`).join('')}</div><div class="actions"><button class="button secondary" type="button" id="add-live-village" disabled>Add village</button><button class="plain-link" type="button" id="retry-place-list" hidden>Retry loading locations</button></div><p role="status" id="directory-status" class="muted"></p><div id="picked-villages"></div>`;
+  root.innerHTML=`<summary>Browse the official Bhulekh directory</summary><div class="search-fields">${fields.map((field,i)=>`<label class="label">${labels[field]}<select id="directory-${field}" ${i?'disabled':''}><option value="">Choose ${labels[field].toLowerCase()}</option></select></label>`).join('')}</div><div class="actions"><button class="button secondary" type="button" id="add-live-village" disabled>Add village</button><button class="plain-link" type="button" id="retry-place-list" hidden>Retry loading locations</button></div><p role="status" id="directory-status" class="muted"></p><div id="picked-villages"></div>`;
   const select = field=>root.querySelector(`#directory-${field}`);
   const status=root.querySelector('#directory-status');
   const add=root.querySelector('#add-live-village');
   const retry=root.querySelector('#retry-place-list');
-  const retained=root.querySelector('#picked-villages');
   const option = field=>{
     const choice=select(field).selectedOptions[0];
     return choice?.value?{code:choice.value,label:choice.dataset.label}:null;
   };
-
-  function renderPicked() {
-    retained.innerHTML=picked.size?`<div class="location-chips">${[...picked.values()].map(x=>`<button type="button" class="button secondary" data-remove="${escape(x.id)}" aria-label="Remove ${escape(x.village)}">${escape(x.village)} · ${escape(x.tehsil)} <span aria-hidden="true">×</span></button>`).join('')}</div>`:'';
-    retained.querySelectorAll('[data-remove]').forEach(button=>{button.onclick=()=>{picked.delete(button.dataset.remove);save();};});
-  }
-
-  function save() {
-    persisted=[...picked.values()];
-    try { localStorage.setItem(storageKey,JSON.stringify(persisted)); } catch { /* Selection remains in this tab. */ }
-    renderPicked(); onEdit();
-  }
 
   async function load(field) {
     const index=fields.indexOf(field);
@@ -86,14 +67,13 @@ export function mountOdishaScope(root,escape,onEdit) {
   add.onclick=()=>{
     const place=selectedVillage();
     if (!place) return;
-    if (picked.has(place.id)) {status.textContent='That village is already selected.';return;}
-    if (picked.size>=20) {status.textContent='Choose up to 20 villages per live search.';return;}
-    picked.set(place.id,place);
-    status.textContent=`${picked.size} ${picked.size===1?'village':'villages'} selected.`;
-    save();
+    try {
+      rememberPlace({...place,portalCode:place.id,state:'Odisha'});
+      status.textContent=place.village+' added.';
+      onEdit();
+    }catch(error){status.textContent=error.message;}
   };
   root.ontoggle=()=>{if (root.open && select('district').options.length<=1 && !pending) void load('district');};
-  renderPicked();
   return {
     focusLocation() {
       root.open=true;
@@ -101,8 +81,8 @@ export function mountOdishaScope(root,escape,onEdit) {
       (next.disabled ? root.querySelector('summary') : next).focus();
     },
     targets() {
-      const current=selectedVillage();
-      return [...new Map([...(current ? [[current.id,current]] : []),...picked]).values()].slice(0,20);
+      const picked=selectedPlaces().map(lookupPlace).filter(Boolean);
+      return picked.length ? picked : selectedVillage() ? [selectedVillage()] : [];
     },
     tehsil() {
       const {district,tehsil}=branch;

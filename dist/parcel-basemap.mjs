@@ -107,7 +107,7 @@ const styles=''
   +'.lr-parcel-map .lr-map-legend i{display:inline-block;width:.8rem;height:.8rem;margin-right:.22rem;border:1px solid #465747;border-radius:2px}'
   +'.lr-parcel-map a{margin-right:.7rem}';
 
-export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBoundary=false,highlights=new Set(),tileTemplate=standardTiles,pinState={},localOnly=false}={}) {
+export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBoundary=false,highlights=new Set(),tileTemplate=standardTiles,pinState={},localOnly=false,onFeature}={}) {
   if (root.tagName==='DETAILS') {
     root.innerHTML='<summary>Geographic map and location pin</summary><div class="lr-parcel-map"></div>';
   }
@@ -135,13 +135,14 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
     +'<a data-google target="_blank" rel="noopener noreferrer">Open pin in Google Maps</a>'
     +'<a data-osm target="_blank" rel="noopener noreferrer">Open pin in OpenStreetMap</a></p>'
     +'<button type="button" class="button secondary" data-download hidden>Download matched parcels as GeoJSON</button>'
-    +'<p class="muted">Pins in this view are for reference. OpenStreetMap receives requests for visible tiles only after you turn it on.</p>';
+    +'<p class="muted">Pins in this view are for reference. OpenStreetMap receives requests for visible tiles for the visible map area.</p>';
 
   const features=wgs84Parcels(geographic);
   const matched=feature=>{
     const id=String(feature.properties.id);
     if (!highlights.has(id)) return null;
     const value=highlights.get?.(id);
+    if(value?.level==='holding')return 'holding';
     return value==='surname' || value?.level==='surname' ? 'surname' : 'full';
   };
   const matchingFeatures=features.filter(matched);
@@ -163,6 +164,7 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
     panel.querySelector('p.muted').textContent='Pins and geographic parcels stay in this browser.';
   }
   const nodes=new Map();
+  const clickPaths=[];
   let center=initialCenter, zoom=7, pin, pinMode=false, tiles=false, start, dirty=true;
   let tileFailures=0;
   let gpsRequest=0;
@@ -187,8 +189,8 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
     ? referenceBoundary ? geographic.source : features.length+' geographic parcels · '+matchingFeatures.length+' matched · '+geographic.source
     : raster ? geographicRaster.source
       : 'Geographic parcel boundaries are unavailable for this sheet. You can use this map to place a reference pin.';
-  downloadButton.hidden=!matchingFeatures.length;
-  panel.querySelector('.lr-map-legend').hidden=!matchingFeatures.length;
+  downloadButton.hidden=referenceBoundary || !matchingFeatures.length;
+  panel.querySelector('.lr-map-legend').hidden=referenceBoundary || !matchingFeatures.length;
 
   const dimensions=()=>[viewport.clientWidth,viewport.clientHeight];
   function drawTiles(width,height) {
@@ -205,6 +207,7 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
         image.decoding='async';
         image.referrerPolicy='strict-origin-when-cross-origin';
         image.onerror=()=>{
+          image.hidden=true;
           if (tiles && ++tileFailures===1) {
             status.textContent='Some background tiles are unavailable. The supplied parcel outline and pin can still be viewed.';
           }
@@ -239,23 +242,34 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
       raster.hidden=false;
       Object.assign(raster.style,{left:left+'px',top:top+'px',width:(right-left)+'px',height:(bottom-top)+'px'});
     }
+    clickPaths.length=0;
     for (const feature of features) {
       const level=matched(feature);
+      if(feature.properties.marker){
+        const [x,y]=pixel(feature.properties.center);
+        if(x<0||y<0||x>width||y>height)continue;
+        const marker=new Path2D();marker.arc(x,y,6,0,2*Math.PI);
+        if(onFeature)clickPaths.push({id:feature.properties.id,path:marker});
+        ctx.fillStyle='#87395d';ctx.fill(marker);ctx.strokeStyle='#fff';ctx.stroke(marker);
+        if(zoom>=7){ctx.fillStyle='#2c142b';ctx.font='600 11px system-ui';ctx.strokeText(feature.properties.name,x,y-9);ctx.fillText(feature.properties.name,x,y-9);}
+        continue;
+      }
       const path=new Path2D();
       for (const polygon of polygons(feature.geometry)) for (const ring of polygon) {
         path.moveTo(...pixel(ring[0]));
         for (const point of ring.slice(1)) path.lineTo(...pixel(point));
         path.closePath();
       }
+      if(onFeature)clickPaths.push({id:feature.properties.id,path});
       ctx.fillStyle=levelColour[level]??'#e4ebe6';
-      ctx.globalAlpha=level ? .75 : .32;
+      ctx.globalAlpha=level==='holding'?0:level ? .75 : .32;
       ctx.fill(path,'evenodd');
       ctx.globalAlpha=1;
       ctx.lineWidth=level?2:1;
       ctx.strokeStyle=level==='surname'?'#8f5a14':level?'#5e417c':'#61786b';
       ctx.stroke(path);
       const plot=referenceBoundary ? feature.properties.name : feature.properties.kide;
-      if (plot && (referenceBoundary || level && zoom>=15)) {
+      if (plot && (referenceBoundary && (level || features.length<70 || zoom>=13) || level && zoom>=15)) {
         const ring=polygons(feature.geometry)[0][0];
         const selectedBounds=featureBounds([feature]);
         const [x,y]=pixel([(selectedBounds[0]+selectedBounds[2])/2,(selectedBounds[1]+selectedBounds[3])/2]);
@@ -391,7 +405,14 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
     const delta=[start[0]-event.clientX,start[1]-event.clientY];
     start=undefined;
     if (Math.hypot(...delta)>=5) {pan(...delta);return;}
-    if (!pinMode) return;
+    if (!pinMode) {
+      if(onFeature){
+        const rect=canvas.getBoundingClientRect(), x=event.clientX-rect.left,y=event.clientY-rect.top;
+        const hit=clickPaths.findLast(({path})=>canvas.getContext('2d').isPointInPath(path,x*canvas.width/rect.width,y*canvas.height/rect.height,'evenodd'));
+        if(hit)onFeature(hit.id);
+      }
+      return;
+    }
     const rect=viewport.getBoundingClientRect();
     const [cx,cy]=projectPosition(center,zoom);
     const [lon,lat]=unprojectPosition([event.clientX-rect.left+cx-rect.width/2,event.clientY-rect.top+cy-rect.height/2],zoom);
@@ -412,6 +433,7 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
     }))};
     download('matched-parcels.geojson',JSON.stringify(featureCollection),'application/geo+json');
   };
+  if (!localOnly) tileButton.click();
   if (validPosition(pinState.position)) setPin(pinState.position,pinState.label??'Reference pin');
   else fit();
   return ()=>observer.disconnect();

@@ -8,7 +8,10 @@ export function sheetHighlights(sheet, numbers, verified = new Set()) {
   const targets=new Set([...numbers].map(plotNumber).filter(Boolean));
   return new Map(sheet.features
     .filter(feature=>targets.has(plotNumber(feature.properties?.kide)) || verified.has(`${sheet.gis}/${feature.properties?.id}`))
-    .map(feature=>[`${sheet.gis}/${feature.properties.id}`,{level:'full'}]));
+    .map(feature=>{
+      const key=`${sheet.gis}/${feature.properties.id}`;
+      return [key,{level:verified.has(key)?'full':'holding'}];
+    }));
 }
 
 export function localMapLayer(file, sheet) {

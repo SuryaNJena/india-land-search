@@ -12,6 +12,7 @@ for (const folder of ['', 'vendor/']) {
     if (file.isFile() && type) assets[`/${folder}${file.name}`] = {type:`${type}; charset=utf-8`,text:await readFile(new URL(file.name,directory),'utf8')};
   }
 }
+assets['/favicon.png']={type:'image/png',base64:(await readFile(new URL('favicon.png',dist))).toString('base64')};
 assets['/'] = assets['/index.html'];
 assets['/offline-worker.js'].text=configureOfflineWorker(assets['/offline-worker.js'].text,
   Object.fromEntries(Object.entries(assets).map(([path,asset])=>[path.slice(1),asset.text])));

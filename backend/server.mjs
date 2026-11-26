@@ -3,6 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {dirname,resolve} from 'node:path';
 import {makeLandReviewWorker} from '../worker/odisha.mjs';
+import {localityIndex} from './locality-index.mjs';
 import {matchRows} from '../dist/core.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -50,7 +51,7 @@ export function createLandApiServer({
   allowedOrigins=process.env.LANDREVIEW_PAGES_ORIGIN??'',
   ratePerMinute=Number(process.env.LANDREVIEW_RATE_PER_MINUTE)||120,
   burst=Number(process.env.LANDREVIEW_RATE_BURST)||12,
-  worker,
+  worker,index,
   limiter=tokenLimiter({ratePerMinute,burst})
 }={}) {
   const pagesOrigin=String(allowedOrigins).split(',').map(value=>value.trim()).filter(Boolean).join(',');
@@ -116,7 +117,17 @@ export function createLandApiServer({
       const request=new Request(`http://localhost${url.pathname}${url.search}`,{
         method:'POST',headers:{'content-type':'application/json',origin},body:bytes
       });
-      const response=await handler.fetch(request,{LANDREVIEW_PAGES_ORIGIN:pagesOrigin});
+      let key,stored;
+      if(index && ['/api/odisha/locations','/api/odisha/map-locations'].includes(url.pathname)){
+        try {key=index.key(url.pathname,JSON.parse(bytes));if(key)stored=index.get(key);}catch{/* Upstream remains available. */}
+      }
+      const response=stored ? Response.json(stored,{headers:{'cache-control':'no-store'}})
+        :await handler.fetch(request,{LANDREVIEW_PAGES_ORIGIN:pagesOrigin});
+      if(key && !stored && response.ok){
+        try {index.put(key,await response.clone().json());}catch{/* Read-through cache is optional. */}
+      }
+      outgoing.setHeader('Access-Control-Allow-Origin',origin);
+      outgoing.setHeader('Vary','Origin');
       outgoing.writeHead(response.status,Object.fromEntries(response.headers));
       if (!response.body) {outgoing.end();return;}
       for await (const chunk of response.body) outgoing.write(chunk);
@@ -137,7 +148,8 @@ export function createLandApiServer({
 
 async function main() {
   const snapshot=await readFile(resolve(root,'worker/odisha-map-snapshots.json'),'utf8');
-  const server=createLandApiServer({worker:makeLandReviewWorker({
+  const index=process.env.LANDREVIEW_LOCALITY_INDEX?localityIndex(process.env.LANDREVIEW_LOCALITY_INDEX):undefined;
+  const server=createLandApiServer({index,worker:makeLandReviewWorker({
     assets:{},matchRows,mapSnapshots:JSON.parse(snapshot)
   })});
   const host=process.env.BIND_HOST??'127.0.0.1';

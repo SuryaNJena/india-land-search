@@ -1,4 +1,7 @@
 import {normalize} from './core.mjs';
+import {loadBhulekhLocations} from './odisha-live-search.mjs';
+import {runtime} from './runtime.mjs';
+import {forgetPlace,placeKey,rememberPlace,resolveVillage,selectedPlaces} from './shared-villages.mjs';
 
 const key = value => normalize(value).replace(/[\s'’_-]+/gu, '');
 const order = new Intl.Collator('en-IN');
@@ -28,34 +31,75 @@ async function readDirectory() {
     ({id,village,local,district,tehsil,state,portalCode,riCode,ri,aliases})),source};
 }
 
-export function mountVillageFinder(root, escape, choose, samplePlace) {
+export function mountVillageFinder(root, escape, choose, samplePlace, {onPreview,onFilter}={}) {
   root.innerHTML = `<summary>Find a village by name</summary>
     <label class="label">Village name<input type="search" maxlength="100" placeholder="English or local script" autocomplete="off"></label>
-    <label><input type="checkbox"> Limit to the selected state</label>
-    <p role="status" class="muted"></p><div class="actions village-results"></div>`;
+    <p role="status" class="muted"></p><div class="actions village-results"></div>
+    <div class="location-chips" data-picked></div><div data-resolver></div>`;
   const input = root.querySelector('input[type="search"]');
-  const filter = root.querySelector('input[type="checkbox"]');
+  const retained=root.querySelector('[data-picked]'), resolver=root.querySelector('[data-resolver]');
   const status = root.querySelector('[role="status"]');
   const matches = root.querySelector('.village-results');
   let state = '', revision = 0, delay;
+  let pending;
+  const getPlaces=()=>samplePlace?[]:selectedPlaces();
+  function chips(){
+    retained.replaceChildren();
+    for(const place of getPlaces()){
+      const button=document.createElement('button');
+      button.type='button';button.className='button secondary';
+      button.textContent=place.village+' ×';button.setAttribute('aria-label','Remove '+place.village);
+      button.onclick=()=>{pending?.abort();resolver.replaceChildren();forgetPlace(placeKey(place));chips();choose(undefined,getPlaces());};
+      retained.append(button);
+    }
+  }
+  async function select(place){
+    if (!place) return;
+    if(samplePlace){choose(place,[place]);return;}
+    pending?.abort();
+    const controller=new AbortController();pending=controller;
+    resolver.replaceChildren();
+    const commit=p=>{const saved=rememberPlace(p);chips();choose(saved,getPlaces());};
+    try {
+      commit(place);
+      if(place.portalCode || !runtime.hosted) return;
+      resolver.textContent='Finding the official village in '+place.tehsil+'…';
+      const {match,candidates}=await resolveVillage(place,loadBhulekhLocations,controller.signal);
+      if(controller.signal.aborted || !root.isConnected)return;
+      resolver.textContent='';
+      if(match){commit(match);return;}
+      resolver.textContent=candidates.length?'Which official village matches?':'Official village link unavailable. You can still view its boundary.';
+      for(const p of candidates){
+        const button=document.createElement('button');button.type='button';button.className='button secondary';
+        button.textContent=p.officialLabel+' ('+p.portalCode+')';
+        button.onclick=()=>{commit(p);resolver.replaceChildren();};
+        resolver.append(button);
+      }
+    }catch(error){if(!controller.signal.aborted && root.isConnected)resolver.textContent=error.message;}
+  }
+  chips();
   async function refresh() {
     clearTimeout(delay);
     const request = ++revision;
     const query = input.value;
     matches.replaceChildren();
-    if (key(query).length < 2) { status.textContent='Enter at least two characters.'; return; }
+    if (key(query).length < 2) { status.textContent='Enter at least two characters.';onFilter?.([]); return; }
     status.textContent='Finding villages…';
     try {
       if (!samplePlace) directory ??= readDirectory().catch(error=>{directory=undefined;throw error;});
       const {rows,source} = samplePlace ? {rows:[samplePlace],source:'Fictional demo directory'} : await directory;
       if (revision !== request || !root.isConnected) return;
-      const {total,results} = findVillages(rows,query,filter.checked?state:'');
+      const {total,results} = findVillages(rows,query,state);
+      onFilter?.(results);
       status.textContent = total
         ? `Showing ${results.length} of ${total} matches · ${source}`
         : `No village matched in this directory · ${source}`;
-      matches.innerHTML = results.map((row,i)=>`<button type="button" class="button secondary" data-village="${i}">${escape(row.village)}${row.local?` · ${escape(row.local)}`:''} <span class="muted">${escape([row.tehsil,row.district,row.state,samplePlace ? 'Sample record' : row.portalCode ? `Bhulekh ${row.portalCode}` : `LGD ${row.id}`].join(', '))}</span></button>`).join('');
+      matches.innerHTML = results.map((row,i)=>`<button type="button" class="button secondary" data-village="${i}">${escape(row.village)}${row.local?` · ${escape(row.local)}`:''} <span class="muted">${escape([row.tehsil,row.district,row.state,samplePlace ? 'Sample record' : ''].join(', '))}</span></button>`).join('');
       matches.querySelectorAll('[data-village]').forEach(button=>{
-        button.onclick=()=>choose(results[Number(button.dataset.village)]);
+        const place=results[Number(button.dataset.village)];
+        button.onclick=()=>void select(place);
+        button.onfocus=()=>onPreview?.(place);
+        button.onpointerenter=()=>onPreview?.(place);
       });
     } catch (error) {
       if (revision === request) status.textContent=error.message;
@@ -63,11 +107,10 @@ export function mountVillageFinder(root, escape, choose, samplePlace) {
   }
   input.oninput=()=>{ revision++; matches.replaceChildren(); clearTimeout(delay); delay=setTimeout(refresh,180); };
   input.onkeydown=event=>{ if (event.key==='Enter') {event.preventDefault();void refresh();} };
-  filter.onchange=()=>void refresh();
-  return selectedState=>{
+  const update=selectedState=>{
+    if(state===selectedState)return;
     state=selectedState;
-    filter.disabled=!state;
-    if (!state) filter.checked=false;
-    if (filter.checked && input.value) void refresh();
+    if (input.value) void refresh();
   };
+  return Object.assign(update,{select,chips});
 }
