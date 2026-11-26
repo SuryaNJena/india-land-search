@@ -251,7 +251,7 @@ try {
   const fallbackPortal='https://bhunakshaodisha.nic.in:8443/bhunaksha/#home-pane';
   const rectangularParcel=(id,kide,x)=>({properties:{id,kide},geometry:{type:'Polygon',
     coordinates:[[[x,0],[x+90,0],[x+90,100],[x,100],[x,0]]]}});
-  const features=[rectangularParcel('a','12',0),rectangularParcel('b','12/3',105),rectangularParcel('c','58',210)];
+  const features=[rectangularParcel('a','12',0),rectangularParcel('b','12/3',105),rectangularParcel('c','43',210),rectangularParcel('d','46',315)];
   await page.route('**/api/odisha/maps',route=>{
     const {parcel,sheet}=route.request().postDataJSON();
     if (parcel) {
@@ -260,7 +260,7 @@ try {
         return route.fulfill({status:502,json:{error:'India Land Search couldn’t retrieve Plot Info from BhuNaksha.',portal:fallbackPortal}});
       }
       const details=parcel.id==='c'
-        ? {info:'Fixture Name\nDetails from BhuNaksha',area:'0.52 acres',khata:'9',
+        ? {info:'Parent: Fixture Name\nDetails from BhuNaksha',area:'0.52 acres',khata:'150',
           front:'https://bhulekh.ori.nic.in/ViewRoR.aspx?type=front',back:'https://bhulekh.ori.nic.in/ViewRoR.aspx?type=back'}
         : {info:'Different name'};
       return route.fulfill({json:details});
@@ -271,13 +271,15 @@ try {
     const {khata,...scope}=route.request().postDataJSON();
     assert.deepEqual(scope,{location:'19-3-79',side:'back',plots:true});
     scheduleRequests.push(khata);
+    if (khata==='150') return route.fulfill({json:{plots:['43','46']}});
     return route.fulfill({json:{plots:[khata==='10'?'12/3':'900/'+khata]}});
   });
   await page.goto(mapPage.href);
   await page.getByText('BhuNaksha village map',{exact:true}).click();
-  await page.getByText(/1 search-matched parcel on sheet 01/).waitFor();
-  assert.deepEqual(scheduleRequests,['7','8','9','10']);
-  assert.deepEqual(requests,[]);
+  await page.getByText(/3 search-matched parcels on sheet 01/).waitFor({timeout:20000});
+  assert.deepEqual(scheduleRequests,['7','8','9','10','150']);
+  assert.deepEqual(requests,[{id:'a',number:'12'},{id:'c',number:'43'}]);
+  assert.equal(await page.locator('#bhu-plot-info').isVisible(),false);
   assert.deepEqual(await page.evaluate(()=>window.plotTexts),[]);
   await click('Zoom in');
   await page.getByText('141%',{exact:true}).waitFor();
@@ -293,13 +295,13 @@ try {
   await page.mouse.click(bounds.x+bounds.width*.16,bounds.y+bounds.height*.5);
   await page.getByRole('heading',{name:'Plot Info · 12',exact:true}).waitFor();
   await page.getByText('Different name',{exact:true}).waitFor();
-  await page.getByRole('searchbox',{name:'Plot number on this sheet'}).fill('୫୮');
+  await page.getByRole('searchbox',{name:'Plot number on this sheet'}).fill('୪୩');
   await click('Find plot');
-  await page.getByRole('heading',{name:'Plot Info · 58',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Plot Info · 43',exact:true}).waitFor();
   await page.getByText('Search match · Fixture Name',{exact:true}).waitFor();
-  await page.getByText(/2 search-matched parcels on sheet 01/).waitFor();
+  await page.getByText(/3 search-matched parcels on sheet 01/).waitFor();
   assert.equal(await page.getByRole('link',{name:'RoR front',exact:true}).getAttribute('href'),'https://bhulekh.ori.nic.in/ViewRoR.aspx?type=front');
-  assert.deepEqual(requests,[{id:'a',number:'12'},{id:'c',number:'58'}]);
+  assert.deepEqual(requests,[{id:'a',number:'12'},{id:'c',number:'43'}]);
   if (evidence) await page.locator('main').screenshot({path:resolve(evidence,'04-interactive-odisha-map.png')});
   await page.getByRole('searchbox',{name:'Plot number on this sheet'}).fill('12/3');
   await click('Find plot');
