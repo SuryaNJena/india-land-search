@@ -532,9 +532,9 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
   const cache = new Map(), mapCache = new Map(), mapMetadataCache = new Map();
   let busyUntil = 0, pausedUntil = 0, mapPausedUntil = 0, mapBusy = false;
   const json = (status, value, headers = {}) => Response.json(value,{status,headers:{'Cache-Control':'no-store',...headers}});
-  async function mapMetadata(key,load) {
+  async function mapMetadata(key,load,cors={}) {
     const cached=mapMetadataCache.get(key);
-    if (cached && Date.now()-cached.at<3600000) return json(200,cached.data);
+    if (cached && Date.now()-cached.at<3600000) return json(200,cached.data,cors);
     const wait=Math.ceil((mapPausedUntil-Date.now())/1000);
     if (wait>0 || mapBusy) return json(429,{error:'BhuNaksha is busy. Try the map lookup again shortly.'},{'Retry-After':String(Math.max(1,wait))});
     mapBusy=true;
@@ -542,13 +542,13 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       const data=await load();
       if (mapMetadataCache.size>=64) mapMetadataCache.delete(mapMetadataCache.keys().next().value);
       mapMetadataCache.set(key,{data,at:Date.now()});
-      return json(200,data);
+      return json(200,data,cors);
     } catch (error) {
       const seconds=error.status===429 ? error.retryAfter??60 : 0;
       if (seconds) mapPausedUntil=Date.now()+seconds*1000;
       return json(error instanceof PortalError?error.status:502,
         {error:error instanceof PortalError?error.message:'The BhuNaksha map resource is temporarily unavailable.'},
-        seconds?{'Retry-After':String(seconds)}:{});
+        {...cors,...(seconds?{'Retry-After':String(seconds)}:{})});
     } finally {
       mapBusy=false;
     }
@@ -562,8 +562,10 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
     const indexed = url.pathname === '/api/odisha/index-search';
     const report = url.pathname === '/api/odisha/ror';
     const origin = request.headers.get('origin');
-    const pages = indexed && env.LANDREVIEW_PAGES_ORIGIN && env.LANDREVIEW_PAGES_ORIGIN===origin;
+    const allowedPages = new Set(String(env.LANDREVIEW_PAGES_ORIGIN??'').split(',').map(value=>value.trim()).filter(Boolean));
+    const pages = allowedPages.has(origin);
     const cors = pages ? {'Access-Control-Allow-Origin':origin,Vary:'Origin'} : {};
+    const json = (status,value,headers={}) => Response.json(value,{status,headers:{'Cache-Control':'no-store',...cors,...headers}});
     if (pages && request.method==='OPTIONS') return new Response(null,{status:204,headers:{...cors,
       'Access-Control-Allow-Methods':'POST','Access-Control-Allow-Headers':'Content-Type','Access-Control-Max-Age':'600'}});
     if (!directory && !map && !mapDirectory && !indexed && !report && url.pathname !== '/api/odisha/tenant-search') {
@@ -612,7 +614,7 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       if (typeof location!=='string' || location && !/^[1-9]\d?(?:-[1-9]\d?){0,2}$/.test(location)) {
         return json(400,{error:'Choose a valid BhuNaksha district, tehsil or RI.'});
       }
-      return mapMetadata('location/'+location,()=>readMapLocations(location?location.split('-'):[]));
+      return mapMetadata('location/'+location,()=>readMapLocations(location?location.split('-'):[]),cors);
     }
     const parts = typeof input?.location==='string' && input.location ? input.location.split('-') : [];
     if ((map ? parts.length!==4 : directory ? parts.length>2 : parts.length!==3) || parts.some(part=>!/^[1-9]\d{0,5}$/.test(part))) {
@@ -626,9 +628,8 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       const official=typeof khata==='string' && officialRoR(location,khata,side);
       if (!official) return json(400,{error:'Select an indexed khata and a record side.'});
       const db=env.DB;
-      if (!db && !plotsOnly) return json(503,{error:'The Odisha index is unavailable.'});
       try {
-        if (!plotsOnly) {
+        if (db && !plotsOnly) {
           const holding=await db.prepare('SELECT 1 FROM landreview_holdings h JOIN landreview_active a ON a.version=h.version WHERE h.village=? AND h.khata=? LIMIT 1').bind(location.id,khata).first();
           if (!holding) return json(404,{error:'This khata is unavailable in the index.'});
         }
@@ -689,7 +690,7 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       if (typeof sheet!=='string' || (sheet && !/^\d{1,3}$/.test(sheet))) return json(400,{error:'Choose a BhuNaksha sheet.'});
       if (input.layers===true) {
         if (!sheet || Number(sheet)<1 || Object.hasOwn(input,'parcel')) return json(400,{error:'Choose a BhuNaksha sheet for map layers.'});
-        return mapMetadata('layers/'+location.id+'/'+sheet,()=>readMapLayers(location,sheet));
+        return mapMetadata('layers/'+location.id+'/'+sheet,()=>readMapLayers(location,sheet),cors);
       }
       if (Object.hasOwn(input,'parcel')) {
         const {id,number}=input.parcel??{};

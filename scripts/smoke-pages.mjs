@@ -15,7 +15,7 @@ try {
   const home = await (await asset('?demo=1', /^text\/html/)).text();
   assert.match(home, /<title>India Land Search<\/title>/);
   assert.match(home, /src="app\.mjs"/);
-  assert.match(home, /connect-src 'self' https:\/\/bhulekh\.ori\.nic\.in;/);
+  assert.match(home, /connect-src 'self' https:\/\/bhulekh\.ori\.nic\.in https:\/\/api\.129\.154\.35\.213\.nip\.io;/);
   assert.match(home, /img-src [^;]+https:\/\/tile\.openstreetmap\.org[^;]*;/);
   assert.match(home, /form-action 'self' https:\/\/app1bhunakshaodisha\.nic\.in[^;]*;/);
   await asset('app.mjs', /^text\/javascript/);
@@ -31,7 +31,7 @@ try {
   await asset('style.css', /^text\/css/);
   await asset('vendor/pdf-lib.js', /^text\/javascript/);
   const runtime=await (await asset('runtime.mjs', /^text\/javascript/)).text();
-  assert.match(runtime, /"hosted":false,"indexBase":"","pages":true/);
+  assert.match(runtime, /"hosted":true,"indexBase":"","pages":true,"apiBase":"https:\/\/api\.129\.154\.35\.213\.nip\.io"/);
   assert.equal((await fetch(new URL('server/index.js',url))).status,404);
   await asset('name-dictionary.mjs', /^text\/javascript/);
   const dictionary=await (await asset('name-dictionary-or.json', /^application\/json/)).json();

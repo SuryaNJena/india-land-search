@@ -13,8 +13,10 @@ and open the official Plot Info for an exact plot. Load both Bhulekh report
 pages for a known khata and save them as one PDF. Use ORSAC Know Your Land to
 inspect village boundaries and geographic context.
 
-The Pages app needs no sign-in or search server. Fresh lookups use the official
-sources where the browser can read them. Saved workspaces and name searches stay
+The Pages app needs no sign-in. Its Odisha live lookups use a small, open-source
+API relay on OCI only where government portals block browser cross-origin reads.
+The relay makes selected requests to official sources; it does not hold a
+statewide name index or user workspace. Saved workspaces and name matching stay
 in your browser. [Odisha source interfaces and coverage](docs/ODISHA-OFFICIAL-INTERFACES.md)
 
 ## Try the challenge demo
@@ -43,7 +45,9 @@ compatible workspace may supply its own parcel geometry or WGS84 GeoJSON for
 the geographic view. Workspace searches use your imported records. The Odisha source tools can also show fresh records by exact location and identifier.
 
 The app runs in the browser on GitHub Pages. Searches, imported records and PDFs
-stay local. A [fictional demo](https://suryanjena.github.io/india-land-search/?demo=1)
+stay local. Odisha live requests pass through the documented OCI relay to handle
+portal CORS; the relay keeps only short-lived source sessions and bounded
+in-memory caches. It stores no user records or search index. A [fictional demo](https://suryanjena.github.io/india-land-search/?demo=1)
 has sample plots, a map, and two RoRs ready to export.
 
 ## Use the app without an imported workspace
@@ -58,9 +62,16 @@ After a live Bhulekh search, open **BhuNaksha village map**, select the matched 
 
 The **Geographic map and location pins** panel accepts a manual or device location. OpenStreetMap tiles load only when enabled. For a parcel overlay, add WGS84 GeoJSON with the current sheet's `giscode` and matching parcel `id` or plot `kide`. Coordinates remain in the browser unless you enable map tiles or open a provider link. BhuNaksha returned no usable WGS84 extent for Kapaleswar sheets 01–03. Keep its cadastral PDF in local sheet coordinates or consult [ORSAC’s georeferenced viewer](https://www.odishakyl.in/mapview.php).
 
-## Hosted edition
+## Odisha live lookup relay
 
-The separate hosted edition retains signed-out Bhulekh village lookup and BhuNaksha maps. The GitHub Pages build supports local workspaces and the direct government lookups listed above. [Data sources](docs/DATA-SOURCES.md)
+GitHub Pages is static hosting and cannot bypass government-site CORS. The Pages
+build therefore calls the public OCI relay for a selected Odisha village, map,
+plot, or known khata. The relay validates fixed API routes and official hostnames,
+limits request size and per-IP volume, and applies the source adapters' cooldowns.
+It does not enable statewide name-only search: Bhulekh requires a village and no
+statewide source dataset is available. See the [OCI architecture and deployment
+guide](docs/OCI-BACKEND.md), [deployment notes](backend/deploy/oci/README.md), and
+[source documentation](docs/DATA-SOURCES.md).
 
 ## Move an existing workspace
 

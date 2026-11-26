@@ -1,5 +1,6 @@
 import {officialMapBase,officialRoR} from './odisha-endpoints.mjs';
 import {plotNumber} from './sheet-overlays.mjs';
+import {runtime} from './runtime.mjs';
 
 export const mapPortal='https://bhunakshaodisha.nic.in/';
 export const reportPortal='https://bhulekh.ori.nic.in/';
@@ -143,11 +144,16 @@ export function safeMapRaster(value,gis) {
 }
 
 export async function postOdisha(path,input,signal) {
-  const response=await fetch('/api/odisha/'+path,{method:'POST',headers:{'Content-Type':'application/json'},
+  const base=runtime.apiBase || globalThis.location?.origin || '';
+  const endpoint=new URL('/api/odisha/'+path,base || 'http://localhost');
+  const response=await fetch(endpoint,{method:'POST',mode:runtime.apiBase?'cors':'same-origin',credentials:'omit',
+    headers:{'Content-Type':'application/json'},
     body:JSON.stringify(input),signal});
   const data=await response.json().catch(()=>null);
   if (response.ok && data) return data;
-  throw Error(data?.error || 'The official Odisha lookup is unavailable. Try again later.');
+  const error=Error(data?.error || 'The official Odisha lookup is unavailable. Try again later.');
+  if (data?.portal) error.portal=data.portal;
+  throw error;
 }
 
 async function readReport(response) {
@@ -168,6 +174,11 @@ async function readReport(response) {
 }
 
 export async function directReport(place,khata,side,signal) {
+  if (runtime.hosted || runtime.apiBase) {
+    const data=await postOdisha('ror',{location:place.id,khata,side},signal);
+    if (typeof data.html!=='string') throw Error('Bhulekh returned an empty report.');
+    return data.html;
+  }
   const response=await fetch(reportURL(place,khata,side),{credentials:'omit',redirect:'error',
     signal:AbortSignal.any([signal,AbortSignal.timeout(12000)])});
   if (!response.ok) {
