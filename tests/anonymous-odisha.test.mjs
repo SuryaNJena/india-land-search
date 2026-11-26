@@ -48,9 +48,19 @@ test('A signed-out visitor can select a village, search, inspect a parcel and lo
   await assertResult('maps',{location,sheet:'01',parcel:{id:'fixture-parcel',number:'58/2'}},
     data=>assert.equal(data.info,'Fixture Plot Info'));
   await assertResult('ror',{location:village,khata:'9',side:'back',plots:true},data=>assert.deepEqual(data,{plots:['58/2']}));
-  assert.equal((await worker.fetch(post('ror',{location:village,khata:'9',side:'front'}))).status,503);
+  await new Promise(resolve=>setTimeout(resolve,1000));
+  await assertResult('ror',{location:village,khata:'9',side:'back'},data=>assert.match(data.html,/ContentArea/));
   assert.equal((await worker.fetch(post('tenant-search',{location:village,names:['Fixture Name']},'https://other.example'))).status,403);
   assert.equal((await worker.fetch(post('tenant-search',{names:['Fixture Name']}))).status,400);
+
+  const pagesOrigin='https://pages.example';
+  const preflight=await worker.fetch(new Request(origin+'/api/odisha/locations',{method:'OPTIONS',headers:{origin:pagesOrigin}}),
+    {LANDREVIEW_PAGES_ORIGIN:pagesOrigin});
+  assert.equal(preflight.status,204);
+  assert.equal(preflight.headers.get('access-control-allow-origin'),pagesOrigin);
+  const live=await worker.fetch(post('locations',{location:'19-3'},pagesOrigin),{LANDREVIEW_PAGES_ORIGIN:pagesOrigin});
+  assert.equal(live.status,200);
+  assert.equal(live.headers.get('access-control-allow-origin'),pagesOrigin);
 });
 
 test('Public cadastral requests share an upstream slot and serve indexed or unindexed villages',async()=>{
