@@ -103,9 +103,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     if (responses.has(key)) return responses.get(key);
     if (isLocal) throw Error('No local map is available for this sheet.');
     const location=[place.districtCode,place.tehsilCode,place.villageCode,place.riCode].join('-');
-    const response=await fetch('/api/odisha/maps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location,sheet:sheetCode}),signal});
-    const data=await response.json();
-    if (!response.ok) throw Error(data.error||'BhuNaksha is unavailable.');
+    const data=await postOdisha('maps',{location,sheet:sheetCode},signal);
     if (responses.size>=36) responses.delete(responses.keys().next().value);
     responses.set(key,data);
     return data;
@@ -258,10 +256,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     loadingPlot=true;
     try {
       const location=[place.districtCode,place.tehsilCode,place.villageCode,place.riCode].join('-');
-      const response=await fetch('/api/odisha/maps',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({location,sheet:current.sheet,parcel:{id:plot.id,number:plot.kide}})});
-      const data=await response.json();
-      if (!response.ok) throw Object.assign(Error(data.error||'BhuNaksha Plot Info is unavailable.'),{portal:data.portal});
+      const data=await postOdisha('maps',{location,sheet:current.sheet,parcel:{id:plot.id,number:plot.kide}});
       const matches=matchRows([{status:'Retrieved',info:data.info}],{names:searchNames})[0].full;
       if (details.size>=100) details.delete(details.keys().next().value);
       details.set(key,{data,matches});
@@ -330,10 +325,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
           let plots=documents.get(key);
           if (!plots) {
             matchStatus.textContent=`Loading the official plot schedule for khata ${khata}…`;
-            const response=await fetch('/api/odisha/ror',{method:'POST',headers:{'Content-Type':'application/json'},
-              body:JSON.stringify({location:place.id,khata,side:'back',plots:true}),signal:abort.signal});
-            const data=await response.json();
-            if (!response.ok) throw Error(data.error||'The official plot schedule is unavailable.');
+            const data=await postOdisha('ror',{location:place.id,khata,side:'back',plots:true},abort.signal);
             plots=data.plots;
             documents.set(key,plots);
             if (checked+1<chosen.length) await new Promise(resolve=>setTimeout(resolve,1100));

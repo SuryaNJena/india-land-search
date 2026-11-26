@@ -1,3 +1,4 @@
+import {runtime} from './runtime.mjs';
 const directory = new Map();
 
 function retryDelay(value) {
@@ -8,7 +9,10 @@ function retryDelay(value) {
 }
 
 export async function requestBhulekh(path, input, signal) {
-  const response=await fetch('/api/odisha/'+path,{method:'POST',headers:{'Content-Type':'application/json'},
+  const base=runtime.apiBase || globalThis.location?.origin || '';
+  const endpoint=new URL('/api/odisha/'+path,base || 'http://localhost');
+  const response=await fetch(endpoint,{method:'POST',mode:runtime.apiBase?'cors':'same-origin',credentials:'omit',
+    headers:{'Content-Type':'application/json'},
     body:JSON.stringify(input),signal});
   const data=await response.json().catch(()=>null);
   if (response.ok && data) return data;

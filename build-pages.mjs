@@ -7,6 +7,15 @@ import {officialMapBase} from './dist/odisha-endpoints.mjs';
 const root=await realpath(new URL('./',import.meta.url));
 const source=join(root,'dist');
 const target=join(root,'pages-out');
+const apiBase=(process.env.LANDREVIEW_API_BASE??'').trim().replace(/\/+$/,'');
+let apiOrigin='';
+if (apiBase) {
+  const apiURL=new URL(apiBase);
+  if (apiURL.protocol!=='https:' || apiURL.username || apiURL.password || apiURL.pathname!=='/' || apiURL.search || apiURL.hash) {
+    throw Error('LANDREVIEW_API_BASE must be an HTTPS origin without a path, query, or credentials.');
+  }
+  apiOrigin=apiURL.origin;
+}
 const prior=await lstat(target).catch(error=>{
   if (error.code!=='ENOENT') throw error;
   return null;
@@ -27,14 +36,14 @@ const files=[
 ];
 files.push(...(await readdir(source)).filter(file=>/^odisha-boundaries-[a-z]+\.json$/.test(file)));
 const bhuOrigins=mapOrigins.sort().join(' ');
-const csp=["default-src 'self'", "script-src 'self'", "worker-src 'self'", "manifest-src 'self'", "connect-src 'self' "+new URL(reportPortal).origin, "img-src 'self' data: blob: https://tile.openstreetmap.org "+bhuOrigins,
+const csp=["default-src 'self'", "script-src 'self'", "worker-src 'self'", "manifest-src 'self'", "connect-src 'self' "+new URL(reportPortal).origin+(apiOrigin?' '+apiOrigin:''), "img-src 'self' data: blob: https://tile.openstreetmap.org "+bhuOrigins,
   "form-action 'self' "+bhuOrigins, "style-src 'self' 'unsafe-inline'", "object-src 'none'", "base-uri 'none'"].join('; ');
 const homepage=(await readFile(join(source,'index.html'),'utf8')).replace('  <meta name="description"',  `  <meta http-equiv="Content-Security-Policy" content="${csp}">\n  <meta name="description"`);
 await Promise.all([
   ...files.map(file=>cp(join(source,file),join(target,file))),
   cp(join(source,'vendor'),join(target,'vendor'),{recursive:true}),
   cp(join(root,'worker','odisha-map-snapshots.json'),join(target,'odisha-map-snapshots.json')),
-  writeFile(join(target,'runtime.mjs'), 'export const runtime = '+JSON.stringify({hosted:false,indexBase:'',pages:true})+';\n'),
+  writeFile(join(target,'runtime.mjs'), 'export const runtime = '+JSON.stringify({hosted:Boolean(apiBase),indexBase:'',pages:true,apiBase})+';\n'),
   writeFile(join(target,'index.html'),homepage),
   writeFile(join(target,'.nojekyll'),'')
 ]);

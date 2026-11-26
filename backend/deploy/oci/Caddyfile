@@ -1,0 +1,18 @@
+{
+	email suryajena@soonerusa.com
+	acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
+
+api.129.154.35.213.nip.io {
+	@probe path_regexp (?i)^/(?:\.env|\.git|\.svn|\.aws|\.ssh|wp-admin|wp-login\.php|xmlrpc\.php|phpmyadmin|vendor/|actuator|\.well-known/[^a])
+	respond @probe 404
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+	reverse_proxy 127.0.0.1:8787 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+	}
+}

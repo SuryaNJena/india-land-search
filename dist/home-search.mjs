@@ -116,7 +116,8 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     scopeElement.hidden=!live || !runtime.hosted;
     form.querySelectorAll('.location-input').forEach(label=>{label.hidden=live && !hasLocal && !selectedVillage;});
     form.querySelector('#home-search-scope').textContent = workspace?.demo ? 'Search checks the fictional plots loaded in this tab.' : live
-      ? 'Search the Odisha index by name, or choose a village to search Bhulekh directly.'
+      ? runtime.indexBase ? 'Search the Odisha index by name, or choose a village to search Bhulekh directly.'
+        : 'No statewide name index is loaded. Choose one or more villages to search the public Bhulekh records.'
       : criteria.state ? 'Search covers loaded records for this state. The official portal is available for fresh lookups.' : '';
     for (const field of locationFields) {
       const options = [...new Set(inState.flatMap(x => x.location[field].slice(0, 1)))].sort((a, b) => a.localeCompare(b));
@@ -267,7 +268,9 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     if (!submitted || !state) { results.innerHTML = ''; return; }
     const found = findRecords(workspace, index, reviewedCriteria());
     if (state==='Odisha' && (runtime.hosted || runtime.indexBase) && !found.stateCount) {
-      results.innerHTML = '<div class="empty"><strong>Your Odisha search is ready.</strong><p>Review suggested spellings. Leave the location blank to search statewide.</p></div>';
+      results.innerHTML = runtime.indexBase
+        ? '<div class="empty"><strong>Your Odisha search is ready.</strong><p>Review suggested spellings. Leave the location blank to search the loaded index.</p></div>'
+        : '<div class="empty"><strong>Your Odisha search is ready.</strong><p>No statewide name index is loaded. Choose a village to search live Bhulekh records.</p></div>';
       return;
     }
     if (!found.stateCount) {

@@ -1,3 +1,5 @@
+import {postOdisha} from './odisha-lookup-source.mjs';
+
 const tags=new Set('TABLE THEAD TBODY TFOOT TR TD TH DIV P SPAN BR HR B STRONG I EM U H1 H2 H3 H4 H5 UL OL LI CENTER FONT'.split(' '));
 const discard=new Set('SCRIPT STYLE IFRAME OBJECT INPUT BUTTON LINK IMG NOSCRIPT TEMPLATE SVG'.split(' '));
 
@@ -24,10 +26,8 @@ export function copyReport(doc, html, side) {
 }
 
 async function hostedReport(hit,side) {
-  const response=await fetch('/api/odisha/ror',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({location:hit.location.id,khata:hit.khata,side})});
-  const result=await response.json();
-  if (!response.ok) throw Error(result.error||'The official record could not be loaded.');
+  const result=await postOdisha('ror',{location:hit.location.id,khata:hit.khata,side});
+  if (typeof result.html!=='string') throw Error('Bhulekh returned an empty report.');
   return result.html;
 }
 
