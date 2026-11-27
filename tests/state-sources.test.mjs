@@ -50,3 +50,42 @@ test('the state map relay preserves a source rate limit without retrying',async(
   await assert.rejects(()=>read({state:'Chhattisgarh',levels:['43']}),{status:429,retryAfter:75});
   assert.equal(called,1);
 });
+
+test('UP resolves native map extent and verifies the exact plot before reading details',async()=>{
+  const requests=[];
+  const read=makeStateMapReader(async (url,init)=>{
+    requests.push(url.pathname);
+    if (url.pathname.endsWith('levelvalue')) return Response.json([{code:'00766',value:'Agra'}]);
+    if (url.pathname.endsWith('getVVVVExtentGeoref')) {
+      assert.equal(init.body.get('gisLevels'),'146,00766,124649,');
+      return Response.json({gisCode:'14600766124649',crs:'EPSG:32644',xmin:1,ymin:2,xmax:31,ymax:62});
+    }
+    if (url.pathname.endsWith('getPlotByPlotNo')) {
+      assert.equal(init.body.get('giscode'),'14600766124649');
+      return Response.json(init.body.get('plotno')==='261'?{id:12345,kide:'261'}:{});
+    }
+    assert.deepEqual(JSON.parse(init.body),{gisCode:'14600766124649',plotNo:'261'});
+    return new Response('Official Plot Info');
+  });
+  assert.deepEqual(await read({state:'Uttar Pradesh',levels:['146']}),{options:[{code:'00766',label:'Agra'}]});
+  const search={state:'Uttar Pradesh',levels:['146','00766','124649']};
+  assert.deepEqual(await read({...search,map:true}),{gis:'14600766124649',crs:'EPSG:32644',
+    bbox:[1,2,31,62],width:360,height:720});
+  assert.deepEqual(await read({...search,plot:'261'}),{gis:'14600766124649',id:'12345',plot:'261',
+    info:'Official Plot Info',record:'https://upbhulekh.gov.in/'});
+  await assert.rejects(()=>read({...search,plot:'262'}),{status:404});
+  assert.equal(requests.filter(path=>path.endsWith('getPlotInfo')).length,1);
+});
+
+test('Chhattisgarh Plot Info links to the exact official khasra record',async()=>{
+  const read=makeStateMapReader(async (url)=>{
+    assert.equal(url.searchParams.get('levels'),'57,08,01,028,');
+    return Response.json({has_data:'Y',plotNo:'1/2',gisCode:'570801.028',ID:123,info:'Plot Info<br>Area'});
+  });
+  const record=await read({state:'Chhattisgarh',levels:['57','08','01','028'],plot:'1/2'});
+  const link=new URL(record.record);
+  assert.equal(link.hostname,'revenue.cg.nic.in');
+  assert.equal(link.searchParams.get('villno'),'570801.028');
+  assert.equal(link.searchParams.get('khasrano'),'1/2');
+  assert.equal(record.info,'Plot Info\nArea');
+});

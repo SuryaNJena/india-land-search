@@ -1,3 +1,5 @@
+import {mountStateMaps} from './state-maps.mjs';
+import {stateSources} from './state-sources.mjs';
 import {mountTour} from './guided-tour.mjs';
 import {countObservedNames,normalize,parcelKey,safeURL,sourceCaste,suggestSurname,validateWorkspace,matchRows} from './core.mjs';
 import {download,localStore,savedLookupStore,zipWorkspace,importFile,exportWorkbook,mergeROR,savedHoldings,combineSavedHoldings,exportRORBundle} from './files.mjs';
@@ -96,7 +98,7 @@ function overview() {
   const mountSearch = () => renderHomeSearch($('home-search'),{
     workspace,escape,tag,loadSavedRecords,onRevenue:demoSession?undefined:openRevenue,openNameLibrary:()=>navigate('names'),
     openPlot:(index,terms)=>workspace?showPlot(index,terms):openSavedLookup(savedPlots[index]),
-    openMap:hits=>navigate('maps',{hits}),openOfficial:village=>navigate('portals',{village}),
+    openMap:hits=>navigate('maps',{hits}),openStateMaps:()=>navigate('maps'),openOfficial:village=>navigate('portals',{village}),
     importRecords:chooseImport,onSave:saveLookup
   });
   if (!workspace) {
@@ -149,7 +151,12 @@ const bindTable = (body,page,handler) => {
   $('previous').onclick=()=>handler(page-1);$('next').onclick=()=>handler(page+1);
 };
 
-const officialLookup = () => demoSession ? '' : '<section class="card" id="official-odisha-lookup"></section>';
+const officialLookup = () => demoSession ? '' : `<section class="card" id="official-odisha-lookup"></section>
+  <section class="card" id="other-state-sources">
+    <h2>Other state sources</h2>
+    <label class="label">State<select><option value="">Choose a state</option>${Object.keys(stateSources).map(state=>`<option>${escape(state)}</option>`).join('')}</select></label>
+    <div data-state-content></div>
+  </section>`;
 
 function openSavedLookup(item) {
   const view={map:'maps',plot:'plots',ror:'ror'}[item.kind];
@@ -164,6 +171,7 @@ function mountOfficialLookup(mode) {
   const initial=pendingLookup;
   pendingLookup=undefined;
   mountOdishaLookup(root,mode,{escape,tag,onSave:saveLookup,onRevenue:openRevenue,initial});
+  mountStateMaps($('other-state-sources'),{escape,tag,initialState:homeNameDraft().state});
 }
 
 function lookupWorkspace() {

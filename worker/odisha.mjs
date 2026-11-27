@@ -1,3 +1,4 @@
+import {stateSources,stateSourcePath} from '../dist/state-sources.mjs';
 import {officialMapBase,officialRoR} from '../dist/odisha-endpoints.mjs';
 export {officialMapBase,officialRoR};
 const portalOrigin = 'https://bhulekh.ori.nic.in';
@@ -247,14 +248,14 @@ function plotKhata(html,location) {
   return '';
 }
 
-function mapSelector(html,name) {
+function mapSelector(html,name,preserveCodes=false) {
   const selector=[...html.matchAll(/<select\b([^>]+)>([\s\S]*?)<\/select>/gi)]
     .find(([,attrs])=>['name','id'].some(key=>attributes(attrs).get(key)===name));
   if (!selector) return null;
   return [...new Map([...selector[2].matchAll(/<option\b([^>]*)>([\s\S]*?)(?=<\/?option\b|$)/gi)].flatMap(([,attrs,body])=>{
     const value=attributes(attrs).get('value');
-    if (!/^\d{1,6}$/.test(value??'') || Number(value)<1) return [];
-    const code=String(Number(value));
+    if (preserveCodes ? !/^[a-z0-9]{1,10}$/i.test(value??'') || attributes(attrs).has('disabled') : !/^\d{1,6}$/.test(value??'') || Number(value)<1) return [];
+    const code=preserveCodes?value:String(Number(value));
     const text=decode(body.split(/<\/?(?:b|em|i|span|strong)\s*>/giu).join(''));
     const label=/[<>]/u.test(text) ? '' : text.replace(/^\s*\d+\s+/u,'').replace(/\s+/gu,' ').trim();
     return [[code,{code,label:label||code}]];
@@ -539,12 +540,120 @@ export function readBhulekhPlotSchedule(html) {
   return header ? [...(consolidated?consolidatedPlots:plots)] : null;
 }
 
-export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),
+export function makeStateMapReader(fetcher=fetch) {
+  async function read(url,fields,limit=128*1024,json=false) {
+    const init={redirect:'error',signal:AbortSignal.timeout(8500)};
+    if (fields) Object.assign(init,{method:'POST',body:json?JSON.stringify(fields):new URLSearchParams(fields),
+      ...(json?{headers:{'Content-Type':'application/json'}}:{})});
+    const response=await fetcher(url,init);
+    const limited=bhunakshaLimit(response);
+    if (limited || !response.ok) {
+      await response.body?.cancel();
+      throw limited??new PortalError('The official BhuNaksha service is unavailable.',502);
+    }
+    return mapResponseText(response,limit);
+  }
+  return async ({state,levels=[],map=false,plot}={})=>{
+    const source=Object.hasOwn(stateSources,state)?stateSources[state]:null;
+    if (!source?.mapState || !Array.isArray(levels) || levels.length>source.levels.length ||
+        !levels.every(code=>typeof code==='string' && /^[a-z0-9]{1,10}$/i.test(code)) ||
+        (map || plot!==undefined) && levels.length!==source.levels.length ||
+        plot!==undefined && (typeof plot!=='string' || !/^\d{1,12}(?:\/\d{1,12}){0,5}$/.test(plot))) {
+      throw new PortalError('Choose a supported state and complete the official location fields.',400);
+    }
+    if (source.plotOnly) {
+      const base=new URL('/bhunakshaserver/',source.map);
+      const level=levels.length+1;
+      if (levels.some(code=>!/^\d+$/.test(code)) || (!map && plot===undefined && level>source.levels.length)) {
+        throw new PortalError('Choose a location and a plot number.',400);
+      }
+      const gis=levels.join('');
+      if (map) {
+        const extent=JSON.parse(await read(new URL('MapInfo/getVVVVExtentGeoref',base),{gisLevels:levels.join(',')+','}));
+        const {xmin,ymin,xmax,ymax,crs,gisCode}=extent;
+        if (gisCode!==gis || ![xmin,ymin,xmax,ymax].every(Number.isFinite) || !(xmax>xmin && ymax>ymin) ||
+            !/^EPSG:\d{4,5}$/.test(crs??'')) throw new PortalError('UP BhuNaksha returned no usable village map.',404);
+        const scale=720/Math.max(xmax-xmin,ymax-ymin);
+        const width=Math.max(1,Math.round((xmax-xmin)*scale)), height=Math.max(1,Math.round((ymax-ymin)*scale));
+        return {gis,crs,bbox:[xmin,ymin,xmax,ymax],width,height};
+      }
+      if (plot===undefined) {
+        const rows=JSON.parse(await read(new URL('masterdata/levelvalue',base),{level:String(level),codes:levels.join(',')}));
+        if (!Array.isArray(rows)) throw new PortalError('UP BhuNaksha did not return the location menu.',502);
+        const options=rows.flatMap(row=>/^\d{1,10}$/.test(row?.code??'') && typeof row.value==='string'
+          ? [{code:row.code,label:row.value.slice(0,150)}] : []);
+        return {options};
+      }
+      const parcel=JSON.parse(await read(new URL('MapInfo/getPlotByPlotNo',base),{giscode:gis,plotno:plot}));
+      if (!parcel?.id || normalizeMapNumber(parcel.kide)!==normalizeMapNumber(plot)) {
+        throw new PortalError('UP BhuNaksha did not find that parcel.',404);
+      }
+      const info=plotText(await read(new URL('MapInfo/getPlotInfo',base),{gisCode:gis,plotNo:plot},128*1024,true));
+      if (!info) throw new PortalError('UP BhuNaksha did not return Plot Info for this parcel.',404);
+      return {gis,id:String(parcel.id),plot:String(parcel.kide),info,record:source.records};
+    }
+    const base=source.mapState==='10'?new URL('/',source.map):new URL(source.map);
+    const stateCode=source.mapState;
+    const selected=levels.join(',');
+    const selections=selected+(source.trailing && levels.length?',':'');
+    const scalar=new URL('ScalarDatahandler',base);
+    if (plot!==undefined) {
+      scalar.search=new URLSearchParams({OP:'5',state:stateCode,levels:selections,plotno:plot}).toString();
+      const data=JSON.parse(await read(scalar));
+      const info=plotText(data.info);
+      if (data.has_data!=='Y' || normalizeMapNumber(data.plotNo)!==normalizeMapNumber(plot) || !info) {
+        throw new PortalError('BhuNaksha did not return Plot Info for this number.',404);
+      }
+      const gis=String(data.gisCode??'');
+      let record='';
+      if (stateCode==='22' && /^\d{6}\.\d{3}$/.test(gis)) {
+        const url=new URL('https://revenue.cg.nic.in/bhuiyanuser/User/Selection_Report_For_KhasraDetail.aspx');
+        url.search=new URLSearchParams({villno:gis,khasrano:plot});
+        record=url.href;
+      }
+      return {plot:String(data.plotNo),id:String(data.ID??''),gis,info,record};
+    }
+    if (!map) {
+      if (levels.length===source.levels.length) throw new PortalError('The village map selection is complete.',400);
+      const level=String(levels.length+1);
+      const html=await (levels.length
+        ? read(scalar,{OP:'2',state:stateCode,level,selections})
+        : read(new URL(source.map)));
+      const options=mapSelector(html,'level_'+level,true);
+      if (options===null) throw new PortalError('BhuNaksha did not return the next location menu.',502);
+      return {options};
+    }
+    const extent=JSON.parse(await read(new URL('rest/MapInfo/getVVVVExtentGeoref',base),
+      {state:stateCode,gisLevels:selected+',',srs:'0'}));
+    const gis=extent.gisCode;
+    if (typeof gis!=='string' || !/^[a-z0-9._-]{1,55}$/i.test(gis)) {
+      throw new PortalError('BhuNaksha did not identify a map for this selection.',404);
+    }
+    const data=JSON.parse(await read(new URL('rest/MapInfo/getVillageGeoJSon',base),
+      {state:stateCode,giscode:gis,noCompress:'true'},maxMapBytes));
+    const validRing=ring=>Array.isArray(ring) && ring.length>=4 &&
+      ring.every(point=>Array.isArray(point) && point.length>=2 && Number.isFinite(point[0]) && Number.isFinite(point[1]));
+    const validPolygon=polygon=>Array.isArray(polygon) && polygon.length>0 && polygon.every(validRing);
+    if (!Array.isArray(data.features) || data.features.length>10000) throw new PortalError('BhuNaksha returned unusable geometry.',502);
+    const features=data.features.flatMap(feature=>{
+      const {properties,geometry}=feature??{};
+      if (!properties?.id || (properties.giscode && String(properties.giscode)!==gis)) return [];
+      const valid=geometry?.type==='Polygon' ? validPolygon(geometry.coordinates)
+        : geometry?.type==='MultiPolygon' && Array.isArray(geometry.coordinates) && geometry.coordinates.length>0 && geometry.coordinates.every(validPolygon);
+      return valid?[{properties:{id:String(properties.id),kide:String(properties.kide??'')},geometry:{type:geometry.type,coordinates:geometry.coordinates}}]:[];
+    });
+    if (!features.length) throw new PortalError('BhuNaksha returned no parcels for this map.',404);
+    return {gis,features};
+  };
+}
+
+export function makeLandReviewWorker({assets,readStateMap=makeStateMapReader(),matchRows,readTenants=makeBhulekhReader(),readMap=makeBhunakshaReader(),
   readPlot=makeBhunakshaPlotReader(),readMapLocations=makeBhunakshaLocationReader(),readMapLayers=makeBhunakshaLayerReader(),
   mapSnapshots={villages:{}},nameLimit=1000,readIndex,fetchReport=fetch}) {
   const cache = new Map(), mapCache = new Map(), mapMetadataCache = new Map();
   const plotCache=new Map(), pendingPlots=new Map();
   const month=30*24*60*60*1000;
+  const stateMapsInFlight=new Map(), stateMapPauses=new Map();
   let busyUntil = 0, pausedUntil = 0, mapPausedUntil = 0, mapBusy = false, activePlots = 0;
   const json = (status, value, headers = {}) => Response.json(value,{status,headers:{'Cache-Control':'no-store',...headers}});
   async function mapMetadata(key,load,cors={}) {
@@ -571,6 +680,7 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
 
   return {async fetch(request, env = {}) {
     const url = new URL(request.url);
+    const stateMap = url.pathname === stateSourcePath;
     const directory = url.pathname === '/api/odisha/locations';
     const map = url.pathname === '/api/odisha/maps';
     const mapDirectory = url.pathname === '/api/odisha/map-locations';
@@ -583,7 +693,7 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
     const json = (status,value,headers={}) => Response.json(value,{status,headers:{'Cache-Control':'no-store',...cors,...headers}});
     if (pages && request.method==='OPTIONS') return new Response(null,{status:204,headers:{...cors,
       'Access-Control-Allow-Methods':'POST','Access-Control-Allow-Headers':'Content-Type','Access-Control-Max-Age':'600'}});
-    if (!directory && !map && !mapDirectory && !indexed && !report && url.pathname !== '/api/odisha/tenant-search') {
+    if (!stateMap && !directory && !map && !mapDirectory && !indexed && !report && url.pathname !== '/api/odisha/tenant-search') {
       const asset = Object.hasOwn(assets,url.pathname) ? assets[url.pathname] : null;
       if (!asset || !['GET','HEAD'].includes(request.method)) return new Response('Not found',{status:404});
       return new Response(request.method==='HEAD'?null:asset.base64?Uint8Array.from(atob(asset.base64),c=>c.charCodeAt(0)):asset.text,{headers:{'Content-Type':asset.type,'X-Content-Type-Options':'nosniff'}});
@@ -606,6 +716,30 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       }
       input=JSON.parse(text+decoder.decode());
     } catch { return json(400,{error:'Enter a valid search.'}); }
+    if (stateMap) {
+      try {
+        if (!input || typeof input!=='object' || Array.isArray(input)) return json(400,{error:'Choose a state and location.'});
+        const {state}=input;
+        if (typeof state!=='string' || !Object.hasOwn(stateSources,state) || !stateSources[state].mapState) {
+          return json(400,{error:'Choose a state with live parcel lookup.'});
+        }
+        const wait=Math.ceil(((stateMapPauses.get(state)??0)-Date.now())/1000);
+        const active=stateMapsInFlight.get(state)??0;
+        if (wait>0 || active>=2) {
+          return json(429,{error:'This state’s map service is busy. Try again shortly.'},{'Retry-After':String(Math.max(wait,2))});
+        }
+        stateMapsInFlight.set(state,active+1);
+        try { return json(200,await readStateMap(input)); }
+        catch (error) {
+          if (error.retryAfter) stateMapPauses.set(state,Date.now()+error.retryAfter*1000);
+          throw error;
+        } finally { stateMapsInFlight.set(state,stateMapsInFlight.get(state)-1); }
+      } catch (error) {
+        return json(error instanceof PortalError?error.status:502,
+          {error:error instanceof PortalError?error.message:'The official BhuNaksha lookup could not be completed.'},
+          error.retryAfter?{'Retry-After':String(error.retryAfter)}:{});
+      }
+    }
     if (indexed) {
       const {names,location='',offset=0}=input??{};
       if (!Array.isArray(names) || !names.length || names.length>Math.min(nameLimit,100) ||

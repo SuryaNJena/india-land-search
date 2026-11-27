@@ -4,12 +4,13 @@ import {fileURLToPath} from 'node:url';
 import {dirname,resolve} from 'node:path';
 import {makeLandReviewWorker} from '../worker/odisha.mjs';
 import {localityIndex} from './locality-index.mjs';
+import {stateSourcePath} from '../dist/state-sources.mjs';
 import {matchRows} from '../dist/core.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const apiPaths=new Set([
   '/api/odisha/locations','/api/odisha/map-locations','/api/odisha/maps',
-  '/api/odisha/tenant-search','/api/odisha/ror'
+  '/api/odisha/tenant-search','/api/odisha/ror',stateSourcePath
 ]);
 const bodyLimit=512*1024;
 
