@@ -1,103 +1,57 @@
 # India Land Search
 
-India Land Search is a free browser workspace for finding and reviewing land records.
-Start with a village, plot, or khata. Compare names across scripts, highlight parcels,
-and assemble a map and Record of Rights (RoR) packet you can keep or share.
+India Land Search helps people find villages, review name spellings, and inspect
+land records without an app account. Start with a name, village, plot number,
+or khata number. Compare the results with the official source and export the
+records you need.
 
-[Open India Land Search on GitHub Pages](https://suryanjena.github.io/india-land-search/).
+[Open GitHub Pages](https://suryanjena.github.io/india-land-search/) · [Open ChatGPT Sites](https://landreview-odisha.thinwave16.chatgpt.site/) · [Download the portable demo](https://github.com/SuryaNJena/india-land-search/releases/latest)
 
-## Work with official Odisha records
+## Get started
 
-Choose **State portals → Odisha maps and RoR lookup**. View a BhuNaksha sheet
-and open the official Plot Info for an exact plot. Load both Bhulekh report
-pages for a known khata and save them as one PDF. Use ORSAC Know Your Land to
-inspect village boundaries and geographic context.
+- **Find a village or search a name.** Start on **Home**. Choose one or more villages from the atlas or the name picker. Use **Start with a name** for a guided search, or visit **Name Matching** to edit and save spellings using the Odia keypad.
+- **Inspect a known plot or khata.** Open **Plot Records** for BhuNaksha Plot Info and a shaded sheet preview. Use **Records of Rights** for the front page, plot schedule, and printable PDF.
+- **Explore maps and dues.** **Village Maps** combines an OpenStreetMap atlas with native cadastral sheets. **Land revenue** opens the official Odisha e-Pauti payment or receipt service and shows the holding details to enter.
+- **Try it with sample records.** On a hosted site, choose **Take a tour**. For the offline demo, extract the release ZIP, run `node serve.mjs` with Node.js 24, and open the URL printed in the terminal.
 
-The Pages app needs no sign-in. Its Odisha live lookups use a small, open-source
-API relay on OCI only where government portals block browser cross-origin reads.
-The relay makes selected requests to official sources; it does not hold a
-statewide name index or user workspace. Saved workspaces and name matching stay
-in your browser. [Odisha source interfaces and coverage](docs/ODISHA-OFFICIAL-INTERFACES.md)
+Live integrations cover Odisha at village, sheet, plot, and khata level. Other
+states and union territories have official links in **State portals**, and
+local search works with compatible imports. An empty village selection supports
+a search of loaded records. Statewide live name-only search needs an authorised
+production dataset. [User manual](docs/USER-MANUAL.md) · [Data coverage and attribution](docs/DATA-SOURCES.md)
 
-## Try the challenge demo
+## Architecture
 
-1. Download `LandReview-portable.zip` from the [latest release](https://github.com/SuryaNJena/india-land-search/releases/latest) and extract it.
-2. Run `node serve.mjs` from the extracted folder using Node.js 24. Open the printed demo URL in a browser.
-3. Click **Find sample village**, choose **Anandapur Sample**, and select **Review name variants**. Approve spellings or use **Clear all**, then choose **Search loaded records**.
-4. Open the matched map and export its overview. In **Records of Rights**, choose **Download selected RoRs (PDF)** to download both sides of two fictional khatas in one file.
-
-The demo uses fictional records and runs without an account, uploads, or government portal requests. The regular app includes a public Odisha village directory and official links for map-point and plot-ID lookups. Verified RI and land-record portal codes cover selected villages. Live Odisha village searches on the hosted site work without a ChatGPT account. Statewide name search needs verified production data. [Data-source research](docs/DATA-SOURCES.md)
-
-## Search and review your records
-
-1. Import an India Land Search workspace ZIP, compatible JSON, or an Excel workbook with
-   a **Plots** tab. Existing v1 backups are supported.
-2. On **Home**, choose a state, enter names and review spelling suggestions.
-   Leave location blank to search all loaded records for that state.
-3. Choose **Show matches on map** where parcel shapes are available. Click a
-   parcel or enter its exact number to inspect the saved Plot Info and RoR links.
-4. Use **Village maps** for matched sheet PDFs, **Plot records** for Excel, and
-   **Records of Rights** to combine saved PDFs from selected khatas.
-
-The Odisha village directory and dated geometry for selected sheets are bundled.
-A geometry snapshot joins by exact sheet, parcel ID, and plot number. A
-compatible workspace may supply its own parcel geometry or WGS84 GeoJSON for
-the geographic view. Workspace searches use your imported records. The Odisha source tools can also show fresh records by exact location and identifier.
-
-The app runs in the browser on GitHub Pages. Searches, imported records and PDFs
-stay local. Odisha live requests pass through the documented OCI relay to handle
-portal CORS; the relay keeps only short-lived source sessions and bounded
-in-memory caches. It stores no user records or search index. A [fictional demo](https://suryanjena.github.io/india-land-search/?demo=1)
-has sample plots, a map, and two RoRs ready to export.
-
-## Use the app without an imported workspace
-
-Open **Village maps**, **Plot records**, or **Records of Rights** and choose an Odisha locality. **Name matching** can also review spellings and search plot text already saved in this browser. Successful standalone lookups appear in **Workspace**, where you can reopen them and remove selected items. Your browser can install the app and reopen its interface offline.
-
-GitHub Pages loads BhuNaksha sheet images from the official WMS and opens the official Plot Info response when the source blocks browser reads. Add its saved JSON to use the content in the app. Bhulekh’s report pages can be read directly with a known khata. In Home, **Pick a location on the map** includes labelled Odisha village boundaries that can be viewed over OpenStreetMap. [Browser support and source checks](docs/STANDALONE-ODISHA-LOOKUPS.md)
-
-## Odisha cadastral maps
-
-After a live Bhulekh search, open **BhuNaksha village map**, select the matched khatas, and choose **Highlight plots from Bhulekh RoR**. Download the current vector sheet or the village PDF containing only sheets with matched plots. The app uses BhuNaksha’s sheet directory and parcel geometry and joins the official back schedule by exact plot number. A dated geometry-only fallback covers Kapaleswar sheets 01–03 if the map host is unavailable.
-
-The **Geographic map and location pins** panel accepts a manual or device location. OpenStreetMap tiles load only when enabled. For a parcel overlay, add WGS84 GeoJSON with the current sheet's `giscode` and matching parcel `id` or plot `kide`. Coordinates remain in the browser unless you enable map tiles or open a provider link. BhuNaksha returned no usable WGS84 extent for Kapaleswar sheets 01–03. Keep its cadastral PDF in local sheet coordinates or consult [ORSAC’s georeferenced viewer](https://www.odishakyl.in/mapview.php).
-
-## Odisha live lookup relay
-
-GitHub Pages is static hosting and cannot bypass government-site CORS. The Pages
-build therefore calls the public OCI relay for a selected Odisha village, map,
-plot, or known khata. The relay validates fixed API routes and official hostnames,
-limits request size and per-IP volume, and applies the source adapters' cooldowns.
-It does not enable statewide name-only search: Bhulekh requires a village and no
-statewide source dataset is available. See the [OCI architecture and deployment
-guide](docs/OCI-BACKEND.md), [deployment notes](backend/deploy/oci/README.md), and
-[source documentation](docs/DATA-SOURCES.md).
-
-## Move an existing workspace
-
-On your previous installation, choose **Back up workspace** to download a ZIP.
-Open GitHub Pages and choose **Import records** to restore it. Browser storage
-is tied to the site address, so repeat this on each device that has a workspace
-you want to keep.
-
-## Develop and verify
-
-Use Node.js 24 from the repository root.
-
-```sh
-node --test
-node verify.mjs
-node build-pages.mjs
-node scripts/smoke-pages.mjs
+```mermaid
+flowchart TB
+  accTitle: India Land Search architecture
+  accDescr: The browser stores records and exports locally and uses the hosting-specific adapter for live Odisha lookups. Maps and payments also use their official services.
+  pages["GitHub Pages<br/>Primary static site"] --> app["Browser app<br/>Search, review, maps and exports"]
+  sites["ChatGPT Sites<br/>Hosted app"] --> app
+  portable["Portable ZIP<br/>Offline demo"] --> app
+  app <-->|"Saved names and workspaces"| local[("Browser storage")]
+  app -->|"Pages live lookups"| relay["OCI API relay"]
+  app -->|"Sites live lookups"| worker["Sites Worker"]
+  relay --> sources["Bhulekh and BhuNaksha"]
+  worker --> sources
+  app -->|"Direct report previews where available"| sources
+  app -->|"Visible map tiles"| tiles["OpenStreetMap"]
+  app -->|"Official payment and receipt links"| epauti["Odisha e-Pauti"]
 ```
 
-See the [deployment guide](docs/DEPLOYMENT.md), [contributor guide](AGENTS.md),
-and [Codex evidence pack](docs/CODEX-EVIDENCE.md).
+The browser handles imports, local matching, saved data, and exports. Live
+queries send the selected lookup inputs to the official sources through the
+appropriate adapter or direct report route. The portable build includes bundled
+reference data and fictional records. [Developer guide](docs/DEVELOPER-GUIDE.md)
 
-## Records and attribution
+## Documentation
 
-Imported India Land Search ZIP, compatible JSON, and Excel workspaces stay in the browser. Workspaces back up to a checksum-validated ZIP. Retain original signed documents and verify records using the official source.
+| Read this | For |
+| --- | --- |
+| [User manual](docs/USER-MANUAL.md) | Searching, map review, RoR exports, payment handoff, and troubleshooting |
+| [Developer guide](docs/DEVELOPER-GUIDE.md) | Local setup, runtime paths, verification, and releases |
+| [Deployment runbook](docs/DEPLOYMENT.md) | GitHub Pages, ChatGPT Sites, and OCI operations |
+| [Changelog](CHANGELOG.md) | Live-site changes and the features in each tagged download |
+| [Contributor guide](AGENTS.md) and [Codex evidence](docs/CODEX-EVIDENCE.md) | Repository conventions and project evidence |
 
-Odia spelling review uses an offline dictionary of 83,664 English-to-Odia pairs drawn from AI4Bharat Aksharantar’s public-domain sources. The app looks up entries locally and marks spelling evidence separately from occurrences in loaded plot text. [Spelling data and attribution](docs/DATA-SOURCES.md#odia-spellings)
-
-Name suggestions also use curated rules and [Sanscript](https://github.com/indic-transliteration/sanscript.js) v1.3.3 under MIT. The reference India map uses simplified [geoBoundaries India ADM1](https://www.geoboundaries.org/api/current/gbOpen/IND/ADM1/) paths sourced from DataMeet India and the Election Commission of India under [CC BY 2.5 India](https://creativecommons.org/licenses/by/2.5/in/).
+[MIT licence for project code](LICENSE) · [Source data licences](docs/DATA-SOURCES.md)
