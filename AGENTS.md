@@ -3,12 +3,12 @@
 ## Project Structure
 
 - `dist/` contains the tracked browser source. `index.html` and `style.css` define the interface. `app.mjs` coordinates the workspace, while `core.mjs`, `search.mjs`, `files.mjs`, and `maps.mjs` handle matching, search, import/export, and map rendering.
-- `build-pages.mjs` publishes the standalone browser bundle to `pages-out/`. It includes dated public geometry from `worker/odisha-map-snapshots.json`. The previous hosted Worker is retained for historical tests.
+- `build-pages.mjs` publishes the standalone browser bundle to `pages-out/`. It includes dated public geometry from `worker/odisha-map-snapshots.json`. The Sites build uses the shared Worker in `worker/` and Pages uses the OCI relay in `backend/`.
 - `dist/vendor/` contains bundled libraries and their licenses. `tests/` holds the unit and characterization tests.
 
 ## Build, Test, and Preview
 
-Run these commands from the repository root with Node.js 24. To preview the interface, use Python 3.
+Run these commands from the repository root with Node.js 24. The [developer guide](docs/DEVELOPER-GUIDE.md) includes the local HTTP preview command.
 
 - `node --test` runs the unit and characterization tests using Node's built-in test runner.
 - `node verify.mjs` runs the broader offline checks with synthetic and saved fixtures.

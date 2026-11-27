@@ -17,7 +17,7 @@ The public National Water Data Portal release lists its Survey of India village 
 
 ## Odia spellings
 
-The bundled spelling dictionary contains 81,198 normalized English lookup keys and 83,664 Odia spelling pairs. It comes from the Wikidata, Samanantar, and IndicCorp rows in the pinned Aksharantar Odia training and validation files. The authors release mined pairs under CC0. The generator keeps individual words, filters lower-scoring IndicCorp pairs, and caps each lookup at three spellings. The sources contain common words and named entities. Official parcel records remain the source for recorded owner spellings. [Dataset and terms](https://indicnlp.ai4bharat.org/aksharantar/) · [Research paper](https://aclanthology.org/2023.findings-emnlp.4/) · [Bundled source notice](../dist/name-dictionary-or-NOTICE.txt)
+The bundled spelling dictionary contains 81,198 normalized English lookup keys and 83,664 Odia spelling pairs. It comes from the Wikidata, Samanantar, and IndicCorp rows in the pinned Aksharantar Odia training and validation files. The authors release mined pairs under CC0. The generator keeps individual words, filters lower-scoring IndicCorp pairs, and caps each lookup at three spellings. The sources contain common words and named entities. Official parcel records remain the source for recorded owner spellings. [Dataset and terms](https://indicnlp.ai4bharat.org/aksharantar/) · [Research paper](https://aclanthology.org/2023.findings-emnlp.4/) · [Bundled source notice](https://github.com/SuryaNJena/india-land-search/blob/main/dist/name-dictionary-or-NOTICE.txt)
 
 ## Production acquisition
 

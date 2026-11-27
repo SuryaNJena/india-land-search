@@ -2,37 +2,44 @@
 
 ## GitHub Pages
 
-Use GitHub Actions as the repository's Pages source. Merge changes through a PR.
-The **Publish India Land Search on GitHub Pages** workflow builds and deploys
-relevant changes from `main`. Use **Run workflow** to republish manually.
+GitHub Pages is the primary public app. Set the Pages publishing source to
+GitHub Actions. The Pages workflow publishes app changes merged into main
+and also supports manual runs. It serves the installable browser app from
+the repository subpath.
 
-The build publishes `pages-out/` with the installable app, vendored JavaScript, the village catalogue, and dated public cadastral geometry. The content security policy permits app resources from the same origin, direct RoR previews from Bhulekh, official BhuNaksha forms and images, and OpenStreetMap tiles when enabled.
+The build uses the HTTPS relay origin in `LANDREVIEW_API_BASE` for live Odisha
+queries. See the relay in the [developer guide](DEVELOPER-GUIDE.md#runtime-and-data-boundaries).
+Direct official RoR previews, BhuNaksha imagery, and visible OpenStreetMap tiles
+use their own origin. Confirm Pages loads the assets and that a signed-out
+lookup works for a known village after a source or API change.
 
-Choose **State portals → Odisha maps and RoR lookup** to view an official sheet and open the exact Plot Info response. The Pages release needs no backend or account. [Odisha source interfaces](ODISHA-OFFICIAL-INTERFACES.md)
+## ChatGPT Sites
 
-## Browser data
+Build the Worker with `node build.mjs`. Publish the reviewed source as a version
+of the existing Site and verify its public URL. The Worker serves the same
+browser interface and a same-origin Odisha adapter. Statewide live ownership
+search requires a populated, verified dataset. See the [data coverage](DATA-SOURCES.md).
 
-Records, saved PDF copies, and name rules are stored in the current browser.
-Choose **Back up workspace** on the previous installation. Then open
-[GitHub Pages](https://suryanjena.github.io/india-land-search/), choose **Import records**,
-and select the ZIP. Data stored under another site address must be transferred
-this way.
+## OCI relay
 
-Search coverage comes from the loaded records. Geometry from the bundled
-BhuNaksha snapshots is available for selected Odisha sheets. Imports can supply
-other sheets and saved Plot Info. Look up known Odisha khatas directly or follow **State portals** for records from other locations. Successful standalone lookups can also be reviewed in **Workspace**.
+The Pages relay runs as a Node 24 container behind Caddy. Keep the public Pages
+origin on the relay's allowlist. The locality index volume stores official
+directory menus. The health route is `GET /healthz`. Deploy only the reviewed
+revision, keep the previous image and service configuration available, and
+recheck the known-locality request if you roll back.
+[OCI configuration and commands](https://github.com/SuryaNJena/india-land-search/tree/main/backend/deploy/oci)
 
-## Local preview and portable release
+## Portable downloads
 
-Run `node build-pages.mjs` and serve `pages-out/` over HTTP. Run
-`node scripts/smoke-pages.mjs` to test the repository subpath. Set
-`LANDREVIEW_PLAYWRIGHT` to Playwright's absolute `index.mjs` path and run
-`node scripts/smoke-browser.mjs` for browser verification.
-`LANDREVIEW_SMOKE_EVIDENCE` saves screenshots and downloaded PDFs.
+Build the offline app with no `LANDREVIEW_API_BASE`. Tag releases through GitHub
+and use the archive produced by the tag workflow. The workflow verifies the
+extracted ZIP and attaches it to the corresponding GitHub release. The ZIP
+contains the guides, sample records, and local server after the documentation update.
+See [local build commands](DEVELOPER-GUIDE.md#build-run-and-verify).
 
-Run `node scripts/package-release.mjs <output.zip>` to package the build.
-Extract the ZIP and run `node serve.mjs` with Node.js 24 for a local demo.
+## Browser data during a migration
 
-## Separate hosted edition
-
-The separate hosted build uses the Sites Worker and database schema for signed-out or verified indexed lookups. Build it with `node build.mjs`. See [the migration decision](GITHUB-PAGES-MIGRATION.md) and [browser support and source checks](STANDALONE-ODISHA-LOOKUPS.md).
+Use **Back up workspace** on the old site and **Import records** on the new
+one to move an imported workspace. Saved standalone lookups and name lists
+belong to the browser origin where they were created. Export any documents
+you want to retain independently. [User manual](USER-MANUAL.md#manage-records-on-this-browser)

@@ -95,3 +95,24 @@ to the public homepage, while the embedded tour uses its own controls.
     Name Matching → type or edit names → review spellings → save to this browser
                                                         → use on Home → search records
     Standalone demo → exit or brand link → normal Home
+
+## Manuals and architecture
+
+### CP1 and CP2
+
+The README gives a quick start and a system overview. The user manual explains
+tasks using the labels visitors see. The developer guide covers maintenance,
+runtime differences, and request boundaries. The changelog distinguishes
+tagged downloads from changes already deployed on the live sites.
+
+Use one Mermaid architecture chart in the README. Put the search flow in the
+user manual and the source request sequence in the developer guide. Give each
+diagram an accessible title and description and describe its flow in prose.
+
+### CP3
+
+Check local links in the changed documents and in the extracted portable ZIP.
+Render the three Mermaid diagrams. Build and smoke-test the portable demo.
+Check the GitHub release notes against the corresponding tag and compare the
+latest tag with the deployed revision before updating the notes.
+
