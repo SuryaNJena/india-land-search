@@ -96,3 +96,17 @@ html:has(body.tour-document){scrollbar-width:thin;scrollbar-color:#875371 #30203
 .state-raster img { display: block; width: 100%; height: auto; }
 .state-raster img[data-state-overlay] { position: absolute; inset: 0; }
 .state-raster [hidden] { display: none; }
+
+[data-state-atlas] .lr-parcel-map {
+  background: var(--panel);
+  color: var(--ink);
+  border-color: var(--line);
+  border-radius: 0;
+  margin: 10px 0 0;
+}
+[data-state-reference] { margin-top: 14px; }
+[data-state-atlas] .lr-map-viewport { border-radius: 0; }
+[data-state-atlas] .lr-map-controls { flex-wrap: wrap; }
+[data-state-atlas] .atlas-attribution { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+#other-state-sources .active-village { max-width: 420px; margin: 12px 0; }
+#other-state-sources .active-village select { width: 100%; }

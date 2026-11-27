@@ -1,3 +1,4 @@
 dist/name-dictionary-or.json text eol=lf
 dist/odisha-boundar*.json text eol=lf
 worker/odisha-map-snapshots.json text eol=lf
+backend/deploy/oci/*.sh text eol=lf

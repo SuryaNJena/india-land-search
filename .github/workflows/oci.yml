@@ -1,0 +1,76 @@
+name: Build and deploy the OCI API
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'worker/odisha*.mjs'
+      - 'worker/odisha-map-snapshots.json'
+      - 'dist/core.mjs'
+      - 'dist/odisha-endpoints.mjs'
+      - 'dist/state-sources.mjs'
+      - '.github/workflows/oci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'worker/odisha*.mjs'
+      - 'worker/odisha-map-snapshots.json'
+      - 'dist/core.mjs'
+      - 'dist/odisha-endpoints.mjs'
+      - 'dist/state-sources.mjs'
+      - '.github/workflows/oci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build the API and check local health
+        run: |
+          bash -n backend/deploy/oci/deploy-main.sh
+          docker build -t india-land-search-api:ci -f backend/Dockerfile .
+          docker run --detach --name landsearch-ci --publish 127.0.0.1:18787:8787 \
+            --env LANDREVIEW_PAGES_ORIGIN=https://suryanjena.github.io india-land-search-api:ci
+          trap 'docker rm -f landsearch-ci' EXIT
+          curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 1 http://127.0.0.1:18787/healthz
+          code=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --header 'Origin: https://suryanjena.github.io' --header 'Content-Type: application/json' \
+            --data '{"state":"unsupported"}' http://127.0.0.1:18787/api/state-maps)
+          test "$code" = 400
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.OCI_DEPLOY_ENABLED == 'true'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    environment: oci-production
+    concurrency:
+      group: oci-production
+      cancel-in-progress: false
+    steps:
+      - name: Trigger the restricted VM release command
+        env:
+          OCI_DEPLOY_SSH_KEY: ${{ secrets.OCI_DEPLOY_SSH_KEY }}
+          OCI_SSH_KNOWN_HOSTS: ${{ vars.OCI_SSH_KNOWN_HOSTS }}
+          OCI_SSH_HOST: ${{ vars.OCI_SSH_HOST }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          test -n "$OCI_DEPLOY_SSH_KEY"
+          test -n "$OCI_SSH_KNOWN_HOSTS"
+          [[ "$OCI_SSH_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          umask 077
+          work=$(mktemp -d "$RUNNER_TEMP/landsearch-ssh.XXXXXXXX")
+          trap 'rm -rf -- "$work"' EXIT
+          printf '%s\n' "$OCI_DEPLOY_SSH_KEY" >"$work/deploy-key"
+          printf '%s\n' "$OCI_SSH_KNOWN_HOSTS" >"$work/known_hosts"
+          printf '%s\n' "$RELEASE_SHA" | ssh -T -F /dev/null -i "$work/deploy-key" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile="$work/known_hosts" \
+            -o ConnectTimeout=15 "landsearch-deploy@$OCI_SSH_HOST"

@@ -109,3 +109,15 @@ flowchart LR
   Gate --> SSH["Restricted VM deploy command"]
   SSH --> Health["Restart, verify or roll back"]
 ```
+
+## CP4 Evidence for village handoff
+
+The public Chhattisgarh directory maps Tangarghat, reference village 434821,
+to Raigarh 41, Tamnar 08, Dhaurabhanta 03 and Tangarghat 289. Verified map
+`410803.289` returned 1,365 parcels. Adhchara has a separate verified crosswalk.
+Chhattisgarh reference districts have a cadastral district crosswalk. The app
+offers manual confirmation when a lower-level code has no verified match.
+
+The Actions workflow checks the OCI image on each applicable PR. Production
+deployment is enabled only once the restricted SSH identity and environment
+are configured. See the [OCI deployment runbook](../backend/deploy/oci/README.md).
