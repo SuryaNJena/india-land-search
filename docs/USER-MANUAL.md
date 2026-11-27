@@ -90,3 +90,19 @@ available reference village outlines. Select a village on the map or through
 **Find a village by name** and open **Village maps** to continue. Some official
 cadastral directories use different spellings or administrative areas. Confirm
 the location in the official dropdowns if the app cannot match it.
+
+### Find villages across scripts
+
+Type a village name in English, Odia, Hindi, or another supported script.
+The finder suggests exact, transliterated, and close spellings within the
+selected state. Compare the district and tehsil before choosing. When a
+reference village and the cadastral directory have different labels, review
+the suggested official choices before continuing.
+
+### Search names on an Odisha sheet
+
+Opening Village Maps loads the cadastral sheet with an empty name field.
+Enter names or choose **Use names from Home** to copy your last search.
+Choose **Search plot names** to check only the open sheet. **Clear names**
+stops further parcel checks and removes name-based highlights. Selecting an
+individual plot still opens its official Plot Info.

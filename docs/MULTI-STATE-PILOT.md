@@ -140,3 +140,11 @@ flowchart LR
   I["Village spelling in English or local script"] --> K["Rank exact, transliterated and close suggestions"]
   K --> A["Confirm the official location"]
 ```
+
+### CP4 verification
+
+The shared village finder now ranks exact, transliterated and approximate
+spellings. Boundary-to-directory suggestions use that same ranking. A
+verified official code or literal unique name can prefill a selection.
+Approximate choices require confirmation. The Odisha map viewer requires
+intentional name scanning and restricts it to the open sheet.

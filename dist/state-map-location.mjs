@@ -1,4 +1,5 @@
 import {geographyKey} from './state-geography.mjs';
+import {villageSpelling,villageSpellingScore} from './village-matching.mjs';
 
 // District identifiers from the NWDP reference release mapped to the public cadastral directory.
 const cgDistricts={
@@ -33,4 +34,10 @@ export function matchOfficialLocation(options, code, label) {
   const matches=code?options.filter(item=>item.code===code)
     :name?options.filter(item=>geographyKey(item.label)===name):[];
   return matches.length===1?matches[0]:undefined;
+}
+
+export function suggestOfficialLocations(options,label,transliterator=globalThis.Sanscript) {
+  const query=villageSpelling(label,transliterator);
+  return options.map(item=>({item,score:villageSpellingScore(query,villageSpelling(item.label,transliterator))}))
+    .filter(result=>Number.isFinite(result.score)).sort((a,b)=>a.score-b.score).slice(0,5).map(result=>result.item);
 }

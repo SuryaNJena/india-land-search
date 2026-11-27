@@ -2,18 +2,26 @@ import {drawMap,makeMapPDF,mapViewLimit,newSheetView,panSheetView,parcelFocus,sh
 import {extractCaste,matchRows,normalize} from './core.mjs';
 import {download} from './files.mjs';
 import {localMapLayer,plotNumber,sheetHighlights} from './sheet-overlays.mjs';
+import {searchTerms} from './search.mjs';
 import {mapImageURL,mapLocation,officialPlotURL,postOdisha,readExactPlot,safeMapRaster} from './odisha-lookup-source.mjs';
 
 const limit=12;
 const asciiName=name=>/[\u0b00-\u0b7f]/u.test(name) && globalThis.Sanscript ? globalThis.Sanscript.t(name,'oriya','iso').normalize('NFD').replace(/[^\x20-\x7e]/g,'') : name;
 
 export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Map(),matchedHoldings=new Map(),searchNames=[],options={}) {
-  const {initialMap,initialSheet,localSheets,onSave,onGeography,onRevenue,showVillage=true}=options;
+  const {initialMap,initialSheet,localSheets,onSave,onGeography,onRevenue,showVillage=true,manualNameSearch=false,homeNameTerms=[]}=options;
   const isLocal=Boolean(initialMap || localSheets);
   root.innerHTML=`<summary>BhuNaksha village map</summary>
     <div class="toolbar"><label class="label" ${showVillage?'':'hidden'}>Village<select id="bhu-village">${locations.map((place,i)=>`<option value="${i}">${escape(place.village)} · ${escape(place.tehsil)}</option>`).join('')}</select></label>
     <label class="label">Sheet<select id="bhu-sheet" disabled></select></label></div>
     <div data-roR-plots></div><p id="bhu-match-status" role="status"></p>
+    ${manualNameSearch&&!isLocal?`<form class="actions map-name-actions" data-map-name-search hidden>
+      <label class="label">Names to find on this sheet<textarea name="names" rows="2" maxlength="3000" placeholder="Enter names or surnames"></textarea></label>
+      <button class="button primary" type="submit">Search plot names</button>
+      ${homeNameTerms.length?'<button class="button secondary" type="button" data-map-copy-names>Use names from Home</button>':''}
+      <button class="button secondary" type="button" data-map-clear-names>Clear names</button>
+      <p role="status" data-map-name-status></p>
+    </form>`:''}
     <div id="bhu-discovery" hidden><span data-progress role="status"></span>
       <button type="button" class="plain-link" data-scan-control><span aria-hidden="true">Ⅱ</span> <span>Pause</span></button>
       <progress aria-label="Parcel check progress" value="0" max="1"></progress></div>
@@ -97,11 +105,54 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
   const checkedParcels=new Set(), discoveredNumbers=new Map(), parcelRequests=new Map();
   const discovery=get('bhu-discovery'), progress=discovery.querySelector('[data-progress]');
   const scanControl=discovery.querySelector('button');
+  const nameForm=root.querySelector('[data-map-name-search]');
+  let scanRequested=false;
   let scanVersion=0, nextParcelStart=0, scheduleQueue=Promise.resolve();
   let view=newSheetView(), projection, selected, mapFrame=0, loadingPlot=false, plotError='';
   let pending, plotRequest, exportRequest, geometry, paths=[], loaded=false, busyExport=false;
   const selectedKey=()=>selected && geometry ? geometry.gis+'/'+selected.properties.id : '';
   const hasHighlights=place=>getNumbers(place).size>0 || verifiedVillages.has(place.id);
+
+  function resetMapNames(names=[]) {
+    ++scanVersion;
+    scanRequested=Boolean(names.length);
+    searchNames=names;
+    checkedParcels.clear();discoveredNumbers.clear();verifiedPlots.clear();verifiedVillages.clear();
+    for (const [key,entry] of details) {
+      entry.matches=names.length?matchRows([{status:'Retrieved',info:entry.data.info}],{names})[0].full:[];
+      if (entry.matches.length) {
+        verifiedPlots.add(key);
+        verifiedVillages.add(currentPlace().id);
+      }
+    }
+    discovery.hidden=true;
+    if (geometry) {render();showPlotInfo();}
+  }
+  if (nameForm) {
+    const input=nameForm.elements.namedItem('names');
+    const status=nameForm.querySelector('[data-map-name-status]');
+    nameForm.querySelector('[data-map-copy-names]')?.addEventListener('click',()=>{
+      input.value=homeNameTerms.join('\n').slice(0,3000);
+      status.textContent='';
+      input.focus();
+    });
+    nameForm.querySelector('[data-map-clear-names]').onclick=()=>{
+      input.value='';
+      resetMapNames();
+      status.textContent='Names cleared. Parcel checks stopped.';
+    };
+    nameForm.onsubmit=event=>{
+      event.preventDefault();
+      const names=searchTerms(input.value);
+      if (!geometry || !names.length) {
+        status.textContent='Enter a name to search this sheet.';
+        return;
+      }
+      resetMapNames(names);
+      status.textContent='';
+      void scanSheet();
+    };
+  }
 
   async function request(place,sheetCode,signal) {
     const key=place.id+'/'+sheetCode;
@@ -345,7 +396,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
 
   async function scanSheet() {
     const version=++scanVersion, visible=geometry, visiblePlace=currentPlace();
-    if (!visible || isLocal || !searchNames.length || !root.open) return;
+    if (!visible || isLocal || !searchNames.length || !root.open || manualNameSearch&&!scanRequested) return;
     let stopped=false, unavailable=0, failures=0, known=0, checked=0, sheetLabel='';
     const active=()=>!stopped && version===scanVersion && geometry===visible && root.open && root.isConnected;
     const wait=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -416,9 +467,10 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     update('Loading sheet inventory…');
     while(plotRequest && active())await wait(250);
     try{
-      for(const place of [visiblePlace,...locations.filter(p=>p.id!==visiblePlace.id)]){
+      const places=manualNameSearch?[visiblePlace]:[visiblePlace,...locations.filter(p=>p.id!==visiblePlace.id)];
+      for(const place of places){
         if(!active())return;
-        const directory=(await request(place,'',undefined)).sheets??[];
+        const directory=manualNameSearch?[]:(await request(place,'',undefined)).sheets??[];
         const sheets=place===visiblePlace?[visible.sheet,...directory.filter(code=>code!==visible.sheet)]:directory;
         for(const code of sheets){
           if(!active())return;
@@ -525,6 +577,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
     layerImages.replaceChildren();
     layerStatus.textContent='';
     geometry=null;
+    if (nameForm) {resetMapNames();nameForm.hidden=true;}
     if(atlasControls){atlasControls.hidden=true;atlasControls.querySelector('[data-atlas-feedback]').textContent='';}
     lastAtlas=undefined;onGeography?.();
     selected=null;
@@ -550,6 +603,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
       const next=await request(place,sheetCode,abort.signal);
       if (abort.signal.aborted) return;
       geometry=next;
+      if (nameForm) nameForm.hidden=false;
       projection=sheetProjection(next.features,canvas);
       frame.hidden=false;
       actions.hidden=false;
@@ -606,7 +660,7 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
   }
 
   root.ontoggle=()=>{
-    if (!root.open) {++scanVersion;lastAtlas=undefined;onGeography?.();return;}
+    if (!root.open) {++scanVersion;if(manualNameSearch)scanRequested=false;lastAtlas=undefined;onGeography?.();return;}
     publishGeography();
     if (!loaded) {loaded=true;showHoldings();void load(initialSheet);}
     else if (geometry) void scanSheet();

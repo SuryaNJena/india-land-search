@@ -87,7 +87,7 @@ export function mountOdishaLookup(root,mode,{escape,tag,onSave,onRevenue,initial
     '<form data-odisha-lookup novalidate><details data-alternate><summary>Browse official directory</summary><div class="search-fields">'+fieldMarkup+'</div>'+
 
     '<details class="live-location" data-manual-codes><summary>Enter official location codes</summary><div class="search-fields">'+manualMarkup+'</div></details>'+
-    '</details><p class="muted" data-location-status role="status"></p><div class="actions">'+sheetMarkup+detailMarkup+
+    '</details><p class="muted" data-location-status role="status"></p><div class="actions odisha-lookup-actions">'+sheetMarkup+detailMarkup+
     (isMap?'<label class="label" data-direct-bounds '+(runtime.hosted?'hidden':'')+
       '>Native sheet bounds (if known)<input name="bounds" placeholder="xmin, ymin, xmax, ymax"></label>':'')+
     (isMap && runtime.hosted?'<label class="check"><input type="checkbox" data-direct-map> Use official sheet image</label>':'')+
@@ -229,8 +229,8 @@ export function mountOdishaLookup(root,mode,{escape,tag,onSave,onRevenue,initial
     details.className='live-location live-map';
     details.open=true;
     output.replaceChildren(details);
-    mountLiveOdishaMap(details,[place],escape,tag,new Map(),new Map(),mapTerms(),{
-      showVillage:false,initialSheet:sheet,initialMap:data,localSheets,onRevenue,onGeography:atlas?.setParcelOverlay,
+    mountLiveOdishaMap(details,[place],escape,tag,new Map(),new Map(),[],{
+      manualNameSearch:true,homeNameTerms:mapTerms(),showVillage:false,initialSheet:sheet,initialMap:data,localSheets,onRevenue,onGeography:atlas?.setParcelOverlay,
       onSave:(entry)=>save(entry,entry.kind==='map'?'Village map loaded.':'Plot Info loaded.')
     });
   }
