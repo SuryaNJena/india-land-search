@@ -44,3 +44,28 @@ sources.
 land revenue demand, including applicable water tax. Payment confirmation and
 [receipt downloads](https://odishalandrevenue.nic.in/KnowTransactionId.aspx)
 remain on the official portal.
+
+## Multi-state atlas and village discovery
+
+The district layer uses the National Water Data Portal's open Survey of India
+district release dated May 2025. The atlas converts the source CRS EPSG:7755
+to WGS84 and simplifies the reference outlines. Odisha uses its existing
+geoBoundaries district layer and locality crosswalk. The Chhattisgarh snapshot
+contains 28 districts, so districts introduced after the source snapshot may
+appear under their predecessor areas. The live cadastral selector follows its
+own current directory. [NWDP district release](https://nwdp.nwic.gov.in/dataset/district-boundary/resource/8d9aa2e9-9806-4f26-a4ac-48ba21e9b96d)
+
+The other discovery inputs are NWDP village releases for Chhattisgarh, Bihar,
+Jharkhand, Rajasthan, and Uttar Pradesh. Chhattisgarh includes simplified
+village outlines by district. Bihar, Jharkhand, Rajasthan, and Uttar Pradesh
+include names and representative points. Reference identifiers belong to
+these datasets. The cadastral menus use their official source codes. English
+or local spellings are available where present in the source.
+[NWDP village release](https://nwdp.nwic.gov.in/dataset/village-boundary) · [NWDP copyright policy](https://nwdp.nwic.gov.in/footer/copyrightPolicy)
+
+Regenerate these extracts with `python scripts/build-state-geography.py
+<archive-directory>` using Python with Shapely and pyproj. Name the original
+archives `district.zip`, `cg.zip`, `br.zip`, `jh.zip`, `rj.zip`, and `up.zip`.
+The generator prints the input hashes and feature counts. It includes
+administrative geography and locality labels. Review the [state integration checklist](STATE-INTEGRATION-CHECKLIST.md)
+before enabling additional live capabilities.

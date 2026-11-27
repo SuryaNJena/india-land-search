@@ -29,12 +29,12 @@ const mapOrigins=[...new Set(Array.from({length:30},(_,i)=>new URL(officialMapBa
 const files=[
   'location-atlas.mjs','atlas-boundaries.json','odisha-district-polygons.json','shared-villages.mjs','field-panorama.css','guided-tour.mjs','favicon.png','app-icon.svg','app.mjs','app.webmanifest','core.mjs','demo.mjs','files.mjs','home-search.mjs','indexed-results.mjs','live-odisha-map.mjs','live-ror.mjs','odisha-endpoints.mjs','official-odisha.mjs','odisha-scope.mjs',
   'india-states.mjs','maps.mjs','matcher.mjs','name-library.mjs','name-review.mjs','name-variants.mjs',
-  'parcel-basemap.mjs','portals.mjs','state-sources.mjs','state-maps.mjs','search.mjs','sheet-overlays.mjs','style.css',
+  'parcel-basemap.mjs','portals.mjs','state-sources.mjs','state-maps.mjs','state-geography.mjs','search.mjs','sheet-overlays.mjs','style.css',
   'plot-profile.mjs','lookup-workspace.mjs','name-dictionary.mjs','name-dictionary-or.json','name-dictionary-or-NOTICE.txt',
   'odisha-boundary-districts.json','odisha-boundaries.mjs','odisha-live-search.mjs','odisha-lookup-source.mjs',
   'odisha-lookup.mjs','offline-worker.js','village-finder.mjs','villages.json','workspace-maps.mjs'
 ];
-files.push(...(await readdir(source)).filter(file=>/^odisha-boundaries-[a-z]+\.json$/.test(file)));
+files.push(...(await readdir(source)).filter(file=>/^(?:odisha-boundaries-[a-z]+|region-[a-z]{2}-(?:districts|villages|boundaries-\d+))\.json$/.test(file)));
 const bhuOrigins=mapOrigins.sort().join(' ');
 const csp=["default-src 'self'", "script-src 'self'", "worker-src 'self'", "manifest-src 'self'", "connect-src 'self' "+new URL(reportPortal).origin+(apiOrigin?' '+apiOrigin:''), "img-src 'self' data: blob: https://tile.openstreetmap.org https://upbhunaksha.gov.in "+bhuOrigins,
   "form-action 'self' "+bhuOrigins, "style-src 'self' 'unsafe-inline'", "object-src 'none'", "base-uri 'none'"].join('; ');

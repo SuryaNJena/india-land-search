@@ -1,4 +1,4 @@
-import {selectedPlaces,mapTerms,lookupPlace,resolveRI,rememberPlace,placeKey} from './shared-villages.mjs';
+import {selectedPlaces as allSelectedPlaces,mapTerms,lookupPlace,resolveRI,rememberPlace,placeKey} from './shared-villages.mjs';
 import {mountVillageFinder} from './village-finder.mjs';
 import {mountLocationAtlas} from './location-atlas.mjs';
 import {runtime} from './runtime.mjs';
@@ -65,6 +65,8 @@ function pause(signal) {
     signal.addEventListener('abort',cancel,{once:true});
   });
 }
+
+const selectedPlaces=()=>allSelectedPlaces().filter(place=>place.state==='Odisha');
 
 export function mountOdishaLookup(root,mode,{escape,tag,onSave,onRevenue,initial}={}) {
   const config=modes[mode], isMap=mode==='maps', isPlot=mode==='plots', needsRI=mode!=='ror';

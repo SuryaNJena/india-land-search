@@ -105,6 +105,17 @@ try {
   });
   assert.equal(aligned,true);
   await page.setViewportSize({width:1440,height:1000});
+  await page.getByLabel('State or union territory').selectOption('Chhattisgarh');
+  const cgDistrict=page.getByLabel('Choose a district in Chhattisgarh');
+  await cgDistrict.selectOption({label:'Kabirdham'});
+  await page.getByText('Survey of India · Village boundaries',{exact:true}).waitFor();
+  await page.locator('#village-finder input').fill('Adhchara');
+  await page.locator('#village-finder [data-village]').filter({hasText:'Adhchara'}).first().click();
+  assert.equal(await page.locator('[name="village"]').inputValue(),'Adhchara');
+  await click('Village maps');
+  assert.equal(await page.locator('#official-state').inputValue(),'Chhattisgarh');
+  await page.getByRole('button',{name:'Remove Adhchara'}).click();
+  await click('Home');
   await page.getByLabel('State or union territory').selectOption('Odisha');
   const districtPicker=page.getByLabel('Choose an Odisha district');
   await districtPicker.waitFor();
