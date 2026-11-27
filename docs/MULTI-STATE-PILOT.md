@@ -87,3 +87,25 @@ Odisha and Chhattisgarh. Other pilot states show reference district boundaries
 and directory results. The shared discovery and official lookup controls carry
 the selected state. See the [state integration checklist](STATE-INTEGRATION-CHECKLIST.md)
 for the remaining steps toward full parity for every state.
+
+## Village handoff and OCI deployment
+
+### CP1 Explain
+
+A reference village may have English geography names while the cadastral
+directory uses local-script names and different administrative codes.
+Village Maps needs a verified crosswalk and an active village among the saved
+selections. The atlas needs the same theme as the surrounding panels.
+
+### CP2 Diagram
+
+```mermaid
+flowchart LR
+  Ref["Selected reference village"] --> Join{"Verified official path?"}
+  Join -->|Yes| Map["Load cadastral map"]
+  Join -->|Partial| Menu["Prefill verified levels and ask for remaining values"]
+  Main["GitHub Actions on main"] --> Check["Build and smoke-test API image"]
+  Check --> Gate["Protected OCI environment"]
+  Gate --> SSH["Restricted VM deploy command"]
+  SSH --> Health["Restart, verify or roll back"]
+```
