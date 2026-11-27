@@ -37,6 +37,8 @@ try {
   await page.goto(url.href);
   await click('Take a tour');
   const tour=page.getByRole('dialog');
+  await tour.frameLocator('iframe').locator('body.tour-document').waitFor();
+  assert.equal(await tour.frameLocator('iframe').locator('.sidebar').isVisible(),false);
   const advance=tour.getByRole('button',{name:'Next'});
   await advance.click();
   await tour.getByRole('heading',{name:'Review the names'}).waitFor();
@@ -90,6 +92,14 @@ try {
   await chooseLocation();
   await click('Open village map');
   await page.locator('.bhu-interactive #bhu-canvas').waitFor();
+  assert.equal(await page.locator('#bhu-geographic').count(),0);
+  assert.equal(await page.locator('[data-location-atlas] canvas').count(),1);
+  await page.getByText('Parcel overlay on the atlas',{exact:true}).click();
+  await page.locator('[data-atlas-geojson]').setInputFiles({
+    name:'bad-sheet.geojson',mimeType:'application/geo+json',
+    buffer:Buffer.from('{"type":"FeatureCollection","features":[]}')
+  });
+  await page.getByText(/No geographic parcels in that file match/).waitFor();
   await page.locator('.bhu-interactive .bhu-map-zoom').getByRole('button',{name:'Zoom in'}).click();
   await page.getByText('141%',{exact:true}).waitFor();
   await page.locator('.bhu-interactive .bhu-map-zoom').getByRole('button',{name:'Fit sheet'}).click();
@@ -254,14 +264,16 @@ try {
   const mapPage=new URL('interactive-map-smoke',url);
   await page.route(mapPage.href,route=>route.fulfill({contentType:'text/html',body:
     '<!doctype html><title>Interactive Odisha map fixture</title><link rel="stylesheet" href="./style.css">'+
-    '<main style="grid-column:1/-1;max-width:1100px"><details class="live-location"></details></main>'+
+    '<main style="grid-column:1/-1;max-width:1100px"><div id="test-atlas"></div><details class="live-location"></details></main>'+
     '<script type="module">'+
     "import {mountLiveOdishaMap} from './live-odisha-map.mjs';"+
+    "import {mountLocationAtlas} from './location-atlas.mjs';"+
+    "const atlas=mountLocationAtlas(document.querySelector('#test-atlas'));atlas.show([], 'Odisha');"+
     "const plotTexts=window.plotTexts=[];const draw=CanvasRenderingContext2D.prototype.fillText;"+
     "CanvasRenderingContext2D.prototype.fillText=function(label,...args){if(this.canvas.id==='bhu-canvas')plotTexts.push(label);return draw.call(this,label,...args);};"+
     "const place={id:'19-3-79',districtCode:'19',tehsilCode:'3',villageCode:'79',riCode:'8',village:'Fixture village',tehsil:'Fixture tehsil'};"+
     "const tag=(href,label)=>href?'<a href=\"'+href+'\">'+label+'</a>':'';"+
-    "mountLiveOdishaMap(document.querySelector('details'),[place],String,tag,new Map(),new Map([[place.id,['7','8','9','10']]]),['Fixture Name']);"+
+    "mountLiveOdishaMap(document.querySelector('details'),[place],String,tag,new Map(),new Map([[place.id,['7','8','9','10']]]),['Fixture Name'],{onGeography:atlas.setParcelOverlay});"+
     '</script>'}));
   const requests=[], scheduleRequests=[];
   const fallbackPortal='https://bhunakshaodisha.nic.in:8443/bhunaksha/#home-pane';
@@ -294,9 +306,18 @@ try {
   await page.getByText('BhuNaksha village map',{exact:true}).click();
   await page.getByText(/1 direct match · 2 khata-only on sheet 01/).waitFor({timeout:20000});
   await page.getByText(/Plot Info unavailable for 1/).waitFor();
+  assert.equal(await page.locator('#bhu-discovery progress').getAttribute('max'),'4');
   assert.deepEqual(scheduleRequests,['7','8','9','10','150']);
   assert.deepEqual(requests,[{id:'a',number:'12'},{id:'b',number:'12/3'},{id:'c',number:'43'},{id:'d',number:'46'}]);
   assert.equal(await page.locator('#bhu-plot-info').isVisible(),false);
+  const polygon=(id,number,x)=>({type:'Feature',properties:{giscode:'19030807901',id,kide:number},
+    geometry:{type:'Polygon',coordinates:[[[x,20.5],[x+.001,20.5],[x+.001,20.501],[x,20.501],[x,20.5]]]}});
+  await page.getByText('Parcel overlay on the atlas',{exact:true}).click();
+  await page.locator('[data-atlas-geojson]').setInputFiles({name:'sheet.geojson',mimeType:'application/geo+json',
+    buffer:Buffer.from(JSON.stringify({type:'FeatureCollection',features:[polygon('c','43',86.27),polygon('d','46',86.271)]}))});
+  await page.locator('#test-atlas').getByText('2 geographic parcels · 1 direct match · 1 matching khata only', {exact:false}).waitFor();
+  assert.equal(await page.locator('#test-atlas canvas').count(),1);
+  assert.equal(await page.locator('#bhu-geographic').count(),0);
   assert.deepEqual(await page.evaluate(()=>window.plotTexts),[]);
   await click('Zoom in');
   await page.getByText('141%',{exact:true}).waitFor();

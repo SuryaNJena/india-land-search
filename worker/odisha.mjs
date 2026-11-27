@@ -545,13 +545,13 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
   const cache = new Map(), mapCache = new Map(), mapMetadataCache = new Map();
   const plotCache=new Map(), pendingPlots=new Map();
   const month=30*24*60*60*1000;
-  let busyUntil = 0, pausedUntil = 0, mapPausedUntil = 0, mapBusy = false;
+  let busyUntil = 0, pausedUntil = 0, mapPausedUntil = 0, mapBusy = false, activePlots = 0;
   const json = (status, value, headers = {}) => Response.json(value,{status,headers:{'Cache-Control':'no-store',...headers}});
   async function mapMetadata(key,load,cors={}) {
     const cached=mapMetadataCache.get(key);
     if (cached && Date.now()-cached.at<(key.startsWith('location/')?month:3600000)) return json(200,cached.data,cors);
     const wait=Math.ceil((mapPausedUntil-Date.now())/1000);
-    if (wait>0 || mapBusy) return json(429,{error:'BhuNaksha is busy. Try the map lookup again shortly.'},{'Retry-After':String(Math.max(1,wait))});
+    if (wait>0 || mapBusy || activePlots>=2) return json(429,{error:'BhuNaksha is busy. Try the map lookup again shortly.'},{'Retry-After':String(Math.max(1,wait))});
     mapBusy=true;
     try {
       const data=await load();
@@ -720,8 +720,8 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
         if(pending)return (await pending).clone();
         const portal=new URL('#home-pane',officialMapBase(districtCode)).href;
         const wait=Math.ceil((mapPausedUntil-Date.now())/1000);
-        if (wait>0 || mapBusy) return json(429,{error:'BhuNaksha is busy. Try Plot Info again shortly.',portal},{'Retry-After':String(Math.max(1,wait))});
-        mapBusy=true;
+        if (wait>0 || mapBusy || activePlots>=2) return json(429,{error:'BhuNaksha is busy. Try Plot Info again shortly.',portal},{'Retry-After':String(Math.max(1,wait))});
+        activePlots++;
         const flight=(async()=>{
         try {
           const data=await readPlot(location,sheet,{id,number});
@@ -737,7 +737,7 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
           return json(error instanceof PortalError?error.status:502,
             {error:error instanceof PortalError?error.message:'BhuNaksha Plot Info is temporarily unavailable.',portal});
         } finally {
-          mapBusy=false;
+          activePlots--;
         }
         })();
         pendingPlots.set(parcelKey,flight);
@@ -745,7 +745,7 @@ export function makeLandReviewWorker({assets,matchRows,readTenants=makeBhulekhRe
       }
       const key=`${location.id}/${sheet}`, cached=mapCache.get(key);
       if (cached && Date.now()-cached.at<(cached.data.captured?300000:3600000)) return json(200,cached.data);
-      if (mapBusy) return json(429,{error:'Another BhuNaksha lookup is running. Try again shortly.'},{'Retry-After':'1'});
+      if (mapBusy || activePlots>=2) return json(429,{error:'Another BhuNaksha lookup is running. Try again shortly.'},{'Retry-After':'1'});
       let data;
       mapBusy=true;
       try {

@@ -336,6 +336,7 @@ $('nav-toggle').onclick=()=>{
 };
 mountTour($('take-tour'));
 if (demoSession) $('take-tour').hidden=true;
+if (demoSession && new URLSearchParams(location.search).get('tour')==='1') document.body.classList.add('tour-document');
 document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>navigate(b.dataset.view));
 $('import').onclick=()=>chooseImport();
 $('file').onchange=()=>{const file=$('file').files[0],state=importState;$('file').value='';importState='';if(!file)return;task('Validating and importing records…',async()=>{await activate(assignImportState(await importFile(file),state));const saved=await persist();selected='overview';render();status(`Imported ${number.format(workspace.rows.length)} records. ${saved?'Saved in this browser.':'Use Back up workspace to retain this session.'}`);});};

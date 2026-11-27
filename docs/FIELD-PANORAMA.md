@@ -21,3 +21,25 @@ The public host serves location discovery independently of personal searches. Th
 Use the local Chromium smoke to exercise the modal tour, all seven mobile destinations, the family-search steps, and shared selections across Home, Maps, Plot Records, and RoR. The sheet fixture checks that all four numbered parcels receive their own request, including the two referenced by a khata. Browser evidence is available in the verification workflow artifact.
 
 Location selectors on OCI use a bounded-age SQLite index in the named Docker volume. Entries refresh on first use after 30 days. Only official directory labels and identifiers go to disk. The parcel reader coalesces requests for the same parcel and keeps up to 256 responses in memory for five minutes. The packaged LGD and Survey of India snapshots retain their source dates; refreshing a portal menu does not update those upstream releases.
+
+## Shared parcel atlas
+
+The handoff removes the second geographic viewer. Keep pins and verified parcel
+geometry in the main geographic atlas and keep the native cadastral sheet for
+Plot Info and PDF export. An uploaded GeoJSON is valid only for the current sheet.
+
+    BhuNaksha sheet → native viewer and Plot Info
+                    → verified geometry and match colours → existing OpenStreetMap atlas
+    Village boundaries and reference pin → same atlas
+
+The browser regression loads a sheet, attaches verified geographic parcels,
+and checks that Home or Village Maps still has one geographic viewer.
+
+The navigation wraps within the viewport. The guided dialog keeps the demo
+controls in view while its content scrolls.
+
+    Open sheet first → paced scan queue → up to two active parcel reads
+                                      ↘ pause on source backoff
+
+All villages share the same cap. Interleaving reads overlaps upstream latency.
+The browser reports the checked and unavailable totals as the scan advances.

@@ -5,7 +5,6 @@ import {runtime} from './runtime.mjs';
 import {loadBhulekhLocations} from './odisha-live-search.mjs';
 import {mountLiveOdishaMap} from './live-odisha-map.mjs';
 import {copyReport,printHoldings} from './live-ror.mjs';
-import {mountParcelBasemap} from './parcel-basemap.mjs';
 import {
   checkBounds,cleanNumber,cleanPlace,cleanSheet,directReport,districtMapBase,
   locationFields,mapImageURL,mapLocation,mapPortal,officialPlotURL,postOdisha,readExactPlot,
@@ -101,11 +100,13 @@ export function mountOdishaLookup(root,mode,{escape,tag,onSave,initial}={}) {
   const value=key=>form.elements.namedItem(key)?.value??'';
   const directMap=get('[data-direct-map]');
   let chosen={}, rows=[], locationRequest, lookupRequest;
+  const atlas=isMap?mountLocationAtlas(get('[data-location-atlas]'),{onChoose:p=>finder.select(p)}):undefined;
   const clear=()=>{
     lookupRequest?.abort();
     lookupRequest=undefined;
     submit.disabled=false;
     output.replaceChildren();
+    atlas?.setParcelOverlay();
     status.textContent='';
   };
 
@@ -226,7 +227,7 @@ export function mountOdishaLookup(root,mode,{escape,tag,onSave,initial}={}) {
     details.open=true;
     output.replaceChildren(details);
     mountLiveOdishaMap(details,[place],escape,tag,new Map(),new Map(),mapTerms(),{
-      showVillage:false,initialSheet:sheet,initialMap:data,localSheets,
+      showVillage:false,initialSheet:sheet,initialMap:data,localSheets,onGeography:atlas?.setParcelOverlay,
       onSave:(entry)=>save(entry,entry.kind==='map'?'Village map loaded.':'Plot Info loaded.')
     });
   }
@@ -235,13 +236,9 @@ export function mountOdishaLookup(root,mode,{escape,tag,onSave,initial}={}) {
     const image=new Image();
     image.className='official-odisha-map';
     image.alt='BhuNaksha sheet '+sheet+' for '+place.village;
-    const geographic=document.createElement('details');
-    geographic.className='live-location';
-    geographic.innerHTML='<summary>Geographic map and location pins</summary><div></div>';
-    geographic.ontoggle=()=>{
-      if (geographic.open && !geographic.querySelector('canvas')) mountParcelBasemap(geographic.querySelector('div'));
-    };
-    output.replaceChildren(image,geographic);
+    output.replaceChildren(image);
+    atlas?.setParcelOverlay();
+    void atlas?.show([place],'Odisha');
     status.textContent='Loading the official BhuNaksha map image…';
     image.onload=()=>{
       if (!image.isConnected) return;
@@ -439,7 +436,6 @@ export function mountOdishaLookup(root,mode,{escape,tag,onSave,initial}={}) {
 
   let resolving;
   const active=get('[data-active-place]'), activeSelect=active.querySelector('select');
-  const atlas=isMap?mountLocationAtlas(get('[data-location-atlas]'),{onChoose:p=>finder.select(p)}):undefined;
   async function useShared(place){
     resolving?.abort();const controller=new AbortController();resolving=controller;
     clear();chosen={};fill();
@@ -464,6 +460,7 @@ export function mountOdishaLookup(root,mode,{escape,tag,onSave,initial}={}) {
   const finder=mountVillageFinder(get('[data-shared-picker]'),escape,(place,all)=>void useShared(place??all.at(-1)),undefined,{onFilter:rows=>atlas?.show(rows.length?rows:selectedPlaces(),'Odisha')});
   finder('Odisha');
   if (!initial?.place)void useShared(selectedPlaces().at(-1));
+  else void atlas?.show([initial.place],'Odisha');
   if (runtime.hosted) {
     if (initial?.place) {
       const district=fields[0];
