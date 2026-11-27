@@ -142,3 +142,24 @@ test('Viewer no-data and transport failure remain distinct and neither fabricate
     assert.equal(data.back,undefined);
   }
 });
+
+test('Distinct parcel lookups share two slots and duplicate reads use the same slot',async()=>{
+  const calls=[];
+  const release=[];
+  const worker=portal.makeLandReviewWorker({assets:{},readPlot:async (_place,_sheet,{number})=>{
+    calls.push(number);
+    await new Promise(resolve=>release.push(resolve));
+    return {info:number};
+  }});
+  const send=number=>worker.fetch(new Request('https://land.example/api/odisha/maps',{
+    method:'POST',headers:{'content-type':'application/json',origin:'https://land.example'},
+    body:JSON.stringify({location:location.id,sheet:'01',parcel:{number}})
+  }));
+  const a=send('12/3'), b=send('13'), duplicate=send('12/3');
+  try {
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.deepEqual(calls,['12/3','13']);
+    assert.equal((await send('14')).status,429);
+  } finally {release.forEach(done=>done());}
+  for(const response of await Promise.all([a,b,duplicate]))assert.equal(response.status,200);
+});

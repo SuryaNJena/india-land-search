@@ -34,3 +34,12 @@ Plot Info and PDF export. An uploaded GeoJSON is valid only for the current shee
 
 The browser regression loads a sheet, attaches verified geographic parcels,
 and checks that Home or Village Maps still has one geographic viewer.
+
+The navigation wraps within the viewport. The guided dialog keeps the demo
+controls in view while its content scrolls.
+
+    Open sheet first → paced scan queue → up to two active parcel reads
+                                      ↘ pause on source backoff
+
+All villages share the same cap. Interleaving reads overlaps upstream latency.
+The browser reports the checked and unavailable totals as the scan advances.
