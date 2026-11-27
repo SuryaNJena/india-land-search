@@ -5,13 +5,13 @@ land records without an app account. Start with a name, village, plot number,
 or khata number. Compare the results with the official source and export the
 records you need.
 
-[Open GitHub Pages](https://suryanjena.github.io/india-land-search/) · [Open ChatGPT Sites](https://landreview-odisha.thinwave16.chatgpt.site/) · [Download the portable demo](https://github.com/SuryaNJena/india-land-search/releases/latest)
+[Open GitHub Pages](https://suryanjena.github.io/india-land-search/) · [Open ChatGPT Sites](https://landreview-odisha.thinwave16.chatgpt.site/) · [Download the latest portable release](https://github.com/SuryaNJena/india-land-search/releases/latest)
 
 ## Get started
 
 - **Find a village or search a name.** Start on **Home**. Choose one or more villages from the atlas or the name picker. Use **Start with a name** for a guided search, or visit **Name Matching** to edit and save spellings using the Odia keypad.
 - **Inspect a known plot or khata.** Open **Plot Records** for BhuNaksha Plot Info and a shaded sheet preview. Use **Records of Rights** for the front page, plot schedule, and printable PDF.
-- **Explore maps and dues.** **Village Maps** combines an OpenStreetMap atlas with native cadastral sheets. **Land revenue** opens the official Odisha e-Pauti payment or receipt service and shows the holding details to enter.
+- **Explore maps and dues.** **Village Maps** combines an OpenStreetMap atlas with native cadastral sheets. Pick or switch villages without entering portal codes. In Odisha, start a name scan when you want to highlight matches on the active sheet. **Land revenue** opens the official Odisha e-Pauti payment or receipt service and shows the holding details to enter.
 - **Try it with sample records.** On a hosted site, choose **Take a tour**. For the offline demo, extract the release ZIP, run `node serve.mjs` with Node.js 24, and open the URL printed in the terminal.
 
 Live coverage varies by state. Odisha has village-scoped name lookup, plot records and maps. Chhattisgarh, Bihar and Uttar Pradesh have pilot parcel lookup and map tools. Statewide live name-only search needs an authorised production dataset. See the coverage table below. [User manual](docs/USER-MANUAL.md) · [Data coverage and attribution](docs/DATA-SOURCES.md)
