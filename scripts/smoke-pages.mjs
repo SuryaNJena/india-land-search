@@ -19,6 +19,9 @@ try {
   assert.match(home, /img-src [^;]+https:\/\/tile\.openstreetmap\.org[^;]*;/);
   assert.match(home, /form-action 'self' https:\/\/app1bhunakshaodisha\.nic\.in[^;]*;/);
   await asset('app.mjs', /^text\/javascript/);
+  await asset('state-sources.mjs', /^text\/javascript/);
+  await asset('state-maps.mjs', /^text\/javascript/);
+  assert.match(home,/img-src [^;]+https:\/\/upbhunaksha\.gov\.in/);
   await asset('app.webmanifest', /^application\/manifest\+json/);
   await asset('offline-worker.js', /^text\/javascript/);
   const boundaries=await (await asset('odisha-boundary-districts.json', /^application\/json/)).json();

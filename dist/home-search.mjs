@@ -1,3 +1,5 @@
+import {statePortalLinks} from './state-maps.mjs';
+import {stateSources} from './state-sources.mjs';
 import {countObservedNames,liveNameLimit,parcelKey} from './core.mjs';
 import {drawMap} from './maps.mjs';
 import {portals} from './portals.mjs';
@@ -48,7 +50,7 @@ function parcelAt(canvas, event, hits) {
   return hits.findLast(({path}) => context.isPointInPath(path, x, y, 'evenodd'))?.key;
 }
 
-export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMap, openOfficial, importRecords, onSave, loadSavedRecords, openNameLibrary, onRevenue}) {
+export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMap, openStateMaps, openOfficial, importRecords, onSave, loadSavedRecords, openNameLibrary, onRevenue}) {
   let index = searchIndex(workspace);
   if (!criteria.state && workspace) {
     const known = new Set(index.map(x => x.state).filter(Boolean));
@@ -158,7 +160,12 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
       ? '<button class="button secondary" type="button" data-odisha-sources>Open Odisha source tools</button>'+
         tag('https://www.odishakyl.in/mapview.php','Find a plot on Odisha’s official map')+
         tag('https://bhulekh.ori.nic.in/SearchYourPlot.aspx','Look up a known plot ID') : '';
-    root.querySelector('#home-portal-links').innerHTML = portal && !workspace?.demo ? tag(portal.record, `Open ${portal.label}`)+officialTools : '';
+    const otherState=Object.hasOwn(stateSources,criteria.state);
+    root.querySelector('#home-portal-links').innerHTML=portal && !workspace?.demo ? otherState
+      ? statePortalLinks(criteria.state,tag)+(stateSources[criteria.state].levels && runtime.hosted && openStateMaps
+        ? '<button class="button secondary" type="button" data-state-maps>Open village map</button>' : '')
+      : tag(portal.record,`Open ${portal.label}`)+officialTools : '';
+    root.querySelector('[data-state-maps]')?.addEventListener('click',openStateMaps);
     root.querySelector('[data-odisha-sources]')?.addEventListener('click',()=>openOfficial?.(selectedVillage));
     const inState = index.filter(x => x.state === criteria.state);
     const live = !workspace?.demo && criteria.state==='Odisha' && (runtime.hosted || runtime.indexBase);

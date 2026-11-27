@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Pilot village maps and exact plot lookup for Chhattisgarh, Bihar, and Uttar Pradesh.
+- Direct official records and map handoffs for Jharkhand and Rajasthan.
+
 ## Live-site updates since v0.1.2
 
 The deployed sites include these changes. The v0.1.2 ZIP was built from its own tag.

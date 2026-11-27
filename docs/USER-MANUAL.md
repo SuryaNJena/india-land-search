@@ -73,3 +73,11 @@ transaction. [Official e-Pauti guide](https://odishalandrevenue.nic.in/OLRP_User
 | The portable demo opens without live results | Use a hosted site for live lookups. The portable app includes fictional records, copied geometry, and offline review tools. |
 
 [Back to the README](../README.md) · [Data sources](DATA-SOURCES.md)
+
+## Other state sources
+
+In **Village maps**, select a state under **Other state sources**. Chhattisgarh
+and Bihar let you open a village map and highlight plot numbers from an official
+record. Uttar Pradesh shows the official village map and highlights one plot by
+number. Open the government records links for the holder search. Jharkhand and
+Rajasthan provide official map and records links.

@@ -91,3 +91,8 @@ html:has(body.tour-document){scrollbar-width:thin;scrollbar-color:#875371 #30203
 .lr-parcel-map .lr-map-coordinates input{width:100%;min-width:0}
 .lr-parcel-map .lr-map-coordinates button{min-height:40px;margin:0}
 @media(max-width:640px){.plot-profile-layout{grid-template-columns:1fr}}
+
+.state-raster { position: relative; margin-inline: auto; }
+.state-raster img { display: block; width: 100%; height: auto; }
+.state-raster img[data-state-overlay] { position: absolute; inset: 0; }
+.state-raster [hidden] { display: none; }

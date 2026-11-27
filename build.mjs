@@ -17,14 +17,16 @@ assets['/'] = assets['/index.html'];
 assets['/offline-worker.js'].text=configureOfflineWorker(assets['/offline-worker.js'].text,
   Object.fromEntries(Object.entries(assets).map(([path,asset])=>[path.slice(1),asset.text])));
 const statewide = await readFile(new URL('./worker/statewide.mjs',import.meta.url),'utf8');
+const sources=await readFile(new URL('state-sources.mjs',dist),'utf8');
 const endpoints=await readFile(new URL('odisha-endpoints.mjs',dist),'utf8');
 const app=(await readFile(new URL('./worker/odisha.mjs',import.meta.url),'utf8'))
+  .replace(/^import \{stateSources,stateSourcePath\} from '\.\.\/dist\/state-sources\.mjs';\r?\n/m,'')
   .replace(/^import \{officialMapBase,officialRoR\} from '\.\.\/dist\/odisha-endpoints\.mjs';\r?\nexport \{officialMapBase,officialRoR\};\r?\n/m,'');
 const snapshots = JSON.parse(await readFile(new URL('./worker/odisha-map-snapshots.json',import.meta.url),'utf8'));
 const matcher = await readFile(new URL('core.mjs',dist),'utf8');
 const manifest = await readFile(new URL('./.openai/hosting.json',import.meta.url),'utf8');
 await Promise.all([mkdir(new URL('server/',dist),{recursive:true}),mkdir(new URL('.openai/',dist),{recursive:true})]);
-const bundle = `${matcher}\n${statewide}\n${endpoints}\n${app}\nexport default makeLandReviewWorker({readIndex:readStatewideIndex,assets:${JSON.stringify(assets)},mapSnapshots:${JSON.stringify(snapshots)},matchRows,nameLimit:liveNameLimit});\n`;
+const bundle = `${matcher}\n${statewide}\n${endpoints}\n${sources}\n${app}\nexport default makeLandReviewWorker({readIndex:readStatewideIndex,assets:${JSON.stringify(assets)},mapSnapshots:${JSON.stringify(snapshots)},matchRows,nameLimit:liveNameLimit});\n`;
 await Promise.all([
   writeFile(new URL('server/index.js',dist),bundle),
   writeFile(new URL('.openai/hosting.json',dist),manifest)
