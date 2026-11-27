@@ -91,6 +91,13 @@ try {
   for (const name of ['Village maps','Plot records','Records of Rights']) {
     await click(name);
     await page.locator('[data-shared-picker] input').waitFor();
+    if (name==='Plot records') {
+      const bar=page.locator('.odisha-lookup-actions');
+      assert.equal(await bar.evaluate(form=>{
+        const bottom=element=>element.getBoundingClientRect().bottom;
+        return Math.abs(bottom(form.querySelector('input[name=number]'))-bottom(form.querySelector('button')))<2;
+      }),true);
+    }
   }
   await click('Workspace');
   await page.getByRole('heading',{name:'Workspace',exact:true}).waitFor();
@@ -363,8 +370,8 @@ try {
   page.setDefaultTimeout(8000);
   page.on('pageerror',error=>errors.push(error.message));
   const mapPage=new URL('interactive-map-smoke',url);
-  await page.route(mapPage.href,route=>route.fulfill({contentType:'text/html',body:
-    '<!doctype html><title>Interactive Odisha map fixture</title><link rel="stylesheet" href="./style.css">'+
+  await page.route(mapPage.href+'*',route=>route.fulfill({contentType:'text/html',body:
+    '<!doctype html><title>Interactive Odisha map fixture</title><link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./field-panorama.css">'+
     '<main style="grid-column:1/-1;max-width:1100px"><div id="test-atlas"></div><details class="live-location"></details></main>'+
     '<script type="module">'+
     "import {mountLiveOdishaMap} from './live-odisha-map.mjs';"+
@@ -374,7 +381,8 @@ try {
     "CanvasRenderingContext2D.prototype.fillText=function(label,...args){if(this.canvas.id==='bhu-canvas')plotTexts.push(label);return draw.call(this,label,...args);};"+
     "const place={id:'19-3-79',districtCode:'19',tehsilCode:'3',villageCode:'79',riCode:'8',village:'Fixture village',tehsil:'Fixture tehsil'};"+
     "const tag=(href,label)=>href?'<a href=\"'+href+'\">'+label+'</a>':'';"+
-    "mountLiveOdishaMap(document.querySelector('details'),[place],String,tag,new Map(),new Map([[place.id,['7','8','9','10']]]),['Fixture Name'],{onGeography:atlas.setParcelOverlay});"+
+    "const manual=Boolean(location.search);"+
+    "mountLiveOdishaMap(document.querySelector('details'),[place],String,tag,new Map(),manual?new Map():new Map([[place.id,['7','8','9','10']]]),manual?[]:['Fixture Name'],{onGeography:atlas.setParcelOverlay,manualNameSearch:manual,homeNameTerms:['Fixture Name']});"+
     '</script>'}));
   const requests=[], scheduleRequests=[];
   const fallbackPortal='https://bhunakshaodisha.nic.in:8443/bhunaksha/#home-pane';
@@ -452,6 +460,23 @@ try {
   await page.getByText('Different name',{exact:true}).waitFor();
   assert.equal(await page.getByRole('link',{name:'Open official BhuNaksha viewer',exact:true}).count(),0);
   assert.deepEqual(requests.slice(-2),[{id:'b',number:'12/3'},{id:'b',number:'12/3'}]);
+  const beforeManual=requests.length;
+  await page.goto(mapPage.href+'?manual=1');
+  await page.getByText('BhuNaksha village map',{exact:true}).click();
+  const mapNames=page.getByLabel('Names to find on this sheet');
+  await mapNames.waitFor();
+  assert.equal(await mapNames.inputValue(),'');
+  await click('Use names from Home');
+  assert.equal(await mapNames.inputValue(),'Fixture Name');
+  assert.equal(await page.locator('#bhu-discovery').isVisible(),false);
+  assert.equal(requests.length,beforeManual);
+  const parcelLookup=page.waitForRequest(request=>request.url().endsWith('/api/odisha/maps') && request.postDataJSON()?.parcel);
+  await click('Search plot names');
+  await parcelLookup;
+  await click('Clear names');
+  await page.getByText('Names cleared. Parcel checks stopped.').waitFor();
+  assert.equal(await mapNames.inputValue(),'');
+  assert.equal(await page.locator('#bhu-discovery').isVisible(),false);
   await page.goto(url.href);
   const officialCalls=[];
   const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64');

@@ -5,7 +5,7 @@ import {portals} from './portals.mjs';
 import {mountVillageFinder} from './village-finder.mjs';
 import {placeKey,selectedPlaces} from './shared-villages.mjs';
 import {geographyFor} from './state-geography.mjs';
-import {matchOfficialLocation,officialVillagePath} from './state-map-location.mjs';
+import {matchOfficialLocation,officialVillagePath,suggestOfficialLocations} from './state-map-location.mjs';
 import {mountLocationAtlas} from './location-atlas.mjs';
 import {stateSources,stateSourcePath} from './state-sources.mjs';
 
@@ -50,6 +50,7 @@ export function mountStateMaps(root,{escape,tag,initialState,mode,onState}) {
       ${geography?.catalog?'<details class="live-location" data-state-villages></details>':''}`+(live?`
       <details class="live-location" data-state-location><summary>Official location</summary>
         <div data-state-levels class="toolbar"></div>
+        <div class="actions" data-state-location-suggestions></div>
         <button type="button" class="plain-link" data-state-retry hidden>Retry official locations</button>
       </details>
       <button type="button" class="button secondary" data-state-load hidden>Load parcel map</button>
@@ -116,6 +117,7 @@ export function mountStateMaps(root,{escape,tag,initialState,mode,onState}) {
     const levels=[];
     const locationDetails=get('[data-state-location]');
     const locationSummary=locationDetails.querySelector('summary');
+    const suggestions=get('[data-state-location-suggestions]');
     const retry=get('[data-state-retry]');
     const menus=new Map();
     let followPlace=true;
@@ -159,6 +161,7 @@ export function mountStateMaps(root,{escape,tag,initialState,mode,onState}) {
       const names=selectors.slice(0,index).map(select=>select.selectedOptions[0]?.textContent).filter(Boolean);
       locationSummary.textContent=names.length?'Official location · '+names.join(' / '):'Official location';
       retry.hidden=true;
+      suggestions.replaceChildren();
       retry.onclick=()=>next(index);
       load.hidden=index!==selectors.length;
       if (index===selectors.length) {
@@ -187,7 +190,16 @@ export function mountStateMaps(root,{escape,tag,initialState,mode,onState}) {
           await next(index+1);
         } else {
           locationDetails.open=true;
-          if (followPlace && place && options.length) status.textContent='Confirm the official '+label.toLowerCase()+' for '+place.village+'.';
+          if (place && options.length) {
+            status.textContent='Confirm the official '+label.toLowerCase()+' for '+place.village+'.';
+            for(const candidate of suggestOfficialLocations(options,name)) {
+              const button=document.createElement('button');
+              button.type='button';button.className='button secondary';
+              button.textContent='Use '+candidate.label;
+              button.onclick=()=>{select.value=candidate.code;select.onchange();};
+              suggestions.append(button);
+            }
+          }
         }
       } catch (error) {
         if (isCurrent(controller)) {locationDetails.open=true;status.textContent=error.message;retry.hidden=false;}

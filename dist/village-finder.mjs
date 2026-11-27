@@ -1,26 +1,31 @@
-import {normalize} from './core.mjs';
 import {loadBhulekhLocations} from './odisha-live-search.mjs';
 import {geographyFor,readVillageDirectory} from './state-geography.mjs';
 import {runtime} from './runtime.mjs';
+import {localityKey,villageSpelling,villageSpellingScore} from './village-matching.mjs';
 import {forgetPlace,placeKey,rememberPlace,resolveVillage,selectedPlaces} from './shared-villages.mjs';
 
-const key = value => normalize(value).replace(/[\s'’_-]+/gu, '');
 const order = new Intl.Collator('en-IN');
 const directories=new Map();
+const spellingCache=new WeakMap();
 const getDirectory=state=>{
   if(!directories.has(state)) directories.set(state,readVillageDirectory(state).catch(error=>{directories.delete(state);throw error;}));
   return directories.get(state);
 };
 
-export function findVillages(rows, input, state = '', limit = 20) {
-  const query = key(input);
-  if (query.length < 2) return {total:0, results:[]};
+export function findVillages(rows, input, state = '', limit = 20, transliterator=globalThis.Sanscript) {
+  const wanted=villageSpelling(input,transliterator);
+  if (wanted.original.length < 2) return {total:0, results:[]};
   const hits = [];
   for (const row of rows) {
     if (state && row.state !== state) continue;
-    const names = [row.village, row.local, ...(row.aliases ?? [])].map(key);
-    const score = names.includes(query) ? 0 : names.some(name => name.startsWith(query)) ? 1 : -1;
-    if (score >= 0) hits.push({row, score});
+    let saved=spellingCache.get(row);
+    if (!saved || saved.transliterator!==transliterator) {
+      const names=[row.village,row.local,...(row.aliases??[])].filter(Boolean).map(name=>villageSpelling(name,transliterator));
+      saved={transliterator,names};
+      spellingCache.set(row,saved);
+    }
+    const score=Math.min(...saved.names.map(name=>villageSpellingScore(wanted,name)));
+    if (Number.isFinite(score)) hits.push({row, score});
   }
   hits.sort((a,b) => a.score-b.score || order.compare(a.row.village,b.row.village) ||
     order.compare(a.row.district,b.row.district) || order.compare(a.row.tehsil,b.row.tehsil) || order.compare(a.row.id,b.row.id));
@@ -79,7 +84,7 @@ export function mountVillageFinder(root, escape, choose, samplePlace, {onPreview
     const request = ++revision;
     const query = input.value;
     matches.replaceChildren();
-    if (key(query).length < 2) { status.textContent='Enter at least two characters.';onFilter?.([]); return; }
+    if (localityKey(query).length < 2) { status.textContent='Enter at least two characters.';onFilter?.([]); return; }
     status.textContent='Finding villages…';
     try {
       if (!samplePlace && !geographyFor(state)?.catalog) {

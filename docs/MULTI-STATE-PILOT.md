@@ -121,3 +121,30 @@ offers manual confirmation when a lower-level code has no verified match.
 The Actions workflow checks the OCI image on each applicable PR. Production
 deployment is enabled only once the restricted SSH identity and environment
 are configured. See the [OCI deployment runbook](../backend/deploy/oci/README.md).
+
+## Explicit map searches and local-script village matching
+
+### CP1 Explain
+
+Village Maps should load geometry without starting a holder search. Reference
+names can differ by spelling and script from government location menus.
+
+### CP2 Diagram
+
+```mermaid
+flowchart LR
+  V["Open Village Maps"] --> G["Load cadastral geometry"]
+  G --> F["Enter or copy names"]
+  F --> C["Click Search plot names"]
+  C --> S["Check parcels on the open sheet"]
+  I["Village spelling in English or local script"] --> K["Rank exact, transliterated and close suggestions"]
+  K --> A["Confirm the official location"]
+```
+
+### CP4 verification
+
+The shared village finder now ranks exact, transliterated and approximate
+spellings. Boundary-to-directory suggestions use that same ranking. A
+verified official code or literal unique name can prefill a selection.
+Approximate choices require confirmation. The Odisha map viewer requires
+intentional name scanning and restricts it to the open sheet.

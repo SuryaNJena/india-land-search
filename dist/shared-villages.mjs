@@ -1,4 +1,5 @@
 import {normalize} from './core.mjs';
+import {villageSpelling,villageSpellingScore} from './village-matching.mjs';
 
 const storageKey='india-land-search.selected-villages.v1';
 const verified=/^[1-9]\d{0,2}-[1-9]\d{0,2}-[1-9]\d{0,4}$/;
@@ -37,22 +38,13 @@ function latin(s){
   if (/[\u0b01-\u0b7f]/u.test(s) && globalThis.Sanscript) s=globalThis.Sanscript.t(s,'oriya','iso');
   return word(s.normalize('NFD').replace(/\p{M}/gu,''));
 }
-function similar(a,b){
-  if (a.length<4 || b.length<4 || Math.abs(a.length-b.length)>2) return false;
-  let prev=Array.from({length:b.length+1},(_,i)=>i);
-  for(let i=0;i<a.length;i++){
-    const next=[i+1];
-    for(let j=0;j<b.length;j++)next.push(Math.min(prev[j]+(a[i]!==b[j]),prev[j+1]+1,next[j]+1));
-    prev=next;
-  }
-  return prev[b.length]<=Math.min(2,Math.floor(Math.max(a.length,b.length)/4));
-}
 const knownAliases={cuttack:['କଟକ'],anugola:['Angul','ଅନୁଗୋଳ'],talacher:['ତାଳଚେର'],kendrapara:['କେନ୍ଦ୍ରାପଡ଼ା'],mahanga:['ମାହାଙ୍ଗା'],derabish:['Derabis','ଡେରାବିଶ']};
 function rank(options,names){
   const keys=names.filter(Boolean).flatMap(n=>[n,...(knownAliases[word(n)]??[])]);
   const exact=options.filter(({label})=>keys.some(n=>word(n)===word(label) || latin(n)===latin(label)));
   if (exact.length) return {options:exact,exact:true};
-  return {options:options.filter(({label})=>keys.some(n=>similar(latin(n),latin(label)))),exact:false};
+  const spellings=keys.map(key=>villageSpelling(key));
+  return {options:options.filter(({label})=>spellings.some(key=>Number.isFinite(villageSpellingScore(key,villageSpelling(label))))),exact:false};
 }
 export async function resolveVillage(place,load,signal){
   if (lookupPlace(place))return {match:place};
