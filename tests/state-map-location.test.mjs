@@ -29,3 +29,24 @@ test('official location choices preserve source codes and leave ambiguous labels
   assert.equal(matchOfficialLocation(rows,undefined,'Raigarh'),undefined);
   assert.equal(matchOfficialLocation(rows,undefined,'रायगढ़')?.code,'41');
 });
+
+test('village suggestions rank close English and local-script spellings within their state',async()=>{
+  const {createRequire}=await import('node:module');
+  const sanscript=createRequire(import.meta.url)('../dist/vendor/sanscript.js');
+  const {findVillages}=await import('../dist/village-finder.mjs');
+  const rows=[tangarghat,{...tangarghat,id:'x',village:'Tangarpur'},
+    {id:'y',state:'Odisha',village:'Bharatpada',local:'ଭରତପଡ଼ା',district:'Cuttack',tehsil:'Mahanga'}];
+  assert.equal(findVillages(rows,'Tangerghat','Chhattisgarh',20,sanscript).results[0]?.id,'434821');
+  assert.equal(findVillages(rows,'टांगरघाट','Chhattisgarh',20,sanscript).results[0]?.id,'434821');
+  assert.equal(findVillages(rows,'ଭରତପଡା','Odisha',20,sanscript).results[0]?.id,'y');
+  assert.equal(findVillages(rows,'टांगरघाट','Odisha',20,sanscript).total,0);
+});
+
+test('a probable localized official label requires a choice',async()=>{
+  const {createRequire}=await import('node:module');
+  const sanscript=createRequire(import.meta.url)('../dist/vendor/sanscript.js');
+  const {suggestOfficialLocations}=await import('../dist/state-map-location.mjs');
+  const options=[{code:'289',label:'टांगरघाट'},{code:'310',label:'आमाघाट'}];
+  assert.equal(matchOfficialLocation(options,undefined,'Tangerghat'),undefined);
+  assert.equal(suggestOfficialLocations(options,'Tangerghat',sanscript)[0]?.code,'289');
+});
