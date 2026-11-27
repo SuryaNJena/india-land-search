@@ -77,6 +77,7 @@ try {
   const approved=await page.locator('[data-spelling]:checked').count();
   assert.ok(approved>0);
   await click('Save names');
+  if(evidence)await page.screenshot({path:resolve(evidence,'12-name-library.png')});
   await page.reload();
   await click('Name matching');
   assert.equal(await page.getByLabel('Names to review').inputValue(),'Samal');
@@ -180,6 +181,7 @@ try {
   await page.goto(new URL('?demo=1',url).href);
   await page.getByRole('link',{name:'India Land Search',exact:true}).click();
   assert.equal(new URL(page.url()).search,'');
+  await page.getByRole('heading',{name:'Search names in land records',exact:true}).waitFor();
   await click('Name matching');
   assert.equal(await page.getByLabel('Names to review').inputValue(),'Samal');
   await page.goto(new URL('?demo=1',url).href);

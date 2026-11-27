@@ -3,7 +3,7 @@ import {drawMap} from './maps.mjs';
 import {portals} from './portals.mjs';
 import {statePaths} from './india-states.mjs';
 import {criteriaFrom, findRecords, locationFields, searchIndex} from './search.mjs';
-import {mountNameReview} from './name-review.mjs';
+import {mountNameReview,getNameApproval,saveNameApproval} from './name-review.mjs';
 import {mountOdishaScope} from './odisha-scope.mjs';
 import {loadBhulekhLocations,requestBhulekh,walkBhulekhVillages} from './odisha-live-search.mjs';
 import {mountLiveOdishaMap} from './live-odisha-map.mjs';
@@ -29,6 +29,17 @@ function saveSearch() {
   try { localStorage.setItem(storageKey, JSON.stringify(criteria)); } catch { /* Current tab still retains the search. */ }
 }
 
+export function homeNameDraft(){
+  return {state:criteria.state,names:criteria.names,approval:demoSession?undefined:getNameApproval()};
+}
+
+export function useNameDraft({state,names,approval}){
+  criteria=criteriaFrom({...(state===criteria.state?criteria:{}),state,names});
+  submitted=false;
+  if(!demoSession)saveNameApproval(approval);
+  saveSearch();
+}
+
 function parcelAt(canvas, event, hits) {
   const bounds = canvas.getBoundingClientRect();
   const x = (event.clientX - bounds.left) * canvas.width / bounds.width;
@@ -37,8 +48,8 @@ function parcelAt(canvas, event, hits) {
   return hits.findLast(({path}) => context.isPointInPath(path, x, y, 'evenodd'))?.key;
 }
 
-export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMap, openOfficial, importRecords, onSave}) {
-  const index = searchIndex(workspace);
+export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMap, openOfficial, importRecords, onSave, loadSavedRecords, openNameLibrary}) {
+  let index = searchIndex(workspace);
   if (!criteria.state && workspace) {
     const known = new Set(index.map(x => x.state).filter(Boolean));
     if (known.size === 1) criteria.state = [...known][0];
@@ -53,6 +64,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
         ${locationFields.map(field => `<label class="label location-input">${fields[field]} <span class="optional">Optional</span><input name="${field}" list="home-${field}" maxlength="500" placeholder="${field === 'village' ? 'Names or codes, separated by commas' : 'Name or code'}"><datalist id="home-${field}"></datalist></label>`).join('')}
         <label class="label search-names">Names or surnames<textarea name="names" rows="3" maxlength="3000" required aria-describedby="home-name-hint" placeholder="Enter one name per line"></textarea><small id="home-name-hint">Use English or the local script. Review any suggested spellings before searching.</small></label>
       </div>
+      ${openNameLibrary?'<button class="plain-link" type="button" id="open-name-library">Manage saved names and spellings</button>':''}
       <div class="name-review" id="home-name-review" hidden></div>
       <details class="live-location" id="odisha-location" hidden></details>
       <div class="actions"><button type="submit" class="button primary" aria-describedby="home-search-feedback">Search records</button><button type="button" id="search-index" class="button secondary" hidden>Search Odisha index</button><button type="button" id="search-bhulekh" class="button secondary" aria-describedby="home-search-feedback" hidden>Search Bhulekh live</button><div id="home-portal-links" class="actions"></div></div>
@@ -61,6 +73,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     </form>
     <details class="search-picker" ${workspace?'':'hidden'}><summary>Pick a location on the map <span class="optional">Optional</span></summary><div id="home-maps"></div></details>
     <div id="home-search-results" class="search-results"></div>`;
+  root.querySelector('#open-name-library')?.addEventListener('click',openNameLibrary);
   const form = root.querySelector('form');
   const results = root.querySelector('#home-search-results');
   const mapPicker = root.querySelector('.search-picker');
@@ -404,7 +417,14 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
       clearResults();
     }
   };
-  function startSearch(scopedPortalSearch = false, forceIndex = false) {
+  let savedRecords;
+  async function startSearch(scopedPortalSearch = false, forceIndex = false) {
+    if(!workspace && loadSavedRecords && !scopedPortalSearch && !forceIndex){
+      savedRecords??=loadSavedRecords();
+      const loaded=await savedRecords;
+      if(!root.isConnected)return;
+      if(loaded){workspace=loaded;index=searchIndex(workspace);refreshScope();}
+    }
     if (liveSearch) return;
     feedback.textContent='';
     if (!criteria.state) {

@@ -1,10 +1,11 @@
 import {mountTour} from './guided-tour.mjs';
-import {normalize,parcelKey,safeURL,sourceCaste,suggestSurname,validateWorkspace,matchRows} from './core.mjs';
+import {countObservedNames,normalize,parcelKey,safeURL,sourceCaste,suggestSurname,validateWorkspace,matchRows} from './core.mjs';
 import {download,localStore,savedLookupStore,zipWorkspace,importFile,exportWorkbook,mergeROR,savedHoldings,combineSavedHoldings,exportRORBundle} from './files.mjs';
 import {drawMap,makeMapPDF,colours} from './maps.mjs';
 import {portals,directoryURL} from './portals.mjs';
 import {mountOfficialOdisha} from './official-odisha.mjs';
-import {renderHomeSearch} from './home-search.mjs';
+import {homeNameDraft,renderHomeSearch,useNameDraft} from './home-search.mjs';
+import {mountNameLibrary} from './name-library.mjs';
 import {assignImportState} from './search.mjs';
 import {mountOdishaLookup} from './odisha-lookup.mjs';
 import {mountLookupWorkspace,saveLookup} from './lookup-workspace.mjs';
@@ -81,7 +82,22 @@ function chooseImport(state = '') {
 
 function overview() {
   const search = '<section id="home-search" class="card home-search"></section>';
-  const mountSearch = () => renderHomeSearch($('home-search'), {workspace,escape,tag,openPlot:showPlot,openMap:hits=>navigate('maps',{hits}),openOfficial:village=>navigate('portals',{village}),importRecords:chooseImport,onSave:saveLookup});
+  let savedPlots=[];
+  const loadSavedRecords=workspace?undefined:async()=>{
+    const items=await savedLookupStore.list().catch(()=>[]);
+    savedPlots=items.filter(item=>item.kind==='plot' && item.data?.info);
+    if(!savedPlots.length)return;
+    return {state:'Odisha',rows:savedPlots.map(item=>({
+      ...item.place,state:'Odisha',gis:item.place.id+'/'+item.place.riCode+'/'+item.sheet,id:item.key,
+      sheet:item.sheet,plot:item.number,khata:item.data.khata,info:item.data.info,status:'Retrieved'
+    }))};
+  };
+  const mountSearch = () => renderHomeSearch($('home-search'),{
+    workspace,escape,tag,loadSavedRecords,openNameLibrary:()=>navigate('names'),
+    openPlot:(index,terms)=>workspace?showPlot(index,terms):openSavedLookup(savedPlots[index]),
+    openMap:hits=>navigate('maps',{hits}),openOfficial:village=>navigate('portals',{village}),
+    importRecords:chooseImport,onSave:saveLookup
+  });
   if (!workspace) {
     $('view').innerHTML = `${search}<section class="card"><div class="card-head"><div><h2>Records and maps</h2><p>Open an official portal, import records you already have, or explore with fictional plots.</p></div></div><div class="actions">${demoLink}<button class="button secondary" id="go-portals">Open official sources</button></div></section>`;
     mountSearch();
@@ -203,22 +219,18 @@ function showPlot(i, searchMatches) {
 
 const split = input => [...new Map(input.split(/\n|;/u).map(x=>[normalize(x),x.trim()]).filter(([x])=>x)).values()];
 function names() {
-  if (!workspace) {
-    $('view').innerHTML='<section class="card home-search" id="name-lookup"><p role="status">Opening name review…</p></section>';
-    const root=$('name-lookup');
-    void savedLookupStore.list().catch(()=>[]).then(items=>{
-      if (!root.isConnected) return;
-      const plots=items.filter(item=>item.kind==='plot' && item.data?.info);
-      const local=plots.length ? {state:'Odisha',rows:plots.map(item=>({
-        ...item.place,state:'Odisha',gis:item.place.id+'/'+item.place.riCode+'/'+item.sheet,id:item.key,
-        sheet:item.sheet,plot:item.number,khata:item.data.khata,info:item.data.info,status:'Retrieved'
-      }))} : null;
-      renderHomeSearch(root,{workspace:local,escape,tag,openPlot:i=>openSavedLookup(plots[i]),openOfficial:village=>navigate('portals',{village}),importRecords:chooseImport,onSave:saveLookup});
-    });
-    return;
-  }
+  $('view').innerHTML='<div id="name-library"></div><div id="workspace-name-rules"></div>';
+  mountNameLibrary($('name-library'),{
+    draft:demoSession && !homeNameDraft().names
+      ?{state:'Odisha',names:demoNames.join('\n')}:homeNameDraft(),
+    escape,demo:demoSession,
+    observe:workspace?(state,names)=>countObservedNames(
+      workspace.rows.filter(row=>(row.state||workspace.state)===state),names):undefined,
+    onUse:entry=>{useNameDraft(entry);navigate('overview');$('home-search-form')?.elements.namedItem('names')?.focus();}
+  });
+  if(!workspace)return;
   const rules=workspace.rules;
-  $('view').innerHTML=`<div class="layout"><section class="card"><div class="card-head"><div><h2>Approved matching rules</h2><p>Use one spelling per line. The specific-name list can include middle-name and surname combinations.</p></div></div><label class="label">Surname variants<textarea id="surname-lines" rows="4">${escape(rules.surnames.join('\n'))}</textarea></label><label class="label">Specific full-name variants<textarea id="full-lines" rows="7">${escape(rules.names.join('\n'))}</textarea></label><label class="check"><input id="use-caste" type="checkbox" ${rules.useCaste?'checked':''}> Require an approved source caste label</label><label class="label">Caste label groups<textarea id="caste-lines" rows="3" placeholder="Separate equivalent spellings with commas">${escape((rules.caste??[]).map(g=>g.aliases.join(', ')).join('\n'))}</textarea></label><button id="apply-rules" class="button primary">Apply and rematch</button></section><section class="card"><div class="card-head"><div><h2>Suggest surname spellings</h2><p>Approve a spelling after checking it against the local record.</p></div></div><label class="label">English or local-script surname<input id="surname-input" placeholder="Jena"></label><label class="label">Record language<select id="language"><option value="or">Odia</option><option value="hi">Hindi</option><option value="mr">Marathi</option><option value="bn">Bengali</option><option value="te">Telugu</option><option value="manual">Other script (enter spelling)</option></select></label><button id="suggest" class="button secondary">Find variants</button><div id="candidates" aria-live="polite"></div></section></div>`;
+  $('workspace-name-rules').innerHTML=`<details class="card workspace-name-rules"><summary>Matching rules for this workspace</summary><div class="layout"><section class="card"><div class="card-head"><div><h2>Approved matching rules</h2><p>Use one spelling per line. The specific-name list can include middle-name and surname combinations.</p></div></div><label class="label">Surname variants<textarea id="surname-lines" rows="4">${escape(rules.surnames.join('\n'))}</textarea></label><label class="label">Specific full-name variants<textarea id="full-lines" rows="7">${escape(rules.names.join('\n'))}</textarea></label><label class="check"><input id="use-caste" type="checkbox" ${rules.useCaste?'checked':''}> Require an approved source caste label</label><label class="label">Caste label groups<textarea id="caste-lines" rows="3" placeholder="Separate equivalent spellings with commas">${escape((rules.caste??[]).map(g=>g.aliases.join(', ')).join('\n'))}</textarea></label><button id="apply-rules" class="button primary">Apply and rematch</button></section><section class="card"><div class="card-head"><div><h2>Suggest surname spellings</h2><p>Approve a spelling after checking it against the local record.</p></div></div><label class="label">English or local-script surname<input id="surname-input" placeholder="Jena"></label><label class="label">Record language<select id="language"><option value="or">Odia</option><option value="hi">Hindi</option><option value="mr">Marathi</option><option value="bn">Bengali</option><option value="te">Telugu</option><option value="manual">Other script (enter spelling)</option></select></label><button id="suggest" class="button secondary">Find variants</button><div id="candidates" aria-live="polite"></div></section></div></details>`;
   $('suggest').onclick=()=>{
     const input=$('surname-input').value, lang=$('language').value;
     const candidates=suggestSurname(input,lang);
@@ -335,8 +347,14 @@ $('nav-toggle').onclick=()=>{
   $('nav-toggle').setAttribute('aria-expanded',String(!open));
 };
 mountTour($('take-tour'));
+const tourDocument=demoSession && new URLSearchParams(location.search).get('tour')==='1';
 if (demoSession) $('take-tour').hidden=true;
-if (demoSession && new URLSearchParams(location.search).get('tour')==='1') document.body.classList.add('tour-document');
+if (tourDocument) document.body.classList.add('tour-document');
+if (demoSession && !tourDocument) $('demo-exit').hidden=false;
+if (!demoSession) $('app-brand').addEventListener('click',event=>{
+  if(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
+  event.preventDefault();navigate('overview');
+});
 document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>navigate(b.dataset.view));
 $('import').onclick=()=>chooseImport();
 $('file').onchange=()=>{const file=$('file').files[0],state=importState;$('file').value='';importState='';if(!file)return;task('Validating and importing records…',async()=>{await activate(assignImportState(await importFile(file),state));const saved=await persist();selected='overview';render();status(`Imported ${number.format(workspace.rows.length)} records. ${saved?'Saved in this browser.':'Use Back up workspace to retain this session.'}`);});};
