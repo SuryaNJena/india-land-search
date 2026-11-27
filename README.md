@@ -7,6 +7,10 @@ records you need.
 
 [Open GitHub Pages](https://suryanjena.github.io/india-land-search/) · [Open ChatGPT Sites](https://landreview-odisha.thinwave16.chatgpt.site/) · [Download the latest portable release](https://github.com/SuryaNJena/india-land-search/releases/latest)
 
+## Government data notice
+
+Official land records and cadastral maps displayed here come from the relevant government portals. India Land Search claims no ownership of that data and has obtained no separate licence to reuse it. The data is shown only for the contest demonstration. For authoritative records and permitted reuse, consult the issuing government authority and its published terms. [Data sources and terms](docs/DATA-SOURCES.md)
+
 ## Get started
 
 - **Find a village or search a name.** Start on **Home**. Choose one or more villages from the atlas or the name picker. Use **Start with a name** for a guided search, or visit **Name Matching** to edit and save spellings using the Odia keypad.

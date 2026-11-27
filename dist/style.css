@@ -93,3 +93,5 @@
 #odisha-official-sources [data-report] details{overflow:auto}
 .official-odisha-preview{position:relative;display:table;max-width:100%;margin:10px 0}
 .official-odisha-preview [data-selected-overlay]{position:absolute;inset:0;width:100%;height:100%}
+
+#government-data-notice{margin-top:24px;padding-top:12px;border-top:1px solid var(--line)}
