@@ -81,3 +81,17 @@ A tenant option contains a listed name and khata. A parcel's Plot Info can also 
     Plot Info name match → colour exact parcel → look up discovered khata → colour scheduled plots
 
 The browser regression must detect a Plot Info match outside the tenant hits and colour a sibling parcel from its khata without selecting any plot. Changing or closing the sheet must stop further background lookups.
+
+## CP1 · Name Matching and demo navigation
+
+Home searches records by name and place. Name Matching manages the spellings
+used in a search. It must support Odia input, review variants without a
+workspace, and retain the existing rematching rules for imported records.
+The standalone demo has a visible exit on every tab. Its brand link returns
+to the public homepage, while the embedded tour uses its own controls.
+
+## CP2 · Name review flow
+
+    Name Matching → type or edit names → review spellings → save to this browser
+                                                        → use on Home → search records
+    Standalone demo → exit or brand link → normal Home
