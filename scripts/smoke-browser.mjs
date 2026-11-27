@@ -49,7 +49,7 @@ try {
   assert.equal(await tour.count(),0);
   await page.setViewportSize({width:390,height:844});
   await page.locator('#nav-toggle').click();
-  assert.equal(await page.locator('#workspace-nav button:visible').count(),7);
+  assert.equal(await page.locator('#workspace-nav button:visible').count(),8);
   await click('Home');
   assert.equal(await page.locator('#nav-toggle').getAttribute('aria-expanded'),'false');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
@@ -63,10 +63,13 @@ try {
   if(evidence){await mkdir(evidence,{recursive:true});await page.screenshot({path:resolve(evidence,'10-panorama-mobile.png')});}
   await page.setViewportSize({width:1440,height:1000});
   if(evidence)await page.screenshot({path:resolve(evidence,'11-panorama-desktop.png')});
+  await click('Land revenue');
+  await page.getByRole('heading',{name:'Odisha land revenue and water tax'}).waitFor();
+  assert.equal(await page.getByRole('link',{name:'Open e-Pauti payment'}).getAttribute('href'),'https://odishalandrevenue.nic.in/OnlineRTrent.aspx');
   await click('Name matching');
   await page.getByRole('heading',{name:'Your search names',exact:true}).waitFor();
   assert.equal(await page.locator('#home-search-form').count(),0);
-  assert.equal(await page.locator('#workspace-nav .nav-purpose').count(),7);
+  assert.equal(await page.locator('#workspace-nav .nav-purpose').count(),8);
   await page.getByLabel('Names to review').fill('Samal');
   await page.getByText(/in the spelling dictionary/).waitFor();
   await page.getByText('Type in Odia',{exact:true}).click();
@@ -94,6 +97,11 @@ try {
 
   await click('Home');
   await page.getByLabel('State or union territory').selectOption('Odisha');
+  const districtPicker=page.getByLabel('Choose an Odisha district');
+  await districtPicker.selectOption('cuttack');
+  await page.getByRole('button',{name:'Odisha districts'}).waitFor();
+  await page.getByRole('button',{name:'Odisha districts'}).click();
+  await districtPicker.waitFor();
   await page.locator('#village-finder input').fill('Bharatpada');
   await page.locator('#village-finder [data-village]').filter({hasText:'Mahanga'}).first().click();
   assert.equal(await page.locator('[name="village"]').inputValue(),'Bharatpada');
@@ -138,6 +146,12 @@ try {
     buffer:Buffer.from(JSON.stringify({has_data:'Y',ID:'fixtureparcel',gisCode:'03110810201',plotNo:'9',info:'Synthetic plot record'}))
   });
   await page.getByText('Plot Info loaded.',{exact:true}).waitFor();
+  const parcelPreview=page.getByRole('img',{name:'Cadastral sheet with plot 9 shaded'});
+  await parcelPreview.waitFor();
+  assert.equal(await parcelPreview.evaluate(canvas=>{
+    const {data}=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height);
+    return data.some((r,i)=>i%4===0&&r===68&&data[i+1]===58&&data[i+2]===114&&data[i+3]===255);
+  }),true);
   const directSides=[];
   await page.route('https://bhulekh.ori.nic.in/ViewRoR.aspx?**',async route=>{
     const requested=new URL(route.request().url());
