@@ -8,7 +8,7 @@ const limit=12;
 const asciiName=name=>/[\u0b00-\u0b7f]/u.test(name) && globalThis.Sanscript ? globalThis.Sanscript.t(name,'oriya','iso').normalize('NFD').replace(/[^\x20-\x7e]/g,'') : name;
 
 export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Map(),matchedHoldings=new Map(),searchNames=[],options={}) {
-  const {initialMap,initialSheet,localSheets,onSave,onGeography,showVillage=true}=options;
+  const {initialMap,initialSheet,localSheets,onSave,onGeography,onRevenue,showVillage=true}=options;
   const isLocal=Boolean(initialMap || localSheets);
   root.innerHTML=`<summary>BhuNaksha village map</summary>
     <div class="toolbar"><label class="label" ${showVillage?'':'hidden'}>Village<select id="bhu-village">${locations.map((place,i)=>`<option value="${i}">${escape(place.village)} · ${escape(place.tehsil)}</option>`).join('')}</select></label>
@@ -292,7 +292,9 @@ export function mountLiveOdishaMap(root,locations,escape,tag,matchedPlots=new Ma
         (caste?'<details><summary>Jaati · as recorded</summary><p>'+escape(caste)+'</p></details>':'')+
         (data.area?'<p>'+escape(data.area)+'</p>':'')+
         '<div class="actions">'+(data.khata?'<span>Khata '+escape(data.khata)+'</span>':'')+
-        tag(data.front,'RoR front')+tag(data.back,'RoR back')+'</div>';
+        tag(data.front,'RoR front')+tag(data.back,'RoR back')+
+        (data.khata&&onRevenue?'<button type="button" class="plain-link" data-bhu-revenue>Land revenue</button>':'')+'</div>';
+      plotInfo.querySelector('[data-bhu-revenue]')?.addEventListener('click',()=>onRevenue({place:currentPlace(),khata:data.khata}));
     }
   }
 

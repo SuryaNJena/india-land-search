@@ -71,23 +71,23 @@ function featureBounds(features,pins=[]) {
   return Number.isFinite(bounds[0]) ? bounds : null;
 }
 
-export function fitViewport(bounds,width,height) {
+export function fitViewport(bounds,width,height,fractional=false) {
   if (!bounds) return {center:initialCenter,zoom:7};
   const [left,bottom,right,top]=bounds;
   const [x0,y0]=projectPosition([left,top],0);
   const [x1,y1]=projectPosition([right,bottom],0);
   const scale=Math.min(Math.max(width-48,1)/(x1-x0 || .000001),Math.max(height-48,1)/(y1-y0 || .000001));
-  return {center:unprojectPosition([(x0+x1)/2,(y0+y1)/2],0),zoom:Math.max(0,Math.min(19,Math.floor(Math.log2(scale))))};
+  return {center:unprojectPosition([(x0+x1)/2,(y0+y1)/2],0),zoom:Math.max(0,Math.min(19,fractional?Math.log2(scale):Math.floor(Math.log2(scale))))};
 }
 
 export function tilesForViewport(center,zoom,width,height) {
   const [cx,cy]=projectPosition(center,zoom);
-  const count=2**zoom;
+  const z=Math.floor(zoom), count=2**z, size=tileSize*2**(zoom-z);
   const left=cx-width/2, top=cy-height/2;
   const tiles=[];
-  for (let y=Math.max(0,Math.floor(top/tileSize));y<=Math.min(count-1,Math.floor((top+height-1)/tileSize));y++) {
-    for (let x=Math.floor(left/tileSize);x<=Math.floor((left+width-1)/tileSize);x++) {
-      tiles.push({x:(x%count+count)%count,y,z:zoom,column:x,left:x*tileSize-left,top:y*tileSize-top});
+  for (let y=Math.max(0,Math.floor(top/size));y<=Math.min(count-1,Math.floor((top+height-1)/size));y++) {
+    for (let x=Math.floor(left/size);x<=Math.floor((left+width-1)/size);x++) {
+      tiles.push({x:(x%count+count)%count,y,z,column:x,left:x*size-left,top:y*size-top,size});
     }
   }
   return tiles;
@@ -107,7 +107,7 @@ const styles=''
   +'.lr-parcel-map .lr-map-legend i{display:inline-block;width:.8rem;height:.8rem;margin-right:.22rem;border:1px solid #465747;border-radius:2px}'
   +'.lr-parcel-map a{margin-right:.7rem}';
 
-export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBoundary=false,highlights=new Set(),tileTemplate=standardTiles,pinState={},localOnly=false,onFeature}={}) {
+export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBoundary=false,highlights=new Set(),tileTemplate=standardTiles,pinState={},localOnly=false,onFeature,fractional=false}={}) {
   if (root.tagName==='DETAILS') {
     root.innerHTML='<summary>Geographic map and location pin</summary><div class="lr-parcel-map"></div>';
   }
@@ -127,7 +127,7 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
     +'<div class="lr-map-viewport"><div class="lr-map-tiles" aria-hidden="true"></div>'
     +'<canvas tabindex="0" aria-label="Map. Use arrow keys to pan and plus or minus to zoom. Use the coordinate fields to add a pin with the keyboard."></canvas>'
     +'<span class="lr-map-credit" hidden>© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></span></div>'
-    +'<form class="lr-map-controls"><label class="label">Latitude<input name="lat" required type="number" min="-85.05112878" max="85.05112878" step="any" inputmode="decimal"></label>'
+    +'<form class="lr-map-controls lr-map-coordinates"><label class="label">Latitude<input name="lat" required type="number" min="-85.05112878" max="85.05112878" step="any" inputmode="decimal"></label>'
     +'<label class="label">Longitude<input name="lon" required type="number" min="-180" max="180" step="any" inputmode="decimal"></label>'
     +'<button class="button secondary">Set coordinate pin</button></form>'
     +'<div class="lr-map-legend" hidden><span><i style="background:'+colours.full+'"></i>Specific-name match</span><span><i style="background:'+colours.surname+'"></i>Surname match</span></div>'
@@ -220,6 +220,7 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
         images.append(image);
         nodes.set(key,image);
       }
+      image.style.width=image.style.height=tile.size+'px';
       image.style.left=tile.left+'px';
       image.style.top=tile.top+'px';
     }
@@ -247,18 +248,10 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
       Object.assign(raster.style,{left:left+'px',top:top+'px',width:(right-left)+'px',height:(bottom-top)+'px'});
     }
     clickPaths.length=0;
+    const labels=[];
     for (const [layer,select,isBoundary] of [[features,onFeature,referenceBoundary],[overlayFeatures,overlaySelect,false]]) {
       for (const feature of layer) {
         const level=layer===features?matched(feature):overlayHighlights.get(String(feature.properties.id))?.level;
-        if(feature.properties.marker){
-          const [x,y]=pixel(feature.properties.center);
-          if(x<0||y<0||x>width||y>height)continue;
-          const marker=new Path2D();marker.arc(x,y,6,0,2*Math.PI);
-          if(select)clickPaths.push({id:feature.properties.id,path:marker,select});
-          ctx.fillStyle='#87395d';ctx.fill(marker);ctx.strokeStyle='#fff';ctx.stroke(marker);
-          if(zoom>=7){ctx.fillStyle='#2c142b';ctx.font='600 11px system-ui';ctx.strokeText(feature.properties.name,x,y-9);ctx.fillText(feature.properties.name,x,y-9);}
-          continue;
-        }
         const path=new Path2D();
         for (const polygon of polygons(feature.geometry)) for (const ring of polygon) {
           path.moveTo(...pixel(ring[0]));
@@ -273,21 +266,31 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
         ctx.lineWidth=level?2:1;
         ctx.strokeStyle=level==='surname'?'#8f5a14':level?'#5e417c':'#61786b';
         ctx.stroke(path);
-        const plot=isBoundary ? feature.properties.name : feature.properties.kide;
-        if (plot && (isBoundary && (level || layer.length<70 || zoom>=13) || !isBoundary && zoom>=15 && (level || layer===overlayFeatures))) {
-          const ring=polygons(feature.geometry)[0][0];
-          const selectedBounds=featureBounds([feature]);
-          const [x,y]=pixel([(selectedBounds[0]+selectedBounds[2])/2,(selectedBounds[1]+selectedBounds[3])/2]);
-          if (ring.length>3 && ctx.isPointInPath(path,x*scale,y*scale,'evenodd')) {
-            ctx.font='600 11px system-ui';
-            ctx.textAlign='center';ctx.textBaseline='middle';
-            ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeText(String(plot),x,y);
-            ctx.fillStyle='#18382d';ctx.fillText(String(plot),x,y);
-            ctx.textAlign='start';ctx.textBaseline='alphabetic';
-          }
+        const {name,shortName,center:labelPoint,kind,kide}=feature.properties;
+        const plot=isBoundary ? (kind==='state' && zoom<7?shortName:name) : kide;
+        if (!plot || (kind==='village' && !level && zoom<11) ||
+            (!isBoundary && (zoom<15 || !level && layer!==overlayFeatures)))continue;
+        const ring=polygons(feature.geometry)[0][0];
+        const extent=featureBounds([feature]);
+        const [x,y]=pixel(labelPoint??[(extent[0]+extent[2])/2,(extent[1]+extent[3])/2]);
+        if(ring.length>3 && ctx.isPointInPath(path,x*scale,y*scale,'evenodd')){
+          labels.push({x,y,plot,priority:(level?3:0)+(kind==='state'&&name==='Odisha'?2:0)});
         }
       }
     }
+    const occupied=[];
+    ctx.font='600 11px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';
+    labels.sort((a,b)=>b.priority-a.priority);
+    for(const {x,y,plot} of labels){
+      const half=ctx.measureText(String(plot)).width/2+4;
+      const left=x-half,right=x+half,top=y-8,bottom=y+8;
+      if(left<0||right>width||top<0||bottom>height||occupied.some(box=>
+        left<box.right && right>box.left && top<box.bottom && bottom>box.top))continue;
+      occupied.push({left,right,top,bottom});
+      ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.strokeText(String(plot),x,y);
+      ctx.fillStyle='#18382d';ctx.fillText(String(plot),x,y);
+    }
+    ctx.textAlign='start';ctx.textBaseline='alphabetic';
     if (pin) {
       const [x,y]=pixel(pin);
       ctx.beginPath();
@@ -306,7 +309,7 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
     const overlayBounds=overlayFeatures.length || overlayKey && raster ? featureBounds(overlayFeatures,[...rasterPoints,...frames]) : null;
     const frame=overlayBounds??(frames.length?featureBounds(matchingFeatures.length?matchingFeatures:features,
       raster?[...rasterPoints,...frames]:frames):bounds);
-    ({center,zoom}=fitViewport(frame,width,height));
+    ({center,zoom}=fitViewport(frame,width,height,fractional));
     dirty=false;
     draw();
   }

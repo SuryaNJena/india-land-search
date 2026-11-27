@@ -19,3 +19,11 @@ test('The geographic atlas covers India and scopes village boundaries by adminis
   assert.equal(resolveBoundary({district:'Puri',tehsil:'Mahanga',village:'Bharatpada'},places),undefined);
   assert.deepEqual(unionBounds([[1,2,3,4],[0,3,7,8]]),[0,2,7,8]);
 });
+
+test('Odisha district navigation has one real polygon region per district',async()=>{
+  const load=async path=>JSON.parse(await readFile(new URL('../dist/'+path,import.meta.url)));
+  const regions=await load('odisha-district-polygons.json');
+  const {districts}=await load('atlas-boundaries.json');
+  assert.deepEqual(regions.map(region=>region.code),districts.map(region=>region.code));
+  for(const district of regions)assert.ok(district.polygons.some(poly=>poly[0].length>10));
+});

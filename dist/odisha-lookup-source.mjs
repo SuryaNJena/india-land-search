@@ -182,6 +182,10 @@ export async function directReport(place,khata,side,signal) {
     if (typeof data.html!=='string') throw Error('Bhulekh returned an empty report.');
     return data.html;
   }
+  return readPublicReport(place,khata,side,signal);
+}
+
+export async function readPublicReport(place,khata,side,signal) {
   const response=await fetch(reportURL(place,khata,side),{credentials:'omit',redirect:'error',
     signal:AbortSignal.any([signal,AbortSignal.timeout(12000)])});
   if (!response.ok) {
