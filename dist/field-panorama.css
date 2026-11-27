@@ -97,7 +97,7 @@ html:has(body.tour-document){scrollbar-width:thin;scrollbar-color:#875371 #30203
 .state-raster img[data-state-overlay] { position: absolute; inset: 0; }
 .state-raster [hidden] { display: none; }
 
-[data-state-atlas] .lr-parcel-map {
+[data-state-atlas].lr-parcel-map {
   background: var(--panel);
   color: var(--ink);
   border-color: var(--line);

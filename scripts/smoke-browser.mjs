@@ -120,7 +120,7 @@ try {
   assert.match(await activeVillage.inputValue(),/434821$/);
   await activeVillage.selectOption({label:'Adhchara · Pandariya · Kabirdham'});
   await page.getByText('Reference atlas',{exact:true}).click();
-  const stateAtlas=page.locator('[data-state-atlas] .lr-parcel-map');
+  const stateAtlas=page.locator('[data-state-atlas].lr-parcel-map');
   await stateAtlas.waitFor();
   assert.equal(await stateAtlas.evaluate(map=>getComputedStyle(map).backgroundColor===getComputedStyle(map.closest('.card')).backgroundColor),true);
   await page.locator('[data-state-villages] summary').click();
