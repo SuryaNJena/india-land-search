@@ -127,6 +127,7 @@ export function createLandApiServer({
         try {index.put(key,await response.clone().json());}catch{/* Read-through cache is optional. */}
       }
       outgoing.setHeader('Access-Control-Allow-Origin',origin);
+      outgoing.setHeader('Access-Control-Expose-Headers','Retry-After');
       outgoing.setHeader('Vary','Origin');
       outgoing.writeHead(response.status,Object.fromEntries(response.headers));
       if (!response.body) {outgoing.end();return;}

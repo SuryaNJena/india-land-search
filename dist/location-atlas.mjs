@@ -22,7 +22,21 @@ export function unionBounds(boxes){
   return boxes.length?[Math.min(...boxes.map(b=>b[0])),Math.min(...boxes.map(b=>b[1])),Math.max(...boxes.map(b=>b[2])),Math.max(...boxes.map(b=>b[3]))]:undefined;
 }
 export function mountLocationAtlas(root,{onChoose,onState}={}){
-  let revision=0,dispose,selection=[],region='';
+  let revision=0,dispose,selection=[],region='',overlay;
+  const parcelStatus=document.createElement('p');
+  parcelStatus.className='atlas-parcel-status';parcelStatus.hidden=true;
+  function setParcelOverlay(next){
+    overlay=next;
+    root.toggleAttribute('data-active-parcel-overlay',Boolean(next));
+    dispose?.setOverlay(next);
+    parcelStatus.hidden=!next;
+    if(!next)return;
+    const features=next.geographic?.features?.length??0;
+    const direct=[...next.highlights.values()].filter(match=>match.level==='full').length;
+    parcelStatus.textContent=features
+      ? features+' geographic parcels · '+direct+' direct '+(direct===1?'match':'matches')+' · '+(next.highlights.size-direct)+' matching khata only'
+      : next.raster?'Official geographic sheet image':'Geographic coordinates unavailable. Open the native sheet to inspect parcels.';
+  }
   const pins={};
   async function show(places=selection,state=region,districtCode=''){
     selection=places;region=state;
@@ -65,13 +79,15 @@ export function mountLocationAtlas(root,{onChoose,onState}={}){
       root.querySelector('[data-zoom="-1"]').setAttribute('aria-label','Zoom geographic map out');
       const credit=document.createElement('small');credit.className='atlas-attribution';
       credit.innerHTML= villages.length?'<a href="https://nwdp.nwic.gov.in/dataset/village-boundary">Survey of India village boundaries</a>':'<a href="https://www.geoboundaries.org/">geoBoundaries / DataMeet</a> · <a href="https://creativecommons.org/licenses/by/2.5/in/">CC BY 2.5 IN</a>';
-      root.append(credit);
+      root.append(credit,parcelStatus);
+      if(overlay)setParcelOverlay(overlay);
       if(villages.length||state||districtCode){
         const reset=document.createElement('button');reset.type='button';reset.className='plain-link';
         reset.textContent='India overview';reset.onclick=()=>void show([],'');credit.append(' · ',reset);
       }
     }catch(error){if(version===revision&&root.isConnected)root.textContent=error.message;}
   }
-  return {show};
+  setParcelOverlay.show=()=>root.scrollIntoView({block:'start'});
+  return {show,setParcelOverlay};
 }
 

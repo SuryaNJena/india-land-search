@@ -37,6 +37,8 @@ try {
   await page.goto(url.href);
   await click('Take a tour');
   const tour=page.getByRole('dialog');
+  await tour.frameLocator('iframe').locator('body.tour-document').waitFor();
+  assert.equal(await tour.frameLocator('iframe').locator('.sidebar').isVisible(),false);
   const advance=tour.getByRole('button',{name:'Next'});
   await advance.click();
   await tour.getByRole('heading',{name:'Review the names'}).waitFor();
@@ -92,11 +94,12 @@ try {
   await page.locator('.bhu-interactive #bhu-canvas').waitFor();
   assert.equal(await page.locator('#bhu-geographic').count(),0);
   assert.equal(await page.locator('[data-location-atlas] canvas').count(),1);
+  await page.getByText('Parcel overlay on the atlas',{exact:true}).click();
   await page.locator('[data-atlas-geojson]').setInputFiles({
     name:'bad-sheet.geojson',mimeType:'application/geo+json',
     buffer:Buffer.from('{"type":"FeatureCollection","features":[]}')
   });
-  await page.getByText(/No uploaded parcels match/).waitFor();
+  await page.getByText(/No geographic parcels in that file match/).waitFor();
   await page.locator('.bhu-interactive .bhu-map-zoom').getByRole('button',{name:'Zoom in'}).click();
   await page.getByText('141%',{exact:true}).waitFor();
   await page.locator('.bhu-interactive .bhu-map-zoom').getByRole('button',{name:'Fit sheet'}).click();
@@ -303,11 +306,13 @@ try {
   await page.getByText('BhuNaksha village map',{exact:true}).click();
   await page.getByText(/1 direct match · 2 khata-only on sheet 01/).waitFor({timeout:20000});
   await page.getByText(/Plot Info unavailable for 1/).waitFor();
+  assert.equal(await page.locator('#bhu-discovery progress').getAttribute('max'),'4');
   assert.deepEqual(scheduleRequests,['7','8','9','10','150']);
   assert.deepEqual(requests,[{id:'a',number:'12'},{id:'b',number:'12/3'},{id:'c',number:'43'},{id:'d',number:'46'}]);
   assert.equal(await page.locator('#bhu-plot-info').isVisible(),false);
   const polygon=(id,number,x)=>({type:'Feature',properties:{giscode:'19030807901',id,kide:number},
     geometry:{type:'Polygon',coordinates:[[[x,20.5],[x+.001,20.5],[x+.001,20.501],[x,20.501],[x,20.5]]]}});
+  await page.getByText('Parcel overlay on the atlas',{exact:true}).click();
   await page.locator('[data-atlas-geojson]').setInputFiles({name:'sheet.geojson',mimeType:'application/geo+json',
     buffer:Buffer.from(JSON.stringify({type:'FeatureCollection',features:[polygon('c','43',86.27),polygon('d','46',86.271)]}))});
   await page.locator('#test-atlas').getByText('2 geographic parcels · 1 direct match · 1 matching khata only', {exact:false}).waitFor();

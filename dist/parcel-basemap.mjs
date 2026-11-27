@@ -168,13 +168,16 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
   let center=initialCenter, zoom=7, pin, pinMode=false, tiles=false, start, dirty=true;
   let tileFailures=0;
   let gpsRequest=0;
-  const extent=geographicRaster?.bounds;
-  const rasterPoints=geographicRaster?.projection==='EPSG:3857' &&
-    Array.isArray(extent) && extent.length===4 && extent[0]<extent[2] && extent[1]<extent[3]
+  let overlayFeatures=[], overlayHighlights=new Map(), overlaySelect, overlayKey;
+  let raster, rasterPoints=[];
+  function attachRaster(geographicRaster) {
+    raster?.remove();raster=undefined;
+    const extent=geographicRaster?.bounds;
+    rasterPoints=geographicRaster?.projection==='EPSG:3857' &&
+      Array.isArray(extent) && extent.length===4 && extent[0]<extent[2] && extent[1]<extent[3]
     ? [[extent[0],extent[3]],[extent[2],extent[1]]] : [];
-  const imaging=rasterPoints.length && rasterPoints.every(validPosition);
-  const raster=imaging?new Image():null;
-  if (raster) {
+    if (!rasterPoints.length || !rasterPoints.every(validPosition)) {rasterPoints=[];return;}
+    raster=new Image();
     raster.alt='Official BhuNaksha cadastral layer';
     raster.style.position='absolute';
     raster.style.maxWidth='none';
@@ -184,6 +187,7 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
     raster.hidden=true;
     viewport.insertBefore(raster,canvas);
   }
+  attachRaster(geographicRaster);
   const bounds=featureBounds(matchingFeatures.length?matchingFeatures:features,raster? rasterPoints:[]);
   coverage.textContent=features.length
     ? referenceBoundary ? geographic.source : features.length+' geographic parcels · '+matchingFeatures.length+' matched · '+geographic.source
@@ -243,42 +247,44 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
       Object.assign(raster.style,{left:left+'px',top:top+'px',width:(right-left)+'px',height:(bottom-top)+'px'});
     }
     clickPaths.length=0;
-    for (const feature of features) {
-      const level=matched(feature);
-      if(feature.properties.marker){
-        const [x,y]=pixel(feature.properties.center);
-        if(x<0||y<0||x>width||y>height)continue;
-        const marker=new Path2D();marker.arc(x,y,6,0,2*Math.PI);
-        if(onFeature)clickPaths.push({id:feature.properties.id,path:marker});
-        ctx.fillStyle='#87395d';ctx.fill(marker);ctx.strokeStyle='#fff';ctx.stroke(marker);
-        if(zoom>=7){ctx.fillStyle='#2c142b';ctx.font='600 11px system-ui';ctx.strokeText(feature.properties.name,x,y-9);ctx.fillText(feature.properties.name,x,y-9);}
-        continue;
-      }
-      const path=new Path2D();
-      for (const polygon of polygons(feature.geometry)) for (const ring of polygon) {
-        path.moveTo(...pixel(ring[0]));
-        for (const point of ring.slice(1)) path.lineTo(...pixel(point));
-        path.closePath();
-      }
-      if(onFeature)clickPaths.push({id:feature.properties.id,path});
-      ctx.fillStyle=levelColour[level]??'#e4ebe6';
-      ctx.globalAlpha=level==='holding'?0:level ? .75 : .32;
-      ctx.fill(path,'evenodd');
-      ctx.globalAlpha=1;
-      ctx.lineWidth=level?2:1;
-      ctx.strokeStyle=level==='surname'?'#8f5a14':level?'#5e417c':'#61786b';
-      ctx.stroke(path);
-      const plot=referenceBoundary ? feature.properties.name : feature.properties.kide;
-      if (plot && (referenceBoundary && (level || features.length<70 || zoom>=13) || level && zoom>=15)) {
-        const ring=polygons(feature.geometry)[0][0];
-        const selectedBounds=featureBounds([feature]);
-        const [x,y]=pixel([(selectedBounds[0]+selectedBounds[2])/2,(selectedBounds[1]+selectedBounds[3])/2]);
-        if (ring.length>3 && ctx.isPointInPath(path,x*scale,y*scale,'evenodd')) {
-          ctx.font='600 11px system-ui';
-          ctx.textAlign='center';ctx.textBaseline='middle';
-          ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeText(String(plot),x,y);
-          ctx.fillStyle='#18382d';ctx.fillText(String(plot),x,y);
-          ctx.textAlign='start';ctx.textBaseline='alphabetic';
+    for (const [layer,select,isBoundary] of [[features,onFeature,referenceBoundary],[overlayFeatures,overlaySelect,false]]) {
+      for (const feature of layer) {
+        const level=layer===features?matched(feature):overlayHighlights.get(String(feature.properties.id))?.level;
+        if(feature.properties.marker){
+          const [x,y]=pixel(feature.properties.center);
+          if(x<0||y<0||x>width||y>height)continue;
+          const marker=new Path2D();marker.arc(x,y,6,0,2*Math.PI);
+          if(select)clickPaths.push({id:feature.properties.id,path:marker,select});
+          ctx.fillStyle='#87395d';ctx.fill(marker);ctx.strokeStyle='#fff';ctx.stroke(marker);
+          if(zoom>=7){ctx.fillStyle='#2c142b';ctx.font='600 11px system-ui';ctx.strokeText(feature.properties.name,x,y-9);ctx.fillText(feature.properties.name,x,y-9);}
+          continue;
+        }
+        const path=new Path2D();
+        for (const polygon of polygons(feature.geometry)) for (const ring of polygon) {
+          path.moveTo(...pixel(ring[0]));
+          for (const point of ring.slice(1)) path.lineTo(...pixel(point));
+          path.closePath();
+        }
+        if(select)clickPaths.push({id:feature.properties.id,path,select});
+        ctx.fillStyle=levelColour[level]??'#e4ebe6';
+        ctx.globalAlpha=level==='holding'?0:level ? .75 : .32;
+        ctx.fill(path,'evenodd');
+        ctx.globalAlpha=1;
+        ctx.lineWidth=level?2:1;
+        ctx.strokeStyle=level==='surname'?'#8f5a14':level?'#5e417c':'#61786b';
+        ctx.stroke(path);
+        const plot=isBoundary ? feature.properties.name : feature.properties.kide;
+        if (plot && (isBoundary && (level || layer.length<70 || zoom>=13) || !isBoundary && zoom>=15 && (level || layer===overlayFeatures))) {
+          const ring=polygons(feature.geometry)[0][0];
+          const selectedBounds=featureBounds([feature]);
+          const [x,y]=pixel([(selectedBounds[0]+selectedBounds[2])/2,(selectedBounds[1]+selectedBounds[3])/2]);
+          if (ring.length>3 && ctx.isPointInPath(path,x*scale,y*scale,'evenodd')) {
+            ctx.font='600 11px system-ui';
+            ctx.textAlign='center';ctx.textBaseline='middle';
+            ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeText(String(plot),x,y);
+            ctx.fillStyle='#18382d';ctx.fillText(String(plot),x,y);
+            ctx.textAlign='start';ctx.textBaseline='alphabetic';
+          }
         }
       }
     }
@@ -297,8 +303,9 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
   function fit(frames=pin?[pin]:[]) {
     const [width,height]=dimensions();
     if (!width || !height) return;
-    const frame=frames.length?featureBounds(matchingFeatures.length?matchingFeatures:features,
-      raster?[...rasterPoints,...frames]:frames):bounds;
+    const overlayBounds=overlayFeatures.length || overlayKey && raster ? featureBounds(overlayFeatures,[...rasterPoints,...frames]) : null;
+    const frame=overlayBounds??(frames.length?featureBounds(matchingFeatures.length?matchingFeatures:features,
+      raster?[...rasterPoints,...frames]:frames):bounds);
     ({center,zoom}=fitViewport(frame,width,height));
     dirty=false;
     draw();
@@ -406,10 +413,10 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
     start=undefined;
     if (Math.hypot(...delta)>=5) {pan(...delta);return;}
     if (!pinMode) {
-      if(onFeature){
+      if(clickPaths.length){
         const rect=canvas.getBoundingClientRect(), x=event.clientX-rect.left,y=event.clientY-rect.top;
         const hit=clickPaths.findLast(({path})=>canvas.getContext('2d').isPointInPath(path,x*canvas.width/rect.width,y*canvas.height/rect.height,'evenodd'));
-        if(hit)onFeature(hit.id);
+        if(hit)hit.select(hit.id);
       }
       return;
     }
@@ -436,5 +443,18 @@ export function mountParcelBasemap(root,{geographic,geographicRaster,referenceBo
   if (!localOnly) tileButton.click();
   if (validPosition(pinState.position)) setPin(pinState.position,pinState.label??'Reference pin');
   else fit();
-  return ()=>observer.disconnect();
+  const dispose=()=>observer.disconnect();
+  dispose.setOverlay=overlay=>{
+    const key=overlay?.key, rasterURL=overlay?.raster?.url;
+    const changed=key!==overlayKey || rasterURL!==raster?.getAttribute('src');
+    const previousFeatures=overlayFeatures.length;
+    overlayKey=key;
+    overlayFeatures=wgs84Parcels(overlay?.geographic);
+    overlayHighlights=overlay?.highlights??new Map();
+    overlaySelect=overlay?.onSelect;
+    if(changed)attachRaster(overlay?.raster);
+    if((changed || !previousFeatures) && (overlayFeatures.length || raster))fit([]);
+    else draw();
+  };
+  return dispose;
 }

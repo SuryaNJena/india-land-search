@@ -130,6 +130,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
 
   function clearResults() {
     liveSearch?.abort(); liveSearch=undefined;
+    atlas?.setParcelOverlay();
     indexedSearch?.abort(); indexedSearch=undefined;
     submitButton.disabled=liveButton.disabled=indexButton.disabled=false;
     feedback.textContent='';
@@ -237,7 +238,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
       if (maps.length) {
         const holdings=new Map(completed.filter(item=>item.location.riCode)
           .map(item=>[item.location.id,item.hits.map(hit=>hit.khata).filter(Boolean)]));
-        mountLiveOdishaMap(results.querySelector('.live-map'),maps,escape,tag,new Map(),holdings,names,{onSave});
+        mountLiveOdishaMap(results.querySelector('.live-map'),maps,escape,tag,new Map(),holdings,names,{onSave,onGeography:atlas?.setParcelOverlay});
       }
       results.querySelector('#cancel-live')?.addEventListener('click',()=>{
         liveSearch?.abort();
@@ -458,7 +459,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
       indexedSearch?.abort();
       indexedSearch=new AbortController();
       void mountIndexedResults(results,{
-        names,location:selectedVillage?.portalCode??'',escape,tag,signal:indexedSearch.signal,
+        names,location:selectedVillage?.portalCode??'',escape,tag,signal:indexedSearch.signal,onGeography:atlas?.setParcelOverlay,
         fallback:odisha ? [
           ...(targets.length ? [{label:'Search selected villages on Bhulekh',run:()=>startSearch(true)}] : []),
           {label:'Choose a Bhulekh village',run:()=>odisha.focusLocation()},

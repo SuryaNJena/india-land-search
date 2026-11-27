@@ -2,7 +2,7 @@ import {runtime} from './runtime.mjs';
 import {mountLiveOdishaMap} from './live-odisha-map.mjs';
 import {printHoldings} from './live-ror.mjs';
 
-export async function mountIndexedResults(root,{names,location,escape,tag,signal,fallback=[]}) {
+export async function mountIndexedResults(root,{names,location,escape,tag,signal,onGeography,fallback=[]}) {
   const selected = new Map();
   const key = hit => hit.location.id+'/'+hit.khata;
   const portalLink=()=>tag('https://bhulekh.ori.nic.in/','Open official Bhulekh portal');
@@ -59,7 +59,7 @@ export async function mountIndexedResults(root,{names,location,escape,tag,signal
       root.querySelector('[data-next]').onclick=()=>{offset=next;void showPage();};
       if (runtime.hosted && maps.length) {
         const plots=new Map(maps.map(place=>[place.id,new Set(hits.filter(hit=>hit.location.id===place.id).flatMap(hit=>hit.plots))]));
-        mountLiveOdishaMap(root.querySelector('.live-map'),maps,escape,tag,plots,new Map(),names);
+        mountLiveOdishaMap(root.querySelector('.live-map'),maps,escape,tag,plots,new Map(),names,{onGeography});
       }
     } catch (error) {
       if (!signal.aborted) showUnavailable('The Odisha index search could not finish. '+error.message);

@@ -153,6 +153,8 @@ export async function postOdisha(path,input,signal) {
   if (response.ok && data) return data;
   const error=Error(data?.error || 'The official Odisha lookup is unavailable. Try again later.');
   error.status=response.status;
+  const after=response.headers.get('Retry-After');
+  if(after && /^\d+$/.test(after))error.retryAfter=Number(after);
   if (data?.portal) error.portal=data.portal;
   throw error;
 }
