@@ -27,10 +27,10 @@ if (prior) {
 await mkdir(target,{recursive:true});
 const mapOrigins=[...new Set(Array.from({length:30},(_,i)=>new URL(officialMapBase(String(i+1))).origin))];
 const files=[
-  'location-atlas.mjs','atlas-boundaries.json','shared-villages.mjs','field-panorama.css','guided-tour.mjs','favicon.png','app-icon.svg','app.mjs','app.webmanifest','core.mjs','demo.mjs','files.mjs','home-search.mjs','indexed-results.mjs','live-odisha-map.mjs','live-ror.mjs','odisha-endpoints.mjs','official-odisha.mjs','odisha-scope.mjs',
+  'location-atlas.mjs','atlas-boundaries.json','odisha-district-polygons.json','shared-villages.mjs','field-panorama.css','guided-tour.mjs','favicon.png','app-icon.svg','app.mjs','app.webmanifest','core.mjs','demo.mjs','files.mjs','home-search.mjs','indexed-results.mjs','live-odisha-map.mjs','live-ror.mjs','odisha-endpoints.mjs','official-odisha.mjs','odisha-scope.mjs',
   'india-states.mjs','maps.mjs','matcher.mjs','name-library.mjs','name-review.mjs','name-variants.mjs',
   'parcel-basemap.mjs','portals.mjs','search.mjs','sheet-overlays.mjs','style.css',
-  'lookup-workspace.mjs','name-dictionary.mjs','name-dictionary-or.json','name-dictionary-or-NOTICE.txt',
+  'plot-profile.mjs','lookup-workspace.mjs','name-dictionary.mjs','name-dictionary-or.json','name-dictionary-or-NOTICE.txt',
   'odisha-boundary-districts.json','odisha-boundaries.mjs','odisha-live-search.mjs','odisha-lookup-source.mjs',
   'odisha-lookup.mjs','offline-worker.js','village-finder.mjs','villages.json','workspace-maps.mjs'
 ];

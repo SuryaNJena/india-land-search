@@ -96,9 +96,36 @@ try {
   await page.getByRole('heading',{name:'Workspace',exact:true}).waitFor();
 
   await click('Home');
+  await page.setViewportSize({width:915,height:720});
+  await page.locator('#home-atlas .lr-map-coordinates').waitFor();
+  assert.equal(await page.locator('#workspace-nav').evaluate(nav=>[...nav.querySelectorAll('.nav-copy')].every(label=>label.scrollWidth<=label.clientWidth+1)),true);
+  const aligned=await page.locator('#home-atlas .lr-map-coordinates').evaluate(form=>{
+    const bottom=node=>node.getBoundingClientRect().bottom;
+    return Math.abs(bottom(form.querySelector('input[name=lon]'))-bottom(form.querySelector('button')))<2;
+  });
+  assert.equal(aligned,true);
+  await page.setViewportSize({width:1440,height:1000});
   await page.getByLabel('State or union territory').selectOption('Odisha');
   const districtPicker=page.getByLabel('Choose an Odisha district');
-  await districtPicker.selectOption('cuttack');
+  await districtPicker.waitFor();
+  const atlasCanvas=page.locator('#home-atlas canvas');
+  await atlasCanvas.click({position:{x:5,y:5}});
+  await districtPicker.waitFor();
+  const districtPoint=await atlasCanvas.evaluate(async canvas=>{
+    const {fitViewport,projectPosition}=await import(new URL('parcel-basemap.mjs',location.href));
+    const districts=await (await fetch(new URL('odisha-district-polygons.json',location.href))).json();
+    const bounds=[Infinity,Infinity,-Infinity,-Infinity];
+    for(const d of districts)for(const polygon of d.polygons)for(const ring of polygon)for(const [x,y] of ring){
+      bounds[0]=Math.min(bounds[0],x);bounds[1]=Math.min(bounds[1],y);
+      bounds[2]=Math.max(bounds[2],x);bounds[3]=Math.max(bounds[3],y);
+    }
+    const {clientWidth:width,clientHeight:height}=canvas;
+    const {center,zoom}=fitViewport(bounds,width,height,true);
+    const [x,y]=projectPosition(districts.find(d=>d.code==='cuttack').label,zoom);
+    const [cx,cy]=projectPosition(center,zoom);
+    return {x:x-cx+width/2,y:y-cy+height/2};
+  });
+  await atlasCanvas.click({position:districtPoint});
   await page.getByRole('button',{name:'Odisha districts'}).waitFor();
   await page.getByRole('button',{name:'Odisha districts'}).click();
   await districtPicker.waitFor();
@@ -143,7 +170,7 @@ try {
   assert.equal(new URL(await plotLink.getAttribute('href')).port,'8443');
   await page.getByLabel('Add the Plot Info JSON saved from BhuNaksha').setInputFiles({
     name:'plot-fixture.json',mimeType:'application/json',
-    buffer:Buffer.from(JSON.stringify({has_data:'Y',ID:'fixtureparcel',gisCode:'03110810201',plotNo:'9',info:'Synthetic plot record'}))
+    buffer:Buffer.from(JSON.stringify({has_data:'Y',ID:'fixtureparcel',gisCode:'03110810201',plotNo:'9',info:'Synthetic plot record',plotInfoLinks:'<a href="https://bhulekh.ori.nic.in/ViewRoR.aspx?DistCode=3&TehCode=11&VillCode=102&KhataNo=147&type=front">Front</a>'}))
   });
   await page.getByText('Plot Info loaded.',{exact:true}).waitFor();
   const parcelPreview=page.getByRole('img',{name:'Cadastral sheet with plot 9 shaded'});
@@ -152,6 +179,15 @@ try {
     const {data}=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height);
     return data.some((r,i)=>i%4===0&&r===68&&data[i+1]===58&&data[i+2]===114&&data[i+3]===255);
   }),true);
+  const linkedFront='https://bhulekh.ori.nic.in/ViewRoR.aspx?**KhataNo=147**';
+  await page.route(linkedFront,route=>route.fulfill({contentType:'text/html',
+    body:'<div id="ContentArea"><table id="gvfront"><tr><td id="gvfront_ctl02_lblName">Fixture recorded holder</td><td id="gvfront_ctl02_lblKhatiyanslNo">147</td></tr></table></div>'}));
+  await page.getByText('Recorded holders and holding details',{exact:true}).click();
+  await page.getByText('Fixture recorded holder',{exact:true}).waitFor();
+  await page.unroute(linkedFront);
+  await click('Land revenue for this khata');
+  await page.getByRole('heading',{name:'Holding to look up'}).waitFor();
+  assert.equal(await page.locator('.revenue-card dd').last().textContent(),'147');
   const directSides=[];
   await page.route('https://bhulekh.ori.nic.in/ViewRoR.aspx?**',async route=>{
     const requested=new URL(route.request().url());

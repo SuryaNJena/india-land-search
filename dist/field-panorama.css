@@ -67,3 +67,27 @@ html:has(body.tour-document){scrollbar-width:thin;scrollbar-color:#875371 #30203
 #open-name-library{display:inline-block;margin-bottom:10px}
 @media(min-width:791px) and (max-height:810px){.sidebar:has(.nav-purpose){position:relative;height:auto;gap:12px}}
 @media(max-width:360px){.sidebar:has(#nav-toggle[aria-expanded=true]) nav{grid-template-columns:1fr}}
+
+.sidebar .nav .nav-copy{flex:1 1 0;white-space:normal;overflow-wrap:anywhere}
+.sidebar .nav .nav-purpose{display:block;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+@media(min-width:791px) and (max-height:890px){.sidebar:has(.nav-purpose){position:relative;height:auto;gap:12px}}
+.bhu-plot-info{background:var(--panel);border-color:var(--line);color:var(--ink);border-radius:0}
+.plot-profile h4{margin:0 0 6px;font-weight:600}
+.plot-profile-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,38%);gap:16px;align-items:start}
+.plot-profile-layout .actions{margin-top:10px}
+.plot-profile-layout [data-preview-status]{font-size:13px;margin-bottom:7px}
+.plot-profile-layout [data-zoom-preview]{margin-top:6px}
+.plot-facts{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0}
+.plot-facts div{flex:1 1 110px;min-width:0;padding:8px 10px;border-left:2px solid #a33762;background:var(--pale)}
+.plot-facts dt{color:var(--muted);font-size:12px}
+.plot-facts dd{margin:2px 0 0;overflow-wrap:anywhere;white-space:pre-line}
+.plot-profile .table-scroll{max-width:100%}
+.revenue-card{max-width:850px}
+.revenue-card .actions{margin:12px 0;gap:12px}
+.atlas-district{padding:6px 8px;margin:0}
+.atlas-attribution{display:flex;align-items:center;gap:4px 10px;flex-wrap:wrap;padding:5px 8px;overflow-wrap:anywhere}
+.panorama-explorer .lr-map-coordinates,.lr-parcel-map .lr-map-coordinates{align-items:flex-end;gap:7px}
+.lr-parcel-map .lr-map-coordinates .label{flex:1 1 88px;max-width:130px;margin:0}
+.lr-parcel-map .lr-map-coordinates input{width:100%;min-width:0}
+.lr-parcel-map .lr-map-coordinates button{min-height:40px;margin:0}
+@media(max-width:640px){.plot-profile-layout{grid-template-columns:1fr}}

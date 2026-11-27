@@ -1,4 +1,5 @@
 import {postOdisha} from './odisha-lookup-source.mjs';
+import {plotNumber} from './sheet-overlays.mjs';
 
 const tags=new Set('TABLE THEAD TBODY TFOOT TR TD TH DIV P SPAN BR HR B STRONG I EM U H1 H2 H3 H4 H5 UL OL LI CENTER FONT'.split(' '));
 const discard=new Set('SCRIPT STYLE IFRAME OBJECT INPUT BUTTON LINK IMG NOSCRIPT TEMPLATE SVG'.split(' '));
@@ -23,6 +24,28 @@ export function copyReport(doc, html, side) {
     return result;
   }
   return copy(side==='back'?schedule:panel);
+}
+
+export function holdingFields(doc,html,khata){
+  const template=doc.createElement('template');
+  template.innerHTML=html;
+  const table=template.content.querySelector('#ContentArea #gvfront');
+  if(!table)return [];
+  const source=suffix=>{
+    const field=table.querySelector('[id$="_'+suffix+'"]');
+    if(!field)return '';
+    field.querySelectorAll('br').forEach(line=>line.replaceWith(doc.createTextNode('\n')));
+    return field.textContent.trim();
+  };
+  const recorded=source('lblKhatiyanslNo');
+  if(recorded && plotNumber(recorded)!==plotNumber(khata))throw Error('Bhulekh returned a different khata.');
+  const fields=[
+    ['Recorded holders','lblName'],['Recorded landlord','lblLandlordName'],['Tenure or status','lblStatua'],
+    ['Revenue village','lblMouja'],['Tahasil','lblTehsil'],['District','lblDist'],
+    ['Rent as recorded','lblTax'],['Cess as recorded','lblSes'],
+    ['Water tax as recorded','lblWaterTax'],['Water tax remarks','lblWtaxRemark']
+  ];
+  return fields.flatMap(([label,suffix])=>{const value=source(suffix);return value?[[label,value]]:[];});
 }
 
 async function hostedReport(hit,side) {

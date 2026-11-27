@@ -48,7 +48,7 @@ function parcelAt(canvas, event, hits) {
   return hits.findLast(({path}) => context.isPointInPath(path, x, y, 'evenodd'))?.key;
 }
 
-export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMap, openOfficial, importRecords, onSave, loadSavedRecords, openNameLibrary}) {
+export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMap, openOfficial, importRecords, onSave, loadSavedRecords, openNameLibrary, onRevenue}) {
   let index = searchIndex(workspace);
   if (!criteria.state && workspace) {
     const known = new Set(index.map(x => x.state).filter(Boolean));
@@ -251,7 +251,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
       if (maps.length) {
         const holdings=new Map(completed.filter(item=>item.location.riCode)
           .map(item=>[item.location.id,item.hits.map(hit=>hit.khata).filter(Boolean)]));
-        mountLiveOdishaMap(results.querySelector('.live-map'),maps,escape,tag,new Map(),holdings,names,{onSave,onGeography:atlas?.setParcelOverlay});
+        mountLiveOdishaMap(results.querySelector('.live-map'),maps,escape,tag,new Map(),holdings,names,{onSave,onRevenue,onGeography:atlas?.setParcelOverlay});
       }
       results.querySelector('#cancel-live')?.addEventListener('click',()=>{
         liveSearch?.abort();

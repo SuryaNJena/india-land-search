@@ -18,7 +18,7 @@ if (navigator.serviceWorker) void navigator.serviceWorker.register('./offline-wo
 const $ = id => document.getElementById(id);
 const escape = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const number = new Intl.NumberFormat('en-IN');
-const labels = {overview:'Home',plots:'Plot records',names:'Name matching',maps:'Village maps',ror:'Records of Rights',workspace:'Workspace',portals:'State portals'};
+const labels = {overview:'Home',plots:'Plot records',names:'Name matching',maps:'Village maps',ror:'Records of Rights',revenue:'Land revenue',workspace:'Workspace',portals:'State portals'};
 const tag = (url,title) => safeURL(url) ? `<a href="${escape(safeURL(url))}" target="_blank" rel="noopener noreferrer">${escape(title)}</a>` : '';
 const legend = () => `<div class="legend">${Object.entries({full:'Specific name',surname:'Surname',none:'Not selected',missing:'Missing info'}).map(([key,value])=>`<span><i style="background:${colours[key]}"></i>${value}</span>`).join('')}</div>`;
 const empty = message => `<div class="empty">${escape(message)}</div>`;
@@ -69,7 +69,8 @@ async function task(message, handler) {
   finally{busy=false;$('import').disabled=false;$('backup').disabled=!workspace;}
 }
 
-let officialVillage, mapSearchHits;
+let officialVillage, mapSearchHits, revenueHolding;
+const openRevenue=holding=>{revenueHolding=holding;navigate('revenue');};
 function navigate(view,{village,hits}={}) { $('nav-toggle').setAttribute('aria-expanded','false'); selected=view; officialVillage=village; mapSearchHits=hits; status(); render(); }
 function matchingCount(kind) { return matches.filter(m=>kind==='full'?m.fullSelected:m.surnameSelected).length; }
 function metric(count, label, accent='') { return `<div class="stat ${accent}"><small>${escape(label)}</small><strong>${number.format(count)}</strong></div>`; }
@@ -93,7 +94,7 @@ function overview() {
     }))};
   };
   const mountSearch = () => renderHomeSearch($('home-search'),{
-    workspace,escape,tag,loadSavedRecords,openNameLibrary:()=>navigate('names'),
+    workspace,escape,tag,loadSavedRecords,onRevenue:demoSession?undefined:openRevenue,openNameLibrary:()=>navigate('names'),
     openPlot:(index,terms)=>workspace?showPlot(index,terms):openSavedLookup(savedPlots[index]),
     openMap:hits=>navigate('maps',{hits}),openOfficial:village=>navigate('portals',{village}),
     importRecords:chooseImport,onSave:saveLookup
@@ -162,7 +163,7 @@ function mountOfficialLookup(mode) {
   if (!root) return;
   const initial=pendingLookup;
   pendingLookup=undefined;
-  mountOdishaLookup(root,mode,{escape,tag,onSave:saveLookup,initial});
+  mountOdishaLookup(root,mode,{escape,tag,onSave:saveLookup,onRevenue:openRevenue,initial});
 }
 
 function lookupWorkspace() {
@@ -333,13 +334,31 @@ function portalView() {
   const results=()=>{const q=normalize($('portal-search').value);$('portal-results').innerHTML=portals.filter(p=>normalize(`${p.name} ${p.label}`).includes(q)).map(p=>`<article class="card"><span class="badge">${escape(p.mode)}</span><h3>${escape(p.name)}</h3><div class="actions">${tag(p.record,p.label)}${tag(p.map,'Cadastral maps')}</div></article>`).join('')||empty('No portals match your search.');};$('portal-search').oninput=results;results();
 }
 
+function revenue() {
+  const payment='https://odishalandrevenue.nic.in/OnlineRTrent.aspx';
+  const receipts='https://odishalandrevenue.nic.in/KnowTransactionId.aspx';
+  const fields=revenueHolding?[
+    ['District',revenueHolding.place.district],['Tahasil',revenueHolding.place.tehsil],
+    ['Village',revenueHolding.place.village],['Khata',revenueHolding.khata]
+  ]:[];
+  $('view').innerHTML=`<section class="card revenue-card">
+    <h2>Odisha land revenue and water tax</h2>
+    <p>Use e-Pauti to check current dues for a khata, including any applicable land water tax. Complete the payment on the official site.</p>
+    ${fields.length?`<h3>Holding to look up</h3><dl class="plot-facts">${fields.map(([label,value])=>
+      `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`).join('')}</dl><p>Use these details in e-Pauti to confirm the holding.</p>`
+      :'<p>Have your district, tahasil, village, and khata number ready.</p>'}
+    <div class="actions">${tag(payment,'Open e-Pauti payment')}${tag(receipts,'Check payment status or download a receipt')}</div>
+    <p class="muted">The payment and receipt links open the Odisha Revenue and Disaster Management Department’s e-Pauti site in a new tab.</p>
+  </section>`;
+}
+
 function render() {
   lastView=selected;
   $('heading').textContent=selected==='overview'?'Field atlas':labels[selected];
   $('crumb').textContent=workspace?.title||'Land records';
   $('backup').disabled=!workspace||busy;
   document.querySelectorAll('.nav').forEach(b=>{const active=b.dataset.view===selected;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
-  ({overview,plots,names,maps:()=>mapView(mapSearchHits),ror,workspace:lookupWorkspace,portals:portalView})[selected]();
+  ({overview,plots,names,maps:()=>mapView(mapSearchHits),ror,revenue,workspace:lookupWorkspace,portals:portalView})[selected]();
 }
 
 $('nav-toggle').onclick=()=>{

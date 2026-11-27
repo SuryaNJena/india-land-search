@@ -28,3 +28,19 @@ Ask the [Director of Land Records and Survey and DILRMP PMU](https://bhulekh.ori
 ### Draft pilot request
 
 India Land Search is a solo, open-source prototype that helps people locate Odisha land records. Could the Department recommend a supported pilot endpoint for matching approved names to the minimal village, khata, and plot identifiers and an official RoR link? We would appreciate documentation on coverage, permitted outputs, data handling, and operating limits. A non-personal village/RI-to-LGD crosswalk would also improve map and village discovery.
+
+## Odisha district navigation and payments
+
+Clickable district outlines use the Odisha extract of the [geoBoundaries India
+ADM2 dataset](https://www.geoboundaries.org/api/current/gbOpen/IND/ADM2/),
+attributed to Pathways Data and LGD under [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/).
+The derived database is `dist/odisha-district-polygons.json` and is distributed
+under that license. Use `scripts/build-odisha-districts.py` with the simplified
+GeoJSON from release `1c423398df24ddf6e730b116567d2181c9782778d0459c3f3b76ca2f9f12b6bc`.
+India, district, village, and parcel outlines use their respective reference
+sources.
+
+[e-Pauti](https://odishalandrevenue.nic.in/OnlineRTrent.aspx) provides the current
+land revenue demand, including applicable water tax. Payment confirmation and
+[receipt downloads](https://odishalandrevenue.nic.in/KnowTransactionId.aspx)
+remain on the official portal.

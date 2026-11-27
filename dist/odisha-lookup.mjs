@@ -4,6 +4,7 @@ import {mountLocationAtlas} from './location-atlas.mjs';
 import {runtime} from './runtime.mjs';
 import {loadBhulekhLocations} from './odisha-live-search.mjs';
 import {mountLiveOdishaMap} from './live-odisha-map.mjs';
+import {mountHoldingPreview,mountPlotPreview} from './plot-profile.mjs';
 import {copyReport,printHoldings} from './live-ror.mjs';
 import {
   checkBounds,cleanNumber,cleanPlace,cleanSheet,directReport,districtMapBase,
@@ -65,7 +66,7 @@ function pause(signal) {
   });
 }
 
-export function mountOdishaLookup(root,mode,{escape,tag,onSave,initial}={}) {
+export function mountOdishaLookup(root,mode,{escape,tag,onSave,onRevenue,initial}={}) {
   const config=modes[mode], isMap=mode==='maps', isPlot=mode==='plots', needsRI=mode!=='ror';
   const fields=locationFields.filter(({code})=>needsRI || code!=='riCode');
   const fieldMarkup=fields.map(({code,label},index)=>
@@ -227,7 +228,7 @@ export function mountOdishaLookup(root,mode,{escape,tag,onSave,initial}={}) {
     details.open=true;
     output.replaceChildren(details);
     mountLiveOdishaMap(details,[place],escape,tag,new Map(),new Map(),mapTerms(),{
-      showVillage:false,initialSheet:sheet,initialMap:data,localSheets,onGeography:atlas?.setParcelOverlay,
+      showVillage:false,initialSheet:sheet,initialMap:data,localSheets,onRevenue,onGeography:atlas?.setParcelOverlay,
       onSave:(entry)=>save(entry,entry.kind==='map'?'Village map loaded.':'Plot Info loaded.')
     });
   }
@@ -292,13 +293,33 @@ export function mountOdishaLookup(root,mode,{escape,tag,onSave,initial}={}) {
   }
 
   function renderPlot(place,sheet,number,data) {
-    output.innerHTML='<section class="bhu-plot-info"><h3>Plot Info · '+escape(number)+'</h3>'+
-      '<p>'+escape(place.village)+' · Sheet '+escape(sheet)+'</p>'+
-      (data.info?'<p class="bhu-plot-source">'+escape(data.info)+'</p>':'')+
-      (data.area?'<p>'+escape(data.area)+'</p>':'')+
-      (data.khata?'<p>Khata '+escape(data.khata)+'</p>':'')+
+    const khata=data.khata;
+    const facts=[['Village',place.village],['Tahasil',place.tehsil],['District',place.district],['Sheet',sheet],
+      ['Khata',khata],['Area',data.area||data.info?.match(/(?:^|\n)\s*(?:ରକବା|Area)\s*[:ଃ]\s*([^\n]+)/iu)?.[1]?.trim()]].filter(([,entry])=>entry);
+    output.innerHTML='<section class="bhu-plot-info plot-profile"><h3>Plot Info · '+escape(number)+'</h3>'+
+      '<dl class="plot-facts">'+facts.map(([name,entry])=>'<div><dt>'+escape(name)+'</dt><dd>'+escape(entry)+'</dd></div>').join('')+'</dl>'+
+      '<div class="plot-profile-layout"><div><h4>BhuNaksha record text</h4>'+
+      (data.info?'<p class="bhu-plot-source" dir="auto">'+escape(data.info)+'</p>':'<p>BhuNaksha did not provide record text for this plot.</p>')+
       '<div class="actions">'+tag(data.front,'Official RoR front')+tag(data.back,'Official RoR back')+
-      tag(officialPlotURL(place,sheet,number),'Open official Plot Info')+'</div></section>';
+      tag(officialPlotURL(place,sheet,number),'Open official Plot Info')+
+      (khata&&onRevenue?'<button type="button" class="button secondary" data-pay-holding>Land revenue for this khata</button>':'')+'</div></div>'+
+      '<section data-plot-preview><h4>Cadastral sheet</h4><p role="status" data-preview-status>Loading the sheet…</p>'+
+      '<div class="map-frame" hidden><canvas role="img" width="600" height="390"></canvas></div>'+
+      '<button class="button secondary" type="button" data-zoom-preview hidden>Zoom to plot</button></section></div>'+
+      (khata?['front','back'].map(side=>'<details class="live-location" data-holding-side="'+side+'"><summary>'+
+      (side==='front'?'Recorded holders and holding details':'RoR plot schedule')+
+      '</summary><p role="status" data-holding-status></p><div class="table-scroll" data-holding-output></div></details>').join(''):'')+'</section>';
+    output.querySelector('[data-pay-holding]')?.addEventListener('click',()=>onRevenue({place,khata}));
+    output.querySelectorAll('[data-holding-side]').forEach(panel=>mountHoldingPreview(panel,{place,khata,side:panel.dataset.holdingSide}));
+    const panel=output.querySelector('[data-plot-preview]');
+    void mountPlotPreview(panel,{place,sheet,number,data,loadSheet:async()=>{
+      if(runtime.hosted){
+        try{return await postOdisha('maps',{location:mapLocation(place),sheet},lookupRequest?.signal);}
+        catch(error){if(error.status===429 || lookupRequest?.signal.aborted)throw error;}
+      }
+      const maps=await localMaps(), snapshot=maps.villages?.[mapLocation(place)]?.[sheet];
+      return snapshot?{...snapshot,captured:snapshot.captured??maps.collected}:undefined;
+    }});
   }
 
   function directPlot(place,sheet,number) {
@@ -342,6 +363,12 @@ export function mountOdishaLookup(root,mode,{escape,tag,onSave,initial}={}) {
     print.type='button';
     print.textContent='Print both sides / Save PDF';
     print.onclick=()=>void printHoldings([hit],status,print,(_hit,side)=>pages[side]);
+      if(onRevenue){
+      const pay=document.createElement('button');
+      pay.className='button secondary';pay.type='button';pay.textContent='Land revenue for this khata';
+      pay.onclick=()=>onRevenue({place,khata});
+      output.append(pay);
+    }
     output.append(print,...previews);
   }
 
