@@ -7,8 +7,18 @@ const key = 'landreview.home-name-review';
 let saved;
 try { saved=JSON.parse(localStorage.getItem(key)); } catch { /* Review remains available in this tab. */ }
 
-export function mountNameReview(root, escape, onEdit, persistent = true, observe) {
+export const getNameApproval=()=>saved;
+export function saveNameApproval(approval) {
+  saved=approval;
+  try {
+    if(approval)localStorage.setItem(key,JSON.stringify(approval));
+    else localStorage.removeItem(key);
+  } catch { /* Review remains available in this tab. */ }
+}
+
+export function mountNameReview(root, escape, onEdit, persistent = true, observe, initialApproval) {
   let state='', text='', choice='', drafts=[], approval, evidenceTimer;
+  const remembered=()=>persistent?saved:initialApproval;
   const dictionaries={}, requested=new Set();
   const signature = () => JSON.stringify([state,searchTerms(text).map(normalize),choice]);
   const languages = () => choice ? [choice] : suggestedLanguages(state);
@@ -24,10 +34,7 @@ export function mountNameReview(root, escape, onEdit, persistent = true, observe
 
   function record(spellings) {
     approval={signature:signature(),state,choice,spellings};
-    if (persistent) {
-      saved=approval;
-      try { localStorage.setItem(key,JSON.stringify(approval)); } catch { /* Review remains available in this tab. */ }
-    }
+    if (persistent) saveNameApproval(approval);
     onEdit();
     root.querySelector('#variant-status').textContent=summary(spellings.length);
   }
@@ -64,7 +71,10 @@ export function mountNameReview(root, escape, onEdit, persistent = true, observe
 
   function update(nextState,nextText) {
     clearTimeout(evidenceTimer);
-    if (nextState!==state) choice=persistent && saved?.state===nextState && Object.hasOwn(recordLanguages,saved.choice) ? saved.choice : '';
+    if (nextState!==state) {
+      const prior=remembered();
+      choice=prior?.state===nextState && Object.hasOwn(recordLanguages,prior.choice) ? prior.choice : '';
+    }
     state=nextState; text=nextText;
     const terms=searchTerms(text).slice(0,30);
     const activeLanguages=languages();
@@ -82,7 +92,7 @@ export function mountNameReview(root, escape, onEdit, persistent = true, observe
     }
     const localized=proposeNames(terms,activeLanguages,globalThis.Sanscript,dictionaries);
     drafts=[...localized,...proposeNameOrders(terms,localized)];
-    if (persistent && saved?.signature===signature() && approval?.signature!==signature()) approval=saved;
+    if (remembered()?.signature===signature() && approval?.signature!==signature()) approval=remembered();
     render();
     if (observe && drafts.length) evidenceTimer=setTimeout(()=>{
       if (!root.isConnected) return;
@@ -96,6 +106,7 @@ export function mountNameReview(root, escape, onEdit, persistent = true, observe
 
   return {
     update,
+    approval:()=>reviewed()?approval:undefined,
     names: () => searchTerms([...searchTerms(text),...selected()].join('\n')),
     confirmed() {
       if (!drafts.length || reviewed()) return true;
