@@ -1,39 +1,51 @@
 # India Land Search Codex evidence pack
 
-## Problem
+**Submitted build** India Land Search v0.1.3, commit `1ecd97e`. [Live app](https://suryanjena.github.io/india-land-search/) · [Release and portable ZIP](https://github.com/SuryaNJena/india-land-search/releases/tag/v0.1.3) · [Tagged CI run](https://github.com/SuryaNJena/india-land-search/actions/runs/46073636271)
 
-An Odisha family may know a name in English or Odia and only part of the location. Bhulekh's documented path asks for district, tahasil, and village before tenant lookup. India Land Search can start with one village name and a jurisdiction-qualified match. The local workspace keeps spellings, colored map evidence, and front/back documents together. This comparison describes the steps and information each workflow requires. [Bhulekh manual](https://bhulekh.ori.nic.in/Bhulekh%20Portal%20User%20Manual.pdf)
+## Problem and scope
+
+An Odisha family may know a name in English or Odia and only part of the location. Bhulekh's tenant lookup starts with the district, tahasil, and village. India Land Search can start with a village name, display candidates with their jurisdictions, and help the user review spellings, find parcels, and save map and Record of Rights (RoR) evidence. Live Odisha name lookup is village-scoped. Statewide name-only lookup depends on an authorised production dataset, and live record coverage varies by state. [Bhulekh manual](https://bhulekh.ori.nic.in/Bhulekh%20Portal%20User%20Manual.pdf) · [State coverage](../README.md#state-and-territory-coverage)
 
 ## Lifecycle evidence
 
-These eight headings are a working mapping from Understand to Automate. Confirm the organizer's exact labels in the attendee handout. The original CP1–CP5 history remains visible in [PR #1](https://github.com/SuryaNJena/india-land-search/pull/1).
+The headings below map the project from Understand to Automate. The organizer's exact stage labels and workshop date remain unverified. The original five-checkpoint implementation trail is in [PR #1](https://github.com/SuryaNJena/india-land-search/pull/1).
 
-| Stage | Decision, artifact, and verified result |
+| Stage | Decision and verified outcome |
 | --- | --- |
-| Understand | Chose language-aware matching, search from partial localities, and a combined evidence packet. Stakeholder answers established signed-out access, official result fields, and a separate statewide ownership requirement. [BRD](BRD.md) · CP1 `43bb7c4` |
-| Plan and design | Separated public place data and source links from the versioned ownership index. Planned distinct stale, partial, and unavailable states. [Architecture](TRD.md) · CP2 `6a99dff` |
-| Build | Built place discovery and scope autofill, the D1-backed search route, both hosting builds, and a two-khata fictional demo. [Deployment](DEPLOYMENT.md) · CP4 `a68ea4c` |
-| Test | Pinned matching, throttling, checksum rejection, and front-before-back export before extending the app. The new tests cover duplicate and incomplete khatas and vector map export. [Test plan](TEST-PLAN.md) · CP3 `19a7d89` |
-| Debug | Browser testing exposed a secondary live-search control on the static page and confirmed the fix. The first hosted browser job hit an unsupported Ubuntu 26.04 image, so the workflow now pins the supported Ubuntu 24.04 image. A separate check showed an Odia Bharatpada alias filling all verified locality fields while the person field was blank. [PR evidence](https://github.com/SuryaNJena/india-land-search/pull/1) |
-| Review | An independent Codex review flagged the license-only default branch, missing sample PDFs, and incomplete model log. The release adds synthetic RoRs and a verified metadata table. [Release checklist](RELEASE-CHECKLIST.md) |
-| Deploy | Site baseline `08bdc8a` served signed-in village lookup. The portable challenge build provides a signed-out demo with a runnable ZIP. [Baseline Site](https://landreview-odisha.thinwave16.chatgpt.site) · [GitHub Releases](https://github.com/SuryaNJena/india-land-search/releases) |
-| Automate | Actions checks builds, packages the release, and exercises the demo under a subpath with browser screenshots and PDF downloads. A weekly offline schedule is configured. Separately, the one-village pilot checkpointed 2,549 entries and skipped that village on rerun. [CI](https://github.com/SuryaNJena/india-land-search/actions/workflows/quality.yml) · [Pilot record](https://github.com/SuryaNJena/india-land-search/commit/b98e6c57718b3fbf0f4283d1f953669d8bf8306d) |
+| Understand | Requirements discussions prioritized signed-out family search, local-script spelling review, and official evidence exports. The BRD records the statewide name-only goal separately from the verified village flow. [BRD](BRD.md) |
+| Plan and design | Keep workspaces and exports in the browser. Use the Pages relay and Sites Worker for live queries. Share one village selection across tools, retaining exact official identifiers and asking the user to confirm approximate directory matches. [Architecture](../README.md#architecture) · [PR #23](https://github.com/SuryaNJena/india-land-search/pull/23) · [PR #24](https://github.com/SuryaNJena/india-land-search/pull/24) |
+| Build | Separated the name library from Home, added state-aware atlas and village discovery, and ranked English and local-script village spellings. The release includes district reference layers for all 36 jurisdictions and six searchable village directories, with cadastral capabilities listed by state. [Name review PR](https://github.com/SuryaNJena/india-land-search/pull/17) · [State discovery PR](https://github.com/SuryaNJena/india-land-search/pull/22) · [Changelog](../CHANGELOG.md#v013) |
+| Test | Characterization tests pin exact official ID matching, ambiguous choices, and Chhattisgarh and Odisha spelling variants. All 93 tests passed for v0.1.3. The signed-out Chromium smoke checked the extracted ZIP, a one-page map PDF, and a four-page combined RoR PDF for two fictional khatas. [Matching tests](../tests/state-map-location.test.mjs) · [Browser test](../scripts/smoke-browser.mjs) · [Tagged CI run](https://github.com/SuryaNJena/india-land-search/actions/runs/46073636271) |
+| Debug | A reference village could be selected while its cadastral viewer still waited for manual directory choices. The verified Tangarghat crosswalk now opens its official map. PR #24 also made Odisha sheet scans explicit. Copy or enter names and start a scan when you want parcel colouring. [Crosswalk and deployment PR](https://github.com/SuryaNJena/india-land-search/pull/23) · [Scan and matching PR](https://github.com/SuryaNJena/india-land-search/pull/24) |
+| Review | The first independent review flagged missing sample PDFs and incomplete model evidence. The release added fictional RoRs and verified session metadata. The v0.1.3 notes went through a separate PR after the 93-test baseline passed. [Initial review trail](https://github.com/SuryaNJena/india-land-search/pull/1) · [Release-notes PR](https://github.com/SuryaNJena/india-land-search/pull/25) |
+| Deploy | Published Pages, ChatGPT Sites, and the tagged ZIP. Release smoke checks found Tangarghat using English and Hindi spellings on both hosted builds and the local preview. A separate OCI relay check returned 1,365 Tangarghat parcels with Pages CORS enabled. [Pages run](https://github.com/SuryaNJena/india-land-search/actions/runs/46073635771) · [ChatGPT Sites](https://landreview-odisha.thinwave16.chatgpt.site/) · [OCI run](https://github.com/SuryaNJena/india-land-search/actions/runs/46073636068) |
+| Automate | Tagged builds test the extracted ZIP in Chromium and attach the verified archive to the release. The OCI workflow builds and checks the container, then deploys the reviewed revision through the restricted production environment. A weekly offline verification is scheduled. [Quality workflow](../.github/workflows/quality.yml) · [OCI workflow](../.github/workflows/oci.yml) |
 
-## Capability use
+## Where Codex changed the work
 
-- **Codex workspace and shell** established baseline tests and reproduced the build, sample map, and PDFs.
-- **Computer Use** verified village-name input, district and tehsil autofill, and that the person field stayed empty. A browser smoke test now also exercises fictional search, map and PDF exports with no external requests.
-- **GitHub and Sites tools** preserved commit history, opened the review, and identified exactly which commit the existing live Site serves.
-- **Subagents and web research** independently reviewed the submission, verified data-source limits, and built portable packaging and automated smoke. The research distinguishes administrative names, land geometry, and records governed by the source owner. [Data sources](DATA-SOURCES.md)
+| Capability | Decision or result |
+| --- | --- |
+| Workspace, shell, and test runner | Turned the English and local-script matching examples into fixtures. Exact identifiers still win, and a plausible transliteration requires confirmation. [Matching tests](../tests/state-map-location.test.mjs) |
+| Computer Use and browser automation | Checked whether a user could pick a village, carry it into Village Maps, and export evidence. The resulting smoke tests cover the selection and run the fictional export path on every tagged build. [Browser test](../scripts/smoke-browser.mjs) |
+| Subagents and web research | Independent review identified the missing sample PDFs and model evidence gaps. Source research distinguished public place references from the data needed to support statewide ownership search. The release uses a fictional demo and describes where the live flow is available. [Initial review trail](https://github.com/SuryaNJena/india-land-search/pull/1) · [Data sources](DATA-SOURCES.md) |
+| GitHub and Sites tools | Traced reviewed commits through merge, hosting, and packaging. The submitted ZIP was downloaded and checked against the release asset digest. [Tagged CI run](https://github.com/SuryaNJena/india-land-search/actions/runs/46073636271) · [Release](https://github.com/SuryaNJena/india-land-search/releases/tag/v0.1.3) |
 
 ## Models and reasoning effort
 
-These settings were verified in Codex turn metadata. Explanations of task fit are retrospective where the original choice was undocumented.
+The three settings below were verified in Codex turn metadata. The task-fit explanations are retrospective where the initial choice was undocumented.
 
-| Work | Model | Effort | Task fit and proof |
+| Work | Model | Effort | Why that effort fit the work |
 | --- | --- | --- | --- |
-| Bounded Odisha plot, map, and PDF exploration, 1–2 November | `gpt-6-astra` | Medium | Focused source and rendering work. Later verification used official links and a bounded connector check. |
-| Requirements, characterization, architecture, and PR, 22–24 November | `gpt-6.2-sol` | High | Cross-file design and implementation with a tested baseline. See CP1–CP5 and linked CI. |
-| Challenge release, independent evidence audit, build automation, and source research, 24 November | `gpt-6.2-sol` | Ultra | Cross-cutting acceptance with parallel evidence, source, and packaging work. The evidence subagent inherited the setting. |
+| Bounded Odisha plot, map, and PDF exploration, 1–2 November | `gpt-6-astra` | Medium | The task was limited to source checks and rendered outputs with a bounded verification path. |
+| Requirements, characterization, architecture, and PR, 22–24 November | `gpt-6.2-sol` | High | The change connected business requirements, module boundaries, test fixtures, and reviewed implementation. [CP1–CP5 trail](https://github.com/SuryaNJena/india-land-search/pull/1) |
+| Challenge release, independent audit, automation, and source research, 24 November | `gpt-6.2-sol` | Ultra | Acceptance required separate checks for data scope, release packaging, browser behavior, and submission evidence. The evidence subagent inherited the setting. [Quality workflow](../.github/workflows/quality.yml) |
 
-Other historical settings remain unverified. Name suggestions in the running application use curated rules and Sanscript. The submitted artifacts contain fictional records and sanitized evidence.
+The v0.1.3 PRs and deployment runs verify outcomes. Their later model and effort settings remain unverified. Runtime name suggestions use curated rules and Sanscript.
+
+## Quick judge walkthrough
+
+1. Open the [fictional demo](https://suryanjena.github.io/india-land-search/?demo=1). Choose **Find sample village**, then **Anandapur Sample** in Cuttack. The location fields fill from that selection.
+2. Enter `Jena` under **Names or surnames**. Open **Review name variants**, select the spellings you want to include, and choose **Search loaded records**.
+3. Choose **Open matched map** to see the coloured parcels, then **Export map PDF**. Back on **Home**, choose **Open sample RoRs** and **Download selected RoRs (PDF)** for the combined front and back pages.
+
+The demo uses fictional records that are bundled with the release. The tagged CI run publishes `LandReview-browser-evidence` with screenshots and the sample PDFs while the artifact is retained. [Tagged CI run](https://github.com/SuryaNJena/india-land-search/actions/runs/46073636271) · [User manual](USER-MANUAL.md)
