@@ -87,3 +87,37 @@ Odisha and Chhattisgarh. Other pilot states show reference district boundaries
 and directory results. The shared discovery and official lookup controls carry
 the selected state. See the [state integration checklist](STATE-INTEGRATION-CHECKLIST.md)
 for the remaining steps toward full parity for every state.
+
+## Village handoff and OCI deployment
+
+### CP1 Explain
+
+A reference village may have English geography names while the cadastral
+directory uses local-script names and different administrative codes.
+Village Maps needs a verified crosswalk and an active village among the saved
+selections. The atlas needs the same theme as the surrounding panels.
+
+### CP2 Diagram
+
+```mermaid
+flowchart LR
+  Ref["Selected reference village"] --> Join{"Verified official path?"}
+  Join -->|Yes| Map["Load cadastral map"]
+  Join -->|Partial| Menu["Prefill verified levels and ask for remaining values"]
+  Main["GitHub Actions on main"] --> Check["Build and smoke-test API image"]
+  Check --> Gate["Protected OCI environment"]
+  Gate --> SSH["Restricted VM deploy command"]
+  SSH --> Health["Restart, verify or roll back"]
+```
+
+## CP4 Evidence for village handoff
+
+The public Chhattisgarh directory maps Tangarghat, reference village 434821,
+to Raigarh 41, Tamnar 08, Dhaurabhanta 03 and Tangarghat 289. Verified map
+`410803.289` returned 1,365 parcels. Adhchara has a separate verified crosswalk.
+Chhattisgarh reference districts have a cadastral district crosswalk. The app
+offers manual confirmation when a lower-level code has no verified match.
+
+The Actions workflow checks the OCI image on each applicable PR. Production
+deployment is enabled only once the restricted SSH identity and environment
+are configured. See the [OCI deployment runbook](../backend/deploy/oci/README.md).

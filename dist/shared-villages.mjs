@@ -6,7 +6,7 @@ const items=new Map();
 export const placeKey=place=>(place.state??'Odisha')+'/'+(place.lgd || place.id || place.portalCode);
 function compact(place) {
   const {id,lgd,village,local,aliases,tehsil,district,ri,state='Odisha',riCode,portalCode,districtCode,center}=place;
-  return {id,lgd,village,local,aliases,tehsil,district,ri,state,riCode,portalCode};
+  return {id,lgd,village,local,aliases,tehsil,district,ri,state,riCode,portalCode,districtCode,center};
 }
 try {
   const current=localStorage.getItem(storageKey);
