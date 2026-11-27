@@ -542,7 +542,7 @@ export function readBhulekhPlotSchedule(html) {
 
 export function makeStateMapReader(fetcher=fetch) {
   async function read(url,fields,limit=128*1024,json=false) {
-    const init={redirect:'error',signal:AbortSignal.timeout(8500)};
+    const init={redirect:'manual',signal:AbortSignal.timeout(8500)};
     if (fields) Object.assign(init,{method:'POST',body:json?JSON.stringify(fields):new URLSearchParams(fields),
       ...(json?{headers:{'Content-Type':'application/json'}}:{})});
     const response=await fetcher(url,init);

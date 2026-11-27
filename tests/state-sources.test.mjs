@@ -89,3 +89,14 @@ test('Chhattisgarh Plot Info links to the exact official khasra record',async()=
   assert.equal(link.searchParams.get('khasrano'),'1/2');
   assert.equal(record.info,'Plot Info\nArea');
 });
+
+test('state map transport uses Worker-compatible redirect handling without following redirects',async()=>{
+  let calls=0;
+  const read=makeStateMapReader(async (url,init)=>{
+    calls++;
+    assert.equal(init.redirect,'manual');
+    return new Response(null,{status:302,headers:{Location:'https://example.invalid/'}});
+  });
+  await assert.rejects(()=>read({state:'Chhattisgarh',levels:['43']}),{status:502});
+  assert.equal(calls,1);
+});
