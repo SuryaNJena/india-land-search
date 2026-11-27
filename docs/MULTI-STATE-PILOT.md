@@ -50,3 +50,30 @@ Government links leave verification and document access on the state portals.
 The Pages deployment needs the updated OCI image for the new
 `POST /api/state-maps` route. The Sites build bundles this route. The portable
 build links to the official portals and retains its offline workspace tools.
+
+## State-aware location discovery
+
+### CP1 Explain
+
+The atlas currently opens district polygons only for Odisha. Village suggestions
+use one Odisha directory even when another state is selected, and shared village
+selection can carry Odisha identifiers into other state tools.
+
+### CP2 Diagram
+
+```mermaid
+flowchart LR
+  S["Selected state"] --> G["State geography and available layers"]
+  G --> A["District and village atlas"]
+  G --> V["Village suggestions"]
+  A --> C["State-scoped selected village"]
+  V --> C
+  C --> P["State-specific records and map adapters"]
+```
+
+### CP3 Coverage
+
+- Chhattisgarh exposes sourced districts and a reference village directory.
+- Identical locality IDs in separate states retain separate selections.
+- Shared tabs use the selected state's capabilities and labels.
+- Odisha's verified portal crosswalk and lookup remains available.
