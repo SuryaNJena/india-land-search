@@ -18,6 +18,9 @@ try {
   assert.match(home, /connect-src 'self' https:\/\/bhulekh\.ori\.nic\.in(?: https:\/\/[^;]+)?;/);
   assert.match(home, /img-src [^;]+https:\/\/tile\.openstreetmap\.org[^;]*;/);
   assert.match(home, /form-action 'self' https:\/\/app1bhunakshaodisha\.nic\.in[^;]*;/);
+  assert.match(home, /<footer[^>]*id="government-data-notice"/, 'Contest notice is available in the app shell');
+  assert.match(home, /has obtained no separate licence to reuse it/);
+  assert.match(home, /shown only for the contest demonstration/);
   await asset('app.mjs', /^text\/javascript/);
   await asset('state-sources.mjs', /^text\/javascript/);
   await asset('state-maps.mjs', /^text\/javascript/);
