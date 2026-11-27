@@ -97,8 +97,9 @@ function overview() {
   };
   const mountSearch = () => renderHomeSearch($('home-search'),{
     workspace,escape,tag,loadSavedRecords,onRevenue:demoSession?undefined:openRevenue,openNameLibrary:()=>navigate('names'),
+    onStateChange:state=>{officialState=state;},
     openPlot:(index,terms)=>workspace?showPlot(index,terms):openSavedLookup(savedPlots[index]),
-    openMap:hits=>navigate('maps',{hits}),openStateMaps:()=>navigate('maps'),openOfficial:village=>navigate('portals',{village}),
+    openMap:hits=>navigate('maps',{hits}),openStateMaps:state=>{officialState=state;navigate('maps');},openOfficial:village=>navigate('portals',{village}),
     importRecords:chooseImport,onSave:saveLookup
   });
   if (!workspace) {
@@ -151,12 +152,13 @@ const bindTable = (body,page,handler) => {
   $('previous').onclick=()=>handler(page-1);$('next').onclick=()=>handler(page+1);
 };
 
-const officialLookup = () => demoSession ? '' : `<section class="card" id="official-odisha-lookup"></section>
-  <section class="card" id="other-state-sources">
-    <h2>Other state sources</h2>
-    <label class="label">State<select><option value="">Choose a state</option>${Object.keys(stateSources).map(state=>`<option>${escape(state)}</option>`).join('')}</select></label>
-    <div data-state-content></div>
-  </section>`;
+let officialState='';
+const officialLookup = () => demoSession ? '' : `<section class="card" id="official-state-picker">
+  <label class="label">State or union territory<select id="official-state">
+    ${portals.map(({name})=>`<option>${escape(name)}</option>`).join('')}
+  </select></label>
+  </section><section class="card" id="official-odisha-lookup"></section>
+  <section class="card" id="other-state-sources" hidden></section>`;
 
 function openSavedLookup(item) {
   const view={map:'maps',plot:'plots',ror:'ror'}[item.kind];
@@ -170,8 +172,22 @@ function mountOfficialLookup(mode) {
   if (!root) return;
   const initial=pendingLookup;
   pendingLookup=undefined;
-  mountOdishaLookup(root,mode,{escape,tag,onSave:saveLookup,onRevenue:openRevenue,initial});
-  mountStateMaps($('other-state-sources'),{escape,tag,initialState:homeNameDraft().state});
+  const picker=$('official-state'), other=$('other-state-sources');
+  const initialState=initial?.place?.state??(officialState||homeNameDraft().state||'Odisha');
+  picker.value=initialState;
+  const mount=()=>{
+    officialState=picker.value;
+    root.hidden=officialState!=='Odisha';
+    other.hidden=!root.hidden;
+    root.replaceChildren();
+    other.replaceChildren();
+    if (root.hidden) mountStateMaps(other,{escape,tag,initialState:officialState,mode,onState:state=>{
+      if (state && state!==picker.value) {picker.value=state;mount();}
+    }});
+    else mountOdishaLookup(root,mode,{escape,tag,onSave:saveLookup,onRevenue:openRevenue,initial:officialState===initialState?initial:undefined});
+  };
+  picker.onchange=mount;
+  mount();
 }
 
 function lookupWorkspace() {
@@ -339,7 +355,18 @@ function ror() {
 function portalView() {
   $('view').innerHTML=`<section class="card"><div class="card-head"><div><h2>Official land-record directory</h2><p>36 states and union territories. Open the government portal to obtain records for import.</p></div>${tag(directoryURL,'DILRMP directory')}</div><details class="live-location" id="odisha-official-sources"></details><div class="toolbar"><input type="search" id="portal-search" aria-label="Search states and portals" placeholder="Find a state or portal"></div><div class="portal-grid" id="portal-results"></div></section>`;
   mountOfficialOdisha($('odisha-official-sources'),tag,officialVillage);
-  const results=()=>{const q=normalize($('portal-search').value);$('portal-results').innerHTML=portals.filter(p=>normalize(`${p.name} ${p.label}`).includes(q)).map(p=>`<article class="card"><span class="badge">${escape(p.mode)}</span><h3>${escape(p.name)}</h3><div class="actions">${tag(p.record,p.label)}${tag(p.map,'Cadastral maps')}</div></article>`).join('')||empty('No portals match your search.');};$('portal-search').oninput=results;results();
+  const results=()=>{
+    const q=normalize($('portal-search').value);
+    const matched=portals.filter(p=>normalize(`${p.name} ${p.label}`).includes(q));
+    $('odisha-official-sources').hidden=q?!matched.some(p=>p.name==='Odisha'):
+      Boolean(!officialVillage && officialState && officialState!=='Odisha');
+    $('portal-results').innerHTML=matched.map(p=>{
+      const source=Object.hasOwn(stateSources,p.name)?stateSources[p.name]:undefined;
+      return `<article class="card"><span class="badge">${escape(source?.levels?'Live parcel lookup':p.mode)}</span><h3>${escape(p.name)}</h3>
+        <div class="actions">${tag(source?.records??p.record,source?.recordLabel??p.label)}${tag(source?.map??p.map,'Cadastral maps')}</div></article>`;
+    }).join('')||empty('No portals match your search.');
+  };
+  $('portal-search').oninput=results;results();
 }
 
 function revenue() {
@@ -350,6 +377,19 @@ function revenue() {
     ['Village',revenueHolding.place.village],['Khata',revenueHolding.khata]
   ]:[];
   $('view').innerHTML=`<section class="card revenue-card">
+    <label class="label">State or union territory<select id="revenue-state">${portals.map(({name})=>`<option>${escape(name)}</option>`).join('')}</select></label>
+    <div data-revenue-details></div></section>`;
+  const picker=$('revenue-state'), target=$('view').querySelector('[data-revenue-details]');
+  picker.value=revenueHolding?'Odisha':(officialState||homeNameDraft().state||'Odisha');
+  const renderRevenue=()=>{
+    const state=picker.value;
+    if (state!=='Odisha') {
+      const portal=portals.find(entry=>entry.name===state);
+      target.innerHTML=`<h2>${escape(state)} land revenue</h2><p>A payment handoff is unavailable for this state. Check the official services for payment and receipts.</p>
+        <div class="actions">${tag(portal?.record,'Open official state services')}</div>`;
+      return;
+    }
+    target.innerHTML=`
     <h2>Odisha land revenue and water tax</h2>
     <p>Use e-Pauti to check current dues for a khata, including any applicable land water tax. Complete the payment on the official site.</p>
     ${fields.length?`<h3>Holding to look up</h3><dl class="plot-facts">${fields.map(([label,value])=>
@@ -357,7 +397,10 @@ function revenue() {
       :'<p>Have your district, tahasil, village, and khata number ready.</p>'}
     <div class="actions">${tag(payment,'Open e-Pauti payment')}${tag(receipts,'Check payment status or download a receipt')}</div>
     <p class="muted">The payment and receipt links open the Odisha Revenue and Disaster Management Department’s e-Pauti site in a new tab.</p>
-  </section>`;
+    `;
+  };
+  picker.onchange=renderRevenue;
+  renderRevenue();
 }
 
 function render() {

@@ -26,3 +26,20 @@ test('discovery loads a state catalog and attributes it independently of the Odi
   assert.equal(payload.rows[0].village,'Adhchara');
   assert.match(payload.source,/Survey of India/);
 });
+
+test('the README lists every supported jurisdiction and every advertised district asset exists',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const {portals}=await import('../dist/portals.mjs');
+  const readme=await readFile(new URL('../README.md',import.meta.url),'utf8');
+  const listed=[...readme.matchAll(/^\| ([^|]+?) \| (?:Yes|—) \|/gm)].map(match=>match[1]);
+  assert.deepEqual(listed.slice(0,3),['Odisha','Chhattisgarh','Bihar']);
+  assert.deepEqual([...listed].sort(),portals.map(p=>p.name).sort());
+  await Promise.all(portals.map(async ({name})=>{
+    const config=geographyFor(name);
+    const district=JSON.parse(await readFile(new URL('../dist/'+config.districts,import.meta.url),'utf8'));
+    assert.ok(district.length,'No reference districts for '+name);
+    if (config.catalog) {
+      await readFile(new URL('../dist/'+config.catalog,import.meta.url));
+    }
+  }));
+});

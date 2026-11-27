@@ -81,3 +81,12 @@ and Bihar let you open a village map and highlight plot numbers from an official
 record. Uttar Pradesh shows the official village map and highlights one plot by
 number. Open the government records links for the holder search. Jharkhand and
 Rajasthan provide official map and records links.
+
+## State and village lookup
+
+Choose a state on Home or in the official lookup tabs. The atlas loads its
+district layer. In Odisha and Chhattisgarh, choose a district to open the
+available reference village outlines. Select a village on the map or through
+**Find a village by name** and open **Village maps** to continue. Some official
+cadastral directories use different spellings or administrative areas. Confirm
+the location in the official dropdowns if the app cannot match it.

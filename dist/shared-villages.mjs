@@ -3,9 +3,9 @@ import {normalize} from './core.mjs';
 const storageKey='india-land-search.selected-villages.v1';
 const verified=/^[1-9]\d{0,2}-[1-9]\d{0,2}-[1-9]\d{0,4}$/;
 const items=new Map();
-export const placeKey=place=>place.lgd || (verified.test(place.id) ? place.portalCode || place.id : place.id) || place.portalCode;
+export const placeKey=place=>(place.state??'Odisha')+'/'+(place.lgd || place.id || place.portalCode);
 function compact(place) {
-  const {id,lgd,village,local,aliases,tehsil,district,ri,state='Odisha',riCode,portalCode}=place;
+  const {id,lgd,village,local,aliases,tehsil,district,ri,state='Odisha',riCode,portalCode,districtCode,center}=place;
   return {id,lgd,village,local,aliases,tehsil,district,ri,state,riCode,portalCode};
 }
 try {
@@ -13,13 +13,13 @@ try {
   const stored=JSON.parse(current??localStorage.getItem('landreview.odisha-villages'));
   if (Array.isArray(stored)) for(const place of stored.slice(0,20)){
     if (!place?.id || !place.village) continue;
-    const p=compact({...place,portalCode:place.portalCode || (verified.test(place.id)?place.id:undefined)});
+    const p=compact({...place,portalCode:place.portalCode || ((!place.state || place.state==='Odisha') && verified.test(place.id)?place.id:undefined)});
     items.set(placeKey(p),p);
   }
 } catch { /* This tab can still hold the current selection. */ }
 export function selectedPlaces(){return [...items.values()];}
 export function rememberPlace(place){
-  const previous=selectedPlaces().find(p=>placeKey(p)===placeKey(place) || place.portalCode && p.portalCode===place.portalCode);
+  const previous=selectedPlaces().find(p=>placeKey(p)===placeKey(place) || p.state===(place.state??'Odisha') && place.portalCode && p.portalCode===place.portalCode);
   if (!previous && items.size>=20) throw Error('Choose up to 20 villages at a time.');
   const p=compact({...previous,...place,...(previous?.lgd?{lgd:previous.lgd}:{})});
   if (previous) items.delete(placeKey(previous));
@@ -28,7 +28,7 @@ export function rememberPlace(place){
 export function forgetPlace(key){items.delete(key);persist();}
 function persist(){try{localStorage.setItem(storageKey,JSON.stringify(selectedPlaces()));}catch{/* Current tab retains selections. */}}
 export function lookupPlace(place){
-  if (!verified.test(place?.portalCode)) return;
+  if (place?.state && place.state!=='Odisha' || !verified.test(place?.portalCode)) return;
   const [districtCode,tehsilCode,villageCode]=place.portalCode.split('-');
   return {...place,id:place.portalCode,districtCode,tehsilCode,villageCode};
 }

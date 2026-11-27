@@ -50,7 +50,7 @@ function parcelAt(canvas, event, hits) {
   return hits.findLast(({path}) => context.isPointInPath(path, x, y, 'evenodd'))?.key;
 }
 
-export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMap, openStateMaps, openOfficial, importRecords, onSave, loadSavedRecords, openNameLibrary, onRevenue}) {
+export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMap, openStateMaps, openOfficial, importRecords, onSave, loadSavedRecords, openNameLibrary, onRevenue,onStateChange}) {
   let index = searchIndex(workspace);
   if (!criteria.state && workspace) {
     const known = new Set(index.map(x => x.state).filter(Boolean));
@@ -98,7 +98,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
   });
   const chosen=()=>workspace?.demo?[]:selectedPlaces().filter(p=>!criteria.state||p.state===criteria.state);
   const applyVillage=(place,all)=>{
-    if(place)selectState(place.state||'Odisha');
+    if(place)selectState(place.state);
     clearResults();
     selectedVillage=place??all.at(-1);
     for (const field of locationFields) criteria[field]=selectedVillage?.[field]??'';
@@ -165,7 +165,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
       ? statePortalLinks(criteria.state,tag)+(stateSources[criteria.state].levels && runtime.hosted && openStateMaps
         ? '<button class="button secondary" type="button" data-state-maps>Open village map</button>' : '')
       : tag(portal.record,`Open ${portal.label}`)+officialTools : '';
-    root.querySelector('[data-state-maps]')?.addEventListener('click',openStateMaps);
+    root.querySelector('[data-state-maps]')?.addEventListener('click',()=>openStateMaps(criteria.state));
     root.querySelector('[data-odisha-sources]')?.addEventListener('click',()=>openOfficial?.(selectedVillage));
     const inState = index.filter(x => x.state === criteria.state);
     const live = !workspace?.demo && criteria.state==='Odisha' && (runtime.hosted || runtime.indexBase);
@@ -180,7 +180,8 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     form.querySelector('#home-search-scope').textContent = workspace?.demo ? 'Search checks the fictional plots loaded in this tab.' : live
       ? runtime.indexBase ? 'Search the Odisha index by name, or choose a village to search Bhulekh directly.'
         : 'No statewide name index is loaded. Choose one or more villages to search the public Bhulekh records.'
-      : criteria.state ? 'Search covers loaded records for this state. The official portal is available for fresh lookups.' : '';
+      : criteria.state ? hasLocal?'Search covers loaded records for '+criteria.state+'.':
+        'Use the official records portal for '+criteria.state+' or import a workspace to search here.' : '';
     for (const field of locationFields) {
       const options = [...new Set(inState.flatMap(x => x.location[field].slice(0, 1)))].sort((a, b) => a.localeCompare(b));
       root.querySelector(`#home-${field}`).innerHTML = options.map(x => `<option value="${escape(x)}"></option>`).join('');
@@ -370,6 +371,7 @@ export function renderHomeSearch(root, {workspace, escape, tag, openPlot, openMa
     clearResults();
     selectedVillage=undefined;
     criteria = criteriaFrom({state, names:criteria.names});
+    onStateChange?.(criteria.state);
     atlas?.show(chosen(),state);
     submitted = false;
     loadFields(); review.update(criteria.state,criteria.names); refreshScope(); showResults();

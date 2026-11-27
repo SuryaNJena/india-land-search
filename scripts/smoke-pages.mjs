@@ -21,6 +21,11 @@ try {
   await asset('app.mjs', /^text\/javascript/);
   await asset('state-sources.mjs', /^text\/javascript/);
   await asset('state-maps.mjs', /^text\/javascript/);
+  await asset('state-geography.mjs', /^text\/javascript/);
+  const cgDistricts=await (await asset('region-cg-districts.json', /^application\/json/)).json();
+  assert.equal(cgDistricts.length,28);
+  const cgVillages=await (await asset('region-cg-villages.json', /^application\/json/)).json();
+  assert.ok(cgVillages.rows.some(row=>row[1]==='Adhchara'));
   assert.match(home,/img-src [^;]+https:\/\/upbhunaksha\.gov\.in/);
   await asset('app.webmanifest', /^application\/manifest\+json/);
   await asset('offline-worker.js', /^text\/javascript/);

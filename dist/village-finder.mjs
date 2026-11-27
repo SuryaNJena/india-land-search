@@ -1,11 +1,16 @@
 import {normalize} from './core.mjs';
 import {loadBhulekhLocations} from './odisha-live-search.mjs';
+import {geographyFor,readVillageDirectory} from './state-geography.mjs';
 import {runtime} from './runtime.mjs';
 import {forgetPlace,placeKey,rememberPlace,resolveVillage,selectedPlaces} from './shared-villages.mjs';
 
 const key = value => normalize(value).replace(/[\s'’_-]+/gu, '');
 const order = new Intl.Collator('en-IN');
-let directory;
+const directories=new Map();
+const getDirectory=state=>{
+  if(!directories.has(state)) directories.set(state,readVillageDirectory(state).catch(error=>{directories.delete(state);throw error;}));
+  return directories.get(state);
+};
 
 export function findVillages(rows, input, state = '', limit = 20) {
   const query = key(input);
@@ -22,15 +27,6 @@ export function findVillages(rows, input, state = '', limit = 20) {
   return {total:hits.length, results:hits.slice(0,limit).map(hit=>hit.row)};
 }
 
-async function readDirectory() {
-  const response = await fetch(new URL('./villages.json', import.meta.url));
-  if (!response.ok) throw Error('The village directory could not be loaded.');
-  const {rows,source,state} = await response.json();
-  if (!Array.isArray(rows)) throw Error('The village directory is unavailable.');
-  return {rows:rows.map(([id,village,local,district,tehsil,portalCode,riCode,ri,aliases])=>
-    ({id,village,local,district,tehsil,state,portalCode,riCode,ri,aliases})),source};
-}
-
 export function mountVillageFinder(root, escape, choose, samplePlace, {onPreview,onFilter}={}) {
   root.innerHTML = `<summary>Find a village by name</summary>
     <label class="label">Village name<input type="search" maxlength="100" placeholder="English or local script" autocomplete="off"></label>
@@ -42,7 +38,7 @@ export function mountVillageFinder(root, escape, choose, samplePlace, {onPreview
   const matches = root.querySelector('.village-results');
   let state = '', revision = 0, delay;
   let pending;
-  const getPlaces=()=>samplePlace?[]:selectedPlaces();
+  const getPlaces=()=>samplePlace?[]:selectedPlaces().filter(place=>!state||place.state===state);
   function chips(){
     retained.replaceChildren();
     for(const place of getPlaces()){
@@ -62,7 +58,7 @@ export function mountVillageFinder(root, escape, choose, samplePlace, {onPreview
     const commit=p=>{const saved=rememberPlace(p);chips();choose(saved,getPlaces());};
     try {
       commit(place);
-      if(place.portalCode || !runtime.hosted) return;
+      if(place.state!=='Odisha' || place.portalCode || !runtime.hosted) return;
       resolver.textContent='Finding the official village in '+place.tehsil+'…';
       const {match,candidates}=await resolveVillage(place,loadBhulekhLocations,controller.signal);
       if(controller.signal.aborted || !root.isConnected)return;
@@ -86,8 +82,11 @@ export function mountVillageFinder(root, escape, choose, samplePlace, {onPreview
     if (key(query).length < 2) { status.textContent='Enter at least two characters.';onFilter?.([]); return; }
     status.textContent='Finding villages…';
     try {
-      if (!samplePlace) directory ??= readDirectory().catch(error=>{directory=undefined;throw error;});
-      const {rows,source} = samplePlace ? {rows:[samplePlace],source:'Fictional demo directory'} : await directory;
+      if (!samplePlace && !geographyFor(state)?.catalog) {
+        status.textContent=state?'Village suggestions are unavailable for '+state+'. Use the official portal.':'Choose a state to find villages.';
+        onFilter?.([]);return;
+      }
+      const {rows,source} = samplePlace ? {rows:[samplePlace],source:'Fictional demo directory'} : await getDirectory(state);
       if (revision !== request || !root.isConnected) return;
       const {total,results} = findVillages(rows,query,state);
       onFilter?.(results);
@@ -109,7 +108,8 @@ export function mountVillageFinder(root, escape, choose, samplePlace, {onPreview
   input.onkeydown=event=>{ if (event.key==='Enter') {event.preventDefault();void refresh();} };
   const update=selectedState=>{
     if(state===selectedState)return;
-    state=selectedState;
+    pending?.abort();resolver.replaceChildren();
+    state=selectedState;chips();
     if (input.value) void refresh();
   };
   return Object.assign(update,{select,chips});

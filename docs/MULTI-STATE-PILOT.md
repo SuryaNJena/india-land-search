@@ -77,3 +77,13 @@ flowchart LR
 - Identical locality IDs in separate states retain separate selections.
 - Shared tabs use the selected state's capabilities and labels.
 - Odisha's verified portal crosswalk and lookup remains available.
+
+## CP4 Evidence for location discovery
+
+The five pilot directories were built from open NWDP geography, with 20,335
+named Chhattisgarh entries and searchable catalogs for Bihar, Jharkhand,
+Rajasthan and Uttar Pradesh. Reference village boundaries load on demand in
+Odisha and Chhattisgarh. Other pilot states show reference district boundaries
+and directory results. The shared discovery and official lookup controls carry
+the selected state. See the [state integration checklist](STATE-INTEGRATION-CHECKLIST.md)
+for the remaining steps toward full parity for every state.

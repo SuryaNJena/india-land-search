@@ -31,9 +31,9 @@ function ring(encoded) {
   return coordinates;
 }
 
-export function boundaryPlace(row,district) {
+export function boundaryPlace(row,district,state='Odisha',districtCode) {
   const [id,village,tehsil,lon,lat,shape,portalCode,riCode,ri]=row;
-  return {id,state:'Odisha',district,tehsil,village,portalCode,riCode,ri,center:[lon/10000,lat/10000],
+  return {id,state,district,districtCode,tehsil,village,portalCode,riCode,ri,center:[lon/10000,lat/10000],
     polygons:shape.split(':').map(part=>part.split('!').map(ring))};
 }
 

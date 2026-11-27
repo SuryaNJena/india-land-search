@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Shared state selection for reference districts, village discovery, and official record tools.
+- District outlines for all 36 jurisdictions. Chhattisgarh adds district-to-village outlines and joins four other pilot states with village suggestions.
+
 - Pilot village maps and exact plot lookup for Chhattisgarh, Bihar, and Uttar Pradesh.
 - Direct official records and map handoffs for Jharkhand and Rajasthan.
 

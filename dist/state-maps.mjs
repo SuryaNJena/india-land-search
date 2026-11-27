@@ -1,6 +1,11 @@
 import {parcelKey} from './core.mjs';
 import {drawMap,newSheetView,zoomSheetView} from './maps.mjs';
 import {runtime} from './runtime.mjs';
+import {portals} from './portals.mjs';
+import {mountVillageFinder} from './village-finder.mjs';
+import {selectedPlaces} from './shared-villages.mjs';
+import {geographyFor,geographyKey} from './state-geography.mjs';
+import {mountLocationAtlas} from './location-atlas.mjs';
 import {stateSources,stateSourcePath} from './state-sources.mjs';
 
 export function statePortalLinks(state,tag) {
@@ -26,17 +31,22 @@ function upRaster({gis,crs,bbox,width,height},id) {
   return url.href;
 }
 
-export function mountStateMaps(root,{escape,tag,initialState}) {
+export function mountStateMaps(root,{escape,tag,initialState,mode,onState}) {
   const get=selector=>root.querySelector(selector);
   let active,map,view,hits,selected,loadRequest,plotRequest;
-  const statePicker=root.querySelector('select');
-  const panel=get('[data-state-content]');
+  const panel=root;
   function choose(state) {
     loadRequest?.abort();plotRequest?.abort();active=null;
-    if (!Object.hasOwn(stateSources,state)) {panel.replaceChildren();return;}
-    const source=stateSources[state];
-    const live=source.levels && (runtime.hosted || runtime.apiBase);
-    panel.innerHTML=`<p class="actions">${statePortalLinks(state,tag)}</p>`+(live?`
+    const source=Object.hasOwn(stateSources,state)?stateSources[state]:undefined;
+    const portal=portals.find(p=>p.name===state);
+    const geography=geographyFor(state);
+    const live=source?.levels && (runtime.hosted || runtime.apiBase);
+    const links=source?statePortalLinks(state,tag)
+      : portal?tag(portal.record,'Open '+portal.label)+(portal.map?tag(portal.map,'Open official parcel map'):''):'';
+    panel.innerHTML=`<h2>${escape(state)} ${mode==='ror'?'records of rights':mode==='plots'?'plot records':'village maps'}</h2>
+      <p class="actions">${links}</p>
+      ${mode==='maps'&&geography?'<div data-state-atlas></div>':''}
+      ${geography?.catalog?'<details class="live-location" data-state-villages open></details>':''}`+(live?`
       <p>Choose the official village. ${source.plotOnly?'Enter a plot number to highlight its location.':'Enter plot numbers from your record to highlight them.'}</p>
       <div data-state-levels class="toolbar"></div>
       <button type="button" class="button secondary" data-state-load hidden>Load parcel map</button>
@@ -57,7 +67,20 @@ export function mountStateMaps(root,{escape,tag,initialState}) {
           <canvas width="1100" height="720" aria-label="Village parcel map. Use the plot-number field to select a parcel without the map."></canvas>
         </div>
         <section class="bhu-plot-info" data-state-plot role="status" hidden></section>
-      </div>`:`<p>${escape(source.reason||'Open the official viewer to load a village map.')}</p>`);
+      </div>`:`<p>${escape(source?.reason||'Open the official viewer for cadastral maps and record details.')}</p>`);
+    const chosenPlaces=()=>selectedPlaces().filter(candidate=>candidate.state===state);
+    let place=chosenPlaces().at(-1), changeVillage, finder;
+    const atlasRoot=get('[data-state-atlas]'), finderRoot=get('[data-state-villages]');
+    const atlas=atlasRoot?mountLocationAtlas(atlasRoot,{onChoose:chosen=>finder?.select(chosen),onState}):null;
+    if (finderRoot) {
+      finder=mountVillageFinder(finderRoot,escape,(chosen,all)=>{
+        place=chosen??all.at(-1);
+        atlas?.show(all,state);
+        changeVillage?.();
+      },undefined,{onFilter:rows=>atlas?.show(rows.length?rows:chosenPlaces(),state)});
+      finder(state);
+    }
+    atlas?.show(chosenPlaces(),state);
     if (!live) return;
     const labels=get('[data-state-levels]');
     const load=get('[data-state-load]'), status=get('[data-state-status]');
@@ -70,8 +93,12 @@ export function mountStateMaps(root,{escape,tag,initialState}) {
     overlay.onerror=()=>{if (active===session && !frame.hidden) highlight.textContent='The official plot highlight image is unavailable.';};
     const result=new Map();
     const levels=[];
+    changeVillage=()=>{
+      levels.length=0;
+      next(0);
+    };
     const session=active={state,levels};
-    const isCurrent=controller=>root.isConnected && active===session && !controller.signal.aborted;
+    const isCurrent=controller=>root.isConnected && root.contains(frame) && active===session && !controller.signal.aborted;
     const selectors=source.levels.map(label=>{
       const wrapper=document.createElement('label');
       wrapper.className='label';
@@ -111,6 +138,16 @@ export function mountStateMaps(root,{escape,tag,initialState}) {
         select.replaceChildren(new Option('Choose '+source.levels[index].toLowerCase(),''),...options.map(item=>new Option(item.label,item.code)));
         select.parentElement.hidden=false;
         status.textContent=options.length?'':'The official source lists no locations here.';
+        const label=source.levels[index];
+        const name=label==='District'?place?.district:
+          ['Tehsil','Subdivision','Circle'].includes(label)?place?.tehsil:
+          ['Mauza','Village'].includes(label)?place?.village:'';
+        const matched=name?options.filter(item=>geographyKey(item.label)===geographyKey(name)):[];
+        if (matched.length===1) {
+          select.value=matched[0].code;
+          levels.push(select.value);
+          next(index+1);
+        }
       } catch (error) {
         if (isCurrent(controller)) status.textContent=error.message;
       }
@@ -190,7 +227,5 @@ export function mountStateMaps(root,{escape,tag,initialState}) {
     };
     next(0);
   }
-  statePicker.onchange=()=>choose(statePicker.value);
-  statePicker.value=Object.hasOwn(stateSources,initialState)?initialState:'';
-  choose(statePicker.value);
+  choose(initialState);
 }
